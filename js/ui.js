@@ -151,7 +151,7 @@ function moveDetailHtml(mid, pp, max, sp) {
   return `<div class="move-detail">
     <div class="md-head"><span class="type" style="background:${TYPE_COLORS[m.t - 1]}">${typeName(m.t)}</span> <b>${esc(m.n)}</b> <span class="dim">${cls}</span></div>
     <table class="md-tbl"><tr><td>위력</td><td>${m.p || '—'}</td><td>명중</td><td>${m.a || '반드시 명중'}</td><td>PP</td><td>${pp != null ? pp + '/' + max : m.pp}</td></tr></table>
-    <div><span class="dim">범위</span> ${MOVE_RULES[mid]?.selfHeal ? RANGE_DESC.s : MOVE_RULES[mid]?.reach ? `앞 ${MOVE_RULES[mid].reach}칸 안의 첫 번째 적 (선공기)` : RANGE_DESC[m.r].replace('N', PROJ_RANGE)}</div>
+    <div><span class="dim">범위</span> ${MOVE_RULES[mid]?.allyHeal ? '같은 편 하나 (바로 앞, 없으면 주변 3칸에서 HP가 가장 적은 쪽)' : MOVE_RULES[mid]?.reach ? `앞 ${MOVE_RULES[mid].reach}칸 안의 첫 번째 적 (선공기)` : RANGE_DESC[m.r].replace('N', PROJ_RANGE)}</div>
     ${sp ? masteryHtml(sp, mid) : ''}
     ${moveRuleText(mid) ? `<div class="md-rule">⚑ 던전 규칙: ${esc(moveRuleText(mid))}</div>` : ''}
     ${m.d ? `<p class="md-flavor">${esc(m.d)}</p>` : ''}

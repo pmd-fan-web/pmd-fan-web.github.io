@@ -726,7 +726,6 @@ const Dungeon = (() => {
     const R = (mid && MOVE_RULES[mid]) || {};
     const mastery = slot >= 0 && party(user) && (!opts.free || opts.release) && !run.hard && !user.tf;   // 이번 사용이 숙련도에 들어가나 (하드모드는 레벨처럼 성장 없음)
     let move = slot < 0 ? NORMAL_ATTACK : DATA.moves[mid];
-    if (R.selfHeal) move = { ...move, r: 's' };
     const wbT = { sun: 10, rain: 11, sand: 6, snow: 15 }[weatherNow()];
     if (R.weatherBall && wbT) move = { ...move, t: wbT, p: 100 };
     if (slot >= 0 && !opts.free) {
@@ -791,6 +790,18 @@ const Dungeon = (() => {
       const pool = [D.player, ...D.mons].filter(t => t && t.hp > 0);
       targets = pool.filter(t => hostileTo(user, t) && Math.max(Math.abs(t.x - user.x), Math.abs(t.y - user.y)) <= 3 && los(user.x, user.y, t.x, t.y));
       D.fx.push({ kind: 'ring', x: user.x, y: user.y, at: t0 + dur * 0.3, dur: 350 * spd(), color });
+    }
+    // 치유파동·플라워힐: 같은 편 하나를 회복
+    if (R.allyHeal) {
+      const front = creatureAt(user.x + dx, user.y + dy);
+      const t = allyHealTarget(user, [D.player, ...D.mons], c => !c.npc && !hostileTo(user, c),
+        c => Math.max(Math.abs(c.x - user.x), Math.abs(c.y - user.y)) <= TEAM_RANGE && los(user.x, user.y, c.x, c.y), front);
+      if (!t) { fail('그러나 회복할 같은 편이 없었다!'); afterUse(); return; }
+      const h = user.boss ? Math.min(move.h, BOSS_HEAL_MAX) : move.h;
+      heal(t, Math.floor(t.maxhp * h / 100), hitAt);
+      D.fx.push({ kind: 'ring', x: t.x, y: t.y, at: hitAt, dur: 300 * spd(), color: '#fff6a0' });
+      if (mastery) addMastery(user, user.moves[slot]);
+      afterUse(); return;
     }
     if (move.r === 's') { applySelf(user, move, hitAt, R); if (mastery) addMastery(user, user.moves[slot]); afterUse(); return; }
     if (!targets.length) {
@@ -1533,7 +1544,7 @@ const Dungeon = (() => {
     const moves = e.moves.map((m, i) => ({ m: DATA.moves[m.id], i, id: m.id, pp: m.pp })).filter(o => o.pp > 0 && o.m && o.m.c === 1 && o.m.r === 's' && !(e.tauntT));
     let best = null;
     for (const o of moves) {
-      const R = MOVE_RULES[o.id] || {}, who = R.team ? team : [e];
+      const R = MOVE_RULES[o.id] || {}, who = R.team ? team : R.allyHeal ? team.filter(m => m !== e) : [e];   // 치유파동: 자신 말고 같은 편
       let s = 0;
       if (o.m.h > 0) {   // 회복: 가장 다친 대상 기준
         const low = Math.min(...who.map(m => m.hp / m.maxhp));
@@ -1592,6 +1603,7 @@ const Dungeon = (() => {
     const worthUsing = (e, p, m) => {
       const R = MOVE_RULES[m.id] || {};   // 새 변화 기술: 소용없을 때는 쓰지 않는다
       if (R.rest) return e.hp < e.maxhp * 0.5 || !!e.status;
+      if (R.allyHeal) return [D.player, ...D.mons].some(c => c && c !== e && c.hp > 0 && c.hp < c.maxhp * 0.7 && !c.npc && !hostileTo(e, c) && cheb(c, e) <= TEAM_RANGE);   // 치유파동: 다친 같은 편이 곁에 있을 때만
       if (R.setWx) return weatherNow() !== R.setWx;
       if (R.screen) return !e[R.screen === 'phys' ? 'reflectT' : 'screenT'];
       if (R.seed) return !p.seeded && !p.types.includes(12);
