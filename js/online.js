@@ -108,7 +108,14 @@ const Online = (() => {
     await db.collection('diag').doc(user.uid).set({ day: d.day, ver: GAME_VERSION, c: d.c, at: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
   }
   // 바깥에서 부르는 서버 기능: 실패하면 세어 둔다 (오류는 그대로 다시 던진다)
-  const track = (op, fn) => async (...a) => { try { return await fn(...a); } catch (e) { noteFail(op, e); throw e; } };
+  // 서버가 한도 초과·연결 불가로 막혔는지: 그런 실패가 난 뒤 성공한 요청이 없으면 막힌 것으로 본다 (구조 요청 코드를 다시 보여 줄 때)
+  let downAt = 0;
+  const DOWN_CODES = /resource-exhausted|quota|unavailable|deadline-exceeded/;
+  const serverDown = () => downAt > 0;
+  const track = (op, fn) => async (...a) => {
+    try { const r = await fn(...a); downAt = 0; return r; }
+    catch (e) { noteFail(op, e); if (DOWN_CODES.test(String((e && e.code) || ''))) downAt = Date.now(); throw e; }
+  };
   const userId = () => (user ? user.email.replace(MAIL, '') : '');
 
   // Firebase 오류 → 한국어 안내
@@ -412,7 +419,7 @@ const Online = (() => {
     voteStarter: track('voteStarter', voteStarter), starterRanks: track('starterRanks', starterRanks), flushDiag,
     voteEnding: track('voteEnding', voteEnding), endingStats: track('endingStats', endingStats),
     enabled, init, onChange, loggedIn, name, userId, why, nameTaken: () => !!(profile && profile.nameTaken),
-    signUp, signIn, signOut, setName: track('setName', setName), deleteAccount, cleanName, uid: () => user && user.uid,
+    serverDown, signUp, signIn, signOut, setName: track('setName', setName), deleteAccount, cleanName, uid: () => user && user.uid,
     fetchCloud: track('fetchCloud', fetchCloud), pushCloud: track('pushCloud', pushCloud), clearCloud: track('clearCloud', clearCloud),
     postSOS: track('postSOS', postSOS), listSOS: track('listSOS', listSOS), takeSOS: track('takeSOS', takeSOS), releaseSOS: track('releaseSOS', releaseSOS),
     getSOS: track('getSOS', getSOS), findMySOS: track('findMySOS', findMySOS), findSOSById: track('findSOSById', findSOSById), watchSOS,
