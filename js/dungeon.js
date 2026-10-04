@@ -1053,9 +1053,10 @@ const Dungeon = (() => {
     log(`${nm(c)}의 ${jo(STAT_NAMES[st], '이')}${Math.abs(ch) > 1 ? ' 크게' : ''} ${ch > 0 ? '올라갔다!' : '떨어졌다!'}`, at);
     if (ch < 0 && byFoe && A.defiant) { abLog(c, '능력이 떨어져서 오기가 생겼다!', at); statChange(c, A.defiant, 2, at, c); }
   }
+  const STATUS_IMMUNE_TYPES = { psn: [4, 9], brn: [10], par: [13], frz: [15] };   // 그 상태 이상에 걸리지 않는 타입
   function inflict(c, kind, at, verbose, src) {
     if (c.status) { if (verbose) log(`${nm(c)}에게는 효과가 없었다.`, at); return; }
-    const imm = { psn: [4, 9], brn: [10], par: [13], frz: [15] }[kind] || [];
+    const imm = STATUS_IMMUNE_TYPES[kind] || [];
     if (c.types.some(t => imm.includes(t)) && !(kind === 'psn' && src && abilityOf(src).corrosion)) { if (verbose) log(`${nm(c)}에게는 효과가 없었다.`, at); return; }
     const A = src && src !== c ? defAbility(src, c) : abilityOf(c);
     if (kind === 'slp' && c.noSleep) { log(`${jo(nm(c), '은')} 유루열매 덕분에 잠들지 않았다!`, at); return; }
@@ -1594,6 +1595,7 @@ const Dungeon = (() => {
       if (R.transform) return !e.tf;
       if (R.yawn) return !p.status && !p.yawnT;
       if (R.protect) return !e.protectPrev;
+      if (m.c === 1 && m.ail) { const k = AILMENT_MAP[m.ail]; return !p.status && !(k === 'slp' && p.noSleep) && !p.types.some(t => (STATUS_IMMUNE_TYPES[k] || []).includes(t)); }   // 상태 이상 기술: 이미 걸렸거나 안 통하는 상대에게는 쓰지 않는다
       if (m.c !== 1 || !m.sc) return true;
       const self = m.r === 's' || m.ss;
       return m.sc.some(([st, ch]) => self ? ch > 0 && (e.stages[st] || 0) < AI_STAGE_LIMIT : ch < 0 && (p.stages[st] || 0) > -AI_STAGE_LIMIT);
@@ -1601,6 +1603,16 @@ const Dungeon = (() => {
     if (e.moveOnly && sees && dist <= 1) return;   // 화난 켈리몬의 두 번째 이동: 붙었으면 멈춘다 (공격은 한 턴에 한 번)
     if (!e.ally && e.item && !e.moveOnly && enemyUseItem(e, p, sees, dist, dx, dy)) return;
     if (e.ally && !e.moveOnly && sees && dist <= 6) { const sup = allySupport(e, p); if (sup) { useMove(e, sup.i, e.dir); return; } }   // 동료: 회복·능력 올리기·벽
+    // 상태 이상 기술 (최면술·다크홀·전기자석파·맹독 등): 아직 상태 이상이 아닌 상대가 닿는 곳에 있으면 먼저 건다 (보스에게는 동료가 더 자주)
+    if (sees && !e.moveOnly && !p.status) {
+      const aligned = dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy);
+      const reach = o => o.m.r === 'f' ? dist === 1 && diagOK(e.x, e.y, Math.sign(dx), Math.sign(dy))
+        : o.m.r === 'p' ? aligned && dist <= PROJ_RANGE && lineClear(e, dirIndex(dx, dy), dist)
+        : o.m.r === 'r' ? dist <= 3 && los(e.x, e.y, p.x, p.y) : false;
+      const dis = usable.filter(o => o.m.c === 1 && o.m.ail && worthUsing(e, p, o.m) && reach(o));
+      const rate = e.ally ? (p.boss ? 0.5 : 0.3) : smartFoes() || e.boss ? 0.35 : 0.2;
+      if (dis.length && Math.random() < rate * nerve) { const o = pick(dis); useMove(e, o.i, o.m.r === 'r' ? e.dir : confuse(e, dirIndex(dx, dy))); return; }
+    }
     // 동료는 상대에게 가장 효과적인 공격을 고른다 (면역·흡수되는 기술은 쓰지 않는다). 적은 지금처럼 무작위
     const score = o => moveScore(e, p, o.m);
     const best = list => list.map(o => ({ o, s: score(o) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s)[0]?.o;

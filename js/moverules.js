@@ -284,6 +284,8 @@ rule([849], { team: true, cure: true, text: '자신과 주변(3칸 안)의 같�
 const LEGEND_SIG = [540, 177, 221, 296, 295, 620, 353, 459, 460, 463, 467, 465, 449, 557, 558, 559, 551, 550, 548, 546, 613, 593, 592, 718,
   713, 714, 722, 711, 705, 712, 721, 742, 744, 795, 817, 819, 878, 919, 821, 823, 354, 832, 877, 904, 781, 782, 462, 717];
 for (const id of LEGEND_SIG) if (DATA.moves[id] && DATA.moves[id].c !== 1) DATA.moves[id].r = 'r';
+// 벌레의야단법석: 벌레 타입에 쓸 만한 범위기가 없어서 하이퍼보이스처럼 주변 범위로 (원작은 상대 하나, v0.77)
+if (DATA.moves[405]) DATA.moves[405].r = 'r';
 // 범위 이름 (선공기는 '앞 2칸')
 const RANGE_SHORT_N = { f: '앞', p: '원거리', r: '주변', s: '자신' };
 const rangeShort = id => (MOVE_RULES[id] && MOVE_RULES[id].reach ? `앞 ${MOVE_RULES[id].reach}칸` : RANGE_SHORT_N[DATA.moves[id].r]);

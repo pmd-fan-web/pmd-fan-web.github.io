@@ -1627,7 +1627,7 @@ const Game = (() => {
       case 'gummy': useGummy(arg); break;
       case 'daily-go': return prepareDaily();
       case 'daily-share': { const rec = Progress.dailyRecord(); if (rec) codeBox('🗓 오늘의 도전 기록', '<p>친구에게 보내서 기록을 비교해 보세요.</p>', esc(Progress.shareText(rec).replace(/\n/g, ' · ')), '확인'); return; }
-      case 'sos-show': if (save.sos) codeBox('🆘 SOS 코드', `<p>${esc(dungeonById(save.sos.dungeon).n)} ${save.sos.floor}F — ${esc(spName(save.sos.sp))} Lv${save.sos.lv}</p>`, sosCode(save.sos)); return;
+      case 'sos-show': if (save.sos && save.sos.online && !save.sos.revived) { sosPostedNote(save.sos); return; } if (save.sos) codeBox('🆘 SOS 코드', `<p>${esc(dungeonById(save.sos.dungeon).n)} ${save.sos.floor}F — ${esc(spName(save.sos.sp))} Lv${save.sos.lv}</p>`, sosCode(save.sos)); return;
       case 'sos-giveup': return giveUpSOS();
       case 'sos-resume': return save.sos && save.sos.thx ? resumeSOS() : receiveAOKAgain();
       case 'aok-show': { const a = (save.aokSent || []).find(x => String(x.id) === arg); if (a) codeBox('✅ A-OK 코드', `<p>친구의 ${esc(spName(a.sp))} 구조 완료 코드입니다.</p>`, a.code); return; }
@@ -2253,7 +2253,7 @@ const Game = (() => {
       UI.open({
         title: '눈앞이 캄캄해졌다...',
         html: `<div class="center">${portraitImg(r.p.sp, 'portrait big', 'Pain', r.p.shiny)}</div>
-          <p>친구에게 <b>구조를 요청</b>할 수 있습니다. 요청하면 SOS 코드가 나오고, 구조될 때까지 아이템과 돈을 잃지 않고 기다립니다.
+          <p>친구에게 <b>구조를 요청</b>할 수 있습니다. ${Online.loggedIn() ? '요청하면 <b>구조 게시판에 자동으로 올라가고</b>' : '요청하면 SOS 코드가 나오고'}, 구조될 때까지 아이템과 돈을 잃지 않고 기다립니다.
           기다리는 동안에도 다른 던전은 탐험할 수 있어요.</p>`,
         choices: [{ label: Online.loggedIn() ? '🆘 구조를 요청한다 (구조 게시판에 올리기)' : '🆘 구조를 요청한다 (SOS 코드 만들기)', fn: () => createSOS(r) }, { label: '포기하고 돌아간다', fn: () => finishRun(r, 'faint') }],
         cancel: false,
@@ -2302,9 +2302,16 @@ const Game = (() => {
       try { s.docId = await Online.postSOS(s); s.online = true; posted = true; persist(); renderTown(); }
       catch (e) { console.warn(e); UI.toast('구조 게시판에 올리지 못했어요. 코드로 친구에게 부탁해 주세요.'); }
     }
+    // 게시판에 올라갔으면 코드를 보여 주지 않는다 (코드를 커뮤니티에 따로 올리는 일이 많았다. 게시판에서 사라지면 다시 코드가 나온다)
+    if (posted) { sosPostedNote(s); return; }
     codeBox('🆘 SOS 코드', `<p>${esc(dungeonById(s.dungeon).n)} ${s.floor}F에서 쓰러진 <b>${esc(spName(s.sp))}</b> Lv${s.lv}의 구조 요청입니다.</p>
-      ${posted ? '<p>📋 <b>구조 게시판에 올렸어요.</b> 다른 플레이어가 구조하면 임무 탭에서 자동으로 알려 드려요.</p><p class="dim">친구에게 직접 부탁하려면 아래 코드를 보내도 됩니다.</p>'
-        : '<p>친구가 이 코드로 구조해 주면 <b>A-OK 코드</b>를 받게 됩니다. 그 코드를 임무 탭에 입력하면 쓰러진 층부터 이어서 탐험할 수 있어요.</p>'}`, sosCode(s));
+      <p>친구가 이 코드로 구조해 주면 <b>A-OK 코드</b>를 받게 됩니다. 그 코드를 임무 탭에 입력하면 쓰러진 층부터 이어서 탐험할 수 있어요.</p>`, sosCode(s));
+  }
+  function sosPostedNote(s) {
+    UI.alert('🆘 구조 요청', `<p>${esc(dungeonById(s.dungeon).n)} ${s.floor}F에서 쓰러진 <b>${esc(spName(s.sp))}</b> Lv${s.lv}의 구조 요청입니다.</p>
+      <p>📋 <b>구조 게시판에 자동으로 올렸어요.</b> 게임 안의 다른 탐험대가 게시판에서 보고 구조하러 와요.</p>
+      <p class="warn">커뮤니티 등에 따로 구조 글이나 코드를 올리지 않아도 됩니다.</p>
+      <p class="dim">누군가 구조하러 출발하거나 구조하면 임무 탭에서 자동으로 알려 드려요.</p>`);
   }
 
   // 달성 선물: 친구 구조 / 임무 완료 횟수가 정해진 수에 닿을 때마다 창고로 (두 횟수는 따로 센다)
@@ -2334,7 +2341,7 @@ const Game = (() => {
         ${s.online && !s.revived ? (s.takenAt && s.takenAt > Date.now() - SOS_HOLD_MS
           ? `<div class="ok">🏃 다른 탐험대가 구조하러 출발했어요! (${Math.max(1, Math.round((Date.now() - s.takenAt) / 60000))}분 전) <span class="dim">구조하던 탐험대가 게임을 끄거나 30분 넘게 던전에 들어가지 않으면 다시 게시판에 올라가요.</span></div>`
           : '<div class="dim">📋 구조 게시판에 올라가 있어요. 누군가 구조하러 가면 여기에 표시되고, 구조하면 자동으로 알려 드려요.</div>') : ''}</div>
-        ${s.revived ? '<button class="btn sm" data-act="sos-resume">이어서 탐험</button>' : '<button class="btn sm ghost" data-act="sos-show">SOS 코드</button> <button class="btn sm ghost danger" data-act="sos-giveup">포기</button>'}</div>`;
+        ${s.revived ? '<button class="btn sm" data-act="sos-resume">이어서 탐험</button>' : `<button class="btn sm ghost" data-act="sos-show">${s.online ? '자세히' : 'SOS 코드'}</button>` + ' <button class="btn sm ghost danger" data-act="sos-giveup">포기</button>'}</div>`;
     }
     if (Online.enabled()) h += Online.loggedIn()
       ? '<div class="row"><span class="grow">📋 <b>구조 게시판</b> <span class="dim">다른 플레이어의 구조 요청을 골라서 구하러 갈 수 있어요.</span></span><button class="btn sm" data-act="sos-board">게시판 보기</button></div>'
