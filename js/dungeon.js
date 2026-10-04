@@ -393,7 +393,7 @@ const Dungeon = (() => {
       for (let i = rint(2, 4) + Math.floor(lvl / 25); i > 0; i--) {
         const t = randomRoomTile({ noItem: true, far: 3 });
         // 복도와 붙은 칸(방 출입구 옆)에는 만들지 않는다
-        if (t && !nearCorridor(t.x, t.y, 2)) D.traps.push({ ...t, kind: pick(kinds), seen: false });
+        if (t && !nearCorridor(t.x, t.y, 2)) { const kind = pick(kinds); D.traps.push({ ...t, kind, seen: TRAP_VISIBLE.includes(kind) }); }
       }
     }
     // 아이템 / 돈
@@ -654,6 +654,10 @@ const Dungeon = (() => {
   const allies = () => D.mons.filter(m => m.ally && m.hp > 0);
 
   // BFS: 목표를 만족하는 가장 가까운 칸과 그 첫 걸음
+  // 첫 걸음 순서: 기본은 DIRS 순서. straight: 길이가 같은 길이 여럿이면 지금 보는 방향 → 곧은 방향 → 대각선 순으로 고른다
+  // (자동 탐색이 두 칸 너비 복도에서 대각선으로 지그재그 걷지 않게)
+  const DIR_ORDER = [0, 1, 2, 3, 4, 5, 6, 7];
+  const straightOrder = dir => [...new Set([...(dir % 2 === 0 ? [dir] : []), 0, 2, 4, 6, 1, 3, 5, 7])];
   function bfs(sx, sy, isGoal, opts = {}) {
     const N = D.w * D.h, prev = new Int32Array(N).fill(-1);
     const start = idx(sx, sy); prev[start] = start;
@@ -666,7 +670,7 @@ const Dungeon = (() => {
         return { x, y, fx: s % D.w, fy: (s / D.w) | 0, len: len + 1 };
       }
       if (opts.max && qi > opts.max) break;
-      for (let d = 0; d < 8; d++) {
+      for (const d of cur === start && opts.straight ? straightOrder(opts.straight.dir) : DIR_ORDER) {
         const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
         if (!floorAt(nx, ny)) continue;
         const ni = idx(nx, ny);
@@ -2058,8 +2062,8 @@ const Dungeon = (() => {
         Sound.play('pickup', T.base + 60);
         D.items = D.items.filter(i => i !== it);
         log(`${jo(ITEMS[it.id].n, '을')} 주웠다.` + (it.n > 1 ? ` (${it.n}개)` : ''), T.base + 60);
-      } else if (!D.ignore.has(idx(p.x, p.y))) {
-        D.ignore.add(idx(p.x, p.y));
+      } else if (!(D.fullSkip = D.fullSkip || new Set()).has(idx(p.x, p.y))) {
+        D.fullSkip.add(idx(p.x, p.y));   // 가방이 가득 차서 못 주운 곳: 가방에 자리가 나면 자동 탐색이 다시 주우러 간다
         log(`가방이 가득 차서 ${jo(ITEMS[it.id].n, '을')} 주울 수 없다.`, T.base + 60);
       }
     }
@@ -2578,6 +2582,8 @@ const Dungeon = (() => {
     D.auto = null;
     if (msg) log(msg, now());
   }
+  const AUTO_ITEM_REACH = 12;
+  const bagFits = id => run.bag.length < bagMax() || (ITEMS[id] && ITEMS[id].stack && run.bag.some(b => b.id === id));
   function isFrontier(x, y) {
     if (!D.explored[idx(x, y)] || !floorAt(x, y)) return false;
     for (const [dx, dy] of DIRS) if (inb(x + dx, y + dy) && !D.explored[idx(x + dx, y + dy)]) return true;
@@ -2597,9 +2603,10 @@ const Dungeon = (() => {
       act({ t: 'wait' }); return;
     }
     let step = null;
+    const AO = { known: true, blockMons: true, seenOnly: true, self: p, avoidTraps: true, passAllies: true, straight: { dir: p.dir } };
     if (a.kind === 'travel') {
       if (p.x === a.x && p.y === a.y) { stopAuto(); return; }
-      step = bfs(p.x, p.y, (x, y) => x === a.x && y === a.y, { known: true, blockMons: true, seenOnly: true, self: p, avoidTraps: true, passAllies: true });
+      step = bfs(p.x, p.y, (x, y) => x === a.x && y === a.y, AO);
       if (!step) { stopAuto('그곳까지 갈 수 없다.'); return; }
     } else {
       // 구조 의뢰 대상이 보이면 옆까지 가서 멈춘다 (한 번 멈춘 뒤에는 다시 O를 누르면 그냥 지나간다)
@@ -2609,19 +2616,23 @@ const Dungeon = (() => {
           (D.npcSeen = D.npcSeen || new Set()).add(sos);
           stopAuto(`구조할 ${jo(spName(sos.sp), '이')} 바로 옆에 있다! (그쪽으로 움직이면 구조)`); return;
         }
-        step = bfs(p.x, p.y, (x, y) => Math.max(Math.abs(sos.x - x), Math.abs(sos.y - y)) <= 1, { known: true, blockMons: true, seenOnly: true, self: p, avoidTraps: true, passAllies: true });
+        step = bfs(p.x, p.y, (x, y) => Math.max(Math.abs(sos.x - x), Math.abs(sos.y - y)) <= 1, AO);
         if (!a.toSos) { a.toSos = true; log(`구조할 ${jo(spName(sos.sp), '을')} 발견했다!`, now()); }
       }
-      if (!step) step = bfs(p.x, p.y, (x, y) => {
-        const it = itemAt(x, y);
-        if (it && !it.price && D.explored[idx(x, y)] && !D.ignore.has(idx(x, y))) return true;
-        return isFrontier(x, y);
-      }, { known: true, blockMons: true, seenOnly: true, self: p, avoidTraps: true, passAllies: true });
+      // 아이템: 이미 본 바닥의 아이템 (일부러 내려놓거나 던진 것은 빼고, 가방이 가득 차 못 주운 것은 지금 들어갈 자리가 있으면)
+      const wantItem = (x, y) => {
+        const it = itemAt(x, y), k = idx(x, y);
+        if (!it || it.price || !D.explored[k] || D.ignore.has(k)) return false;
+        return !(D.fullSkip && D.fullSkip.has(k)) || it.money || it.id === 'quest' || bagFits(it.id);
+      };
+      // 가까운(AUTO_ITEM_REACH걸음 안) 아이템은 안 가 본 곳보다 먼저 줍는다. 그보다 멀면 가까운 쪽부터
+      if (!step) { const s = bfs(p.x, p.y, wantItem, AO); if (s && s.len <= AUTO_ITEM_REACH) step = s; }
+      if (!step) step = bfs(p.x, p.y, (x, y) => wantItem(x, y) || isFrontier(x, y), AO);
       if (!step) {
         const s = D.stairs;
         if (!D.stairsHidden && D.explored[idx(s.x, s.y)]) {
           if (p.x === s.x && p.y === s.y) { stopAuto(); D.prompts.push(Game.save.settings.autoDescend ? descend : stairsPrompt); return; }
-          step = bfs(p.x, p.y, (x, y) => x === s.x && y === s.y, { known: true, blockMons: true, seenOnly: true, self: p, avoidTraps: true, passAllies: true });
+          step = bfs(p.x, p.y, (x, y) => x === s.x && y === s.y, AO);
           if (!step) { stopAuto('계단까지 갈 수 없다.'); return; }
           if (!a.toStairs) { a.toStairs = true; log('탐색 완료. 계단으로 향한다.', now()); }
         } else { stopAuto('더 이상 탐색할 곳이 없다.'); return; }
@@ -2708,7 +2719,8 @@ const Dungeon = (() => {
     if (c.shopkeeper) { ctx.fillStyle = '#ffe066'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('상점', cx, cy - 20); }
     if (c.boss && !c.dead) { ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('BOSS', cx, cy - 22); }
     if (c.outlaw) { ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('WANTED', cx, cy - 20); }
-    if (c.status && !c.dead) {
+    if (c.status && !c.dead && Gfx.drawStatus(ctx, c.status, cx, cy, t, c.id)) {}   // 원작 상태 이상 그림 (마비는 이모지)
+    else if (c.status && !c.dead) {
       const ic = { psn: '☠', brn: '🔥', par: '⚡', slp: 'z', frz: '❄', cnf: '?' }[c.status];
       ctx.font = '9px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(ic, cx + 9, cy - 10);
     }
@@ -2765,6 +2777,7 @@ const Dungeon = (() => {
     for (const tr of D.traps) {
       if (!tr.seen || !D.explored[idx(tr.x, tr.y)]) continue;
       const x = tr.x * TILE - ox, y = tr.y * TILE - oy;
+      if (Gfx.drawTrap(ctx, tr.kind, x, y)) continue;   // 원작 함정 그림 (없으면 아래 이모지)
       ctx.fillStyle = 'rgba(20,10,30,0.7)'; ctx.fillRect(x + 3, y + 3, TILE - 6, TILE - 6);
       ctx.font = '11px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(TRAPS[tr.kind].icon, x + TILE / 2, y + TILE / 2 + 1);
     }
@@ -2772,7 +2785,8 @@ const Dungeon = (() => {
     for (const it of D.items) {
       if (!D.explored[idx(it.x, it.y)]) continue;
       const cx = it.x * TILE + TILE / 2 - ox, cy = it.y * TILE + TILE / 2 - oy;
-      if (it.money) {
+      if (Gfx.drawItem(ctx, it, cx, cy)) {}   // 원작 아이템 그림 (없는 아이템·못 불러왔으면 아래 이모지)
+      else if (it.money) {
         ctx.fillStyle = '#f5c542'; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, 7); ctx.fill();
         ctx.fillStyle = '#b8860b'; ctx.beginPath(); ctx.arc(cx + 3, cy + 3, 4, 0, 7); ctx.fill();
       } else { ctx.font = '13px sans-serif'; ctx.fillText(ITEMS[it.id].icon, cx, cy + 1); }
@@ -2898,7 +2912,7 @@ const Dungeon = (() => {
     const team = [P(), ...allies()], pa = { frisk: team.some(m => abilityOf(m).frisk), forewarn: team.some(m => abilityOf(m).forewarn) };   // 통찰·예지몽: 탐험대 누구든
     if (heldOf(P()).xray || D.radar) { pa.frisk = true; pa.forewarn = true; }
     for (const it of D.items) if (D.explored[idx(it.x, it.y)] || pa.frisk) { mctx.fillStyle = it.id === 'quest' ? '#f0f' : it.money ? '#fc3' : '#3fc'; mctx.fillRect(it.x * S, it.y * S, S, S); }
-    for (const tr of D.traps) if (tr.seen) { mctx.fillStyle = '#f80'; mctx.fillRect(tr.x * S, tr.y * S, S, S); }
+    for (const tr of D.traps) if (tr.seen) { mctx.fillStyle = tr.kind === 'reset' ? '#5f5' : '#f80'; mctx.fillRect(tr.x * S, tr.y * S, S, S); }
     for (const m of D.mons) if (seen(m) || (pa.forewarn && !m.npc)) { mctx.fillStyle = m.npc ? '#ff0' : m.ally ? '#6cf' : '#f44'; mctx.fillRect(m.x * S - 0.5, m.y * S - 0.5, S + 1, S + 1); }
     const p = P(); mctx.fillStyle = '#ff0'; mctx.fillRect(p.x * S - 1, p.y * S - 1, S + 2, S + 2);
     if (bigMap) { mctx.strokeStyle = '#000'; mctx.lineWidth = 2; mctx.strokeRect(p.x * S - 1, p.y * S - 1, S + 2, S + 2); }
@@ -3261,6 +3275,7 @@ const Dungeon = (() => {
   function enter(r) {
     updateKeyHints();
     run = r; LOG.length = 0; hudCache = logCache = moveCache = quickCache = '';
+    Gfx.preload();
     Sprites.load(r.p.sp, r.p.shiny);
     newFloor();
     if (!rafId) render();

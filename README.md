@@ -61,7 +61,7 @@
 - 아래 에셋과 데이터는 AGPL 대상이 **아니며** 각자의 권리와 라이선스를 따릅니다.
 - 포켓몬 스프라이트와 초상화: [PMD Sprite Repository (SpriteCollab)](https://sprites.pmdcollab.org/), CC BY-NC 4.0. 제작자별 크레딧은 게임 안(정보 탭, 도감)에서 볼 수 있습니다.
 - 포켓몬 데이터(이름, 능력치, 기술, 특성): [PokeAPI](https://pokeapi.co/).
-- 원작 배경음악(별도 저장소 [pmd-fan-web/assets](https://github.com/pmd-fan-web/assets))과 원작 타일셋: Pokémon Mystery Dungeon 시리즈에서 가져온 것으로, 저작권은 Nintendo / Creatures Inc. / GAME FREAK inc. / Spike Chunsoft에 있습니다.
+- 원작 배경음악과 아이템·함정·상태 이상 도트 그림(별도 저장소 [pmd-fan-web/assets](https://github.com/pmd-fan-web/assets)), 원작 타일셋: Pokémon Mystery Dungeon 시리즈에서 가져온 것으로, 저작권은 Nintendo / Creatures Inc. / GAME FREAK inc. / Spike Chunsoft에 있습니다.
 - Pokémon © Nintendo / Creatures Inc. / GAME FREAK inc. Pokémon Mystery Dungeon © Spike Chunsoft.
 
 ### 권리자 삭제 요청

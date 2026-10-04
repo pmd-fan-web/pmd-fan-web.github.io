@@ -66,7 +66,7 @@ const Dex = (() => {
     return `<div class="picker-bar"><input class="dex-q" placeholder="아이템 이름 검색" autocomplete="off">
       <select class="dex-c"><option value="">전체</option><option value="1">도구</option><option value="2,4,5">지닌 물건</option><option value="4">전용 도구 (녹슨검·금강옥 등)</option><option value="5">메가스톤</option><option value="3">기술머신</option></select><span class="dim dex-count"></span></div>
       ${ids.map(id => { const it = ITEMS[id]; return `<div class="row dex-item clickable" data-dexitem="${id}" data-s="${esc(it.n.toLowerCase())}" data-c="${it.tm ? 3 : it.mega ? 5 : it.sig ? 4 : it.held ? 2 : 1}">
-        <span class="ico big">${it.icon}</span><div class="grow"><b>${esc(it.n)}</b><div class="dim">${esc(it.d)}</div></div>
+        ${Gfx.iconHtml(id, true)}<div class="grow"><b>${esc(it.n)}</b><div class="dim">${esc(it.d)}</div></div>
         <div class="dex-tags">${it.held ? '<span class="tag">지닌 물건</span>' : ''}${shopSet.has(id) ? `<span class="tag">상점 ₽${it.price}</span>` : ''}${dropSet.has(id) ? '<span class="tag">던전</span>' : ''}${it.sig ? '<span class="tag">전용</span>' : ''}${it.mega ? '<span class="tag">메가스톤</span>' : ''}</div></div>`; }).join('')}`;
   }
 
@@ -207,7 +207,7 @@ const Dex = (() => {
     const sell = Math.floor(sellOf(id));
     UI.open({
       title: '아이템 도감',
-      html: `<div class="dex-itemd"><div class="md-head"><span class="ico big">${it.icon}</span> <b>${esc(it.n)}</b></div>
+      html: `<div class="dex-itemd"><div class="md-head">${Gfx.iconHtml(id, true)} <b>${esc(it.n)}</b></div>
         <p class="md-flavor">${esc(it.d)}</p>
         ${how ? `<div class="md-eff">• ${how}</div>` : ''}
         ${it.stack ? '<div class="md-eff">• 여러 개를 가방 한 칸에 겹쳐 담을 수 있다. (상점에서 5개 묶음)</div>' : ''}

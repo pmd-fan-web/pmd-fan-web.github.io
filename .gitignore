@@ -9,3 +9,5 @@ music/*.mp3
 music/*.ogg
 music/*.m4a
 music/*.wav
+# 원작 아이템·함정 그림 (테스트용 사본, 사이트는 pmd-fan-web/assets 저장소에서 불러온다)
+pmdgfx/

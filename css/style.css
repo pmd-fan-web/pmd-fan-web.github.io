@@ -235,6 +235,9 @@ i.clear { font-style: normal; font-size: 11px; background: #3a9d4d; padding: 1px
 .row.clickable { cursor: pointer; }
 .row.clickable:hover { background: #ffffff1a; }
 .ico.big { font-size: 22px; }
+/* 원작 아이템 그림 아이콘 (js/gfx.js iconHtml) */
+.gfx-ico { display: inline-block; width: 16px; height: 16px; vertical-align: middle; image-rendering: pixelated; background-repeat: no-repeat; }
+.gfx-ico.big { width: 32px; height: 32px; }
 .dex-tags { display: flex; gap: 4px; flex-shrink: 0; }
 .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #ffffff1a; white-space: nowrap; }
 .dex-poke h3 { color: var(--accent); margin: 12px 0 6px; font-size: 14px; }

@@ -35,3 +35,5 @@ const APPCHECK_SITE_KEY = { dev: '', prod: '' }[ENV];
 // 원작 배경음악: 코드와 다른 저장소(pmd-fan-web/assets)에 따로 둔다.
 // 권리자 요청으로 음악을 내려도 게임은 합성 배경음으로 계속 돌아간다. 내 컴퓨터에서는 게임 폴더의 music/을 쓴다.
 const MUSIC_BASE = ENV === 'prod' ? '/assets/music/' : 'music/';
+// 원작 아이템·함정·상태 이상 그림도 같은 저장소에 (못 불러오면 이모지로). 내 컴퓨터에서는 pmdgfx/ (tools/build_gfx.py로 만든다)
+const GFX_BASE = ENV === 'prod' ? '/assets/sprites/' : 'pmdgfx/';

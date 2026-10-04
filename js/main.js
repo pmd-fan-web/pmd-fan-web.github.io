@@ -66,8 +66,12 @@ const Game = (() => {
   let newerSave = null;   // 세이브가 이 화면보다 새 버전에서 저장됐으면 그 버전 (덮어쓰지 않는다)
   let lastBody = null;   // 저장 시각을 뺀 세이브 내용 (내용이 바뀌었을 때만 저장 시각을 갱신한다)
   const bodyOf = s => JSON.stringify({ ...s, savedAt: 0, playSec: 0 });   // 플레이 시간만 늘어난 것은 '바뀜'으로 치지 않는다 (클라우드 저장을 아끼려고)
+  // 세이브를 통째로 바꾸고 새로고침하는 중 (불러오기·백업 복원·초기화): 새로고침하면서 창이 숨겨질 때
+  // 지금 메모리의 옛 세이브를 다시 저장하면 바꾼 세이브가 덮여 버린다 (v0.78 전까지 불러오기·초기화가 안 되던 원인)
+  let leaving = false;
+  function reloadAfterReplace() { leaving = true; clearTimeout(upTimer); location.reload(); }
   function persist() {
-    if (newerSave || !save) return;
+    if (newerSave || leaving || !save) return;
     const body = bodyOf(save);
     if (body !== lastBody) { save.savedAt = Date.now(); lastBody = body; }
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* 저장 불가 환경 */ }
@@ -136,7 +140,7 @@ const Game = (() => {
     if (!ok) return;
     backupSave(JSON.stringify(save), GAME_VERSION);
     try { localStorage.setItem(SAVE_KEY, b.data); } catch (e) { UI.alert('복원 실패', '<p>브라우저에 저장할 수 없습니다.</p>'); return; }
-    location.reload();
+    reloadAfterReplace();
   }
 
   // ── 새 버전 알림: 사이트에 새 버전이 올라오면 마을에서 새로고침을 안내한다 (던전 중에는 방해하지 않음) ──
@@ -182,7 +186,7 @@ const Game = (() => {
     upTimer = setTimeout(() => { upTimer = null; if (!inDungeon()) uploadNow(); }, Math.max(0, lastUp + UPLOAD_GAP - Date.now()));
   }
   async function uploadNow() {
-    if (!bound || !Online.loggedIn() || !save || newerSave) return false;
+    if (!bound || !Online.loggedIn() || !save || newerSave || leaving) return false;
     const m = syncMeta();
     if (m && m.uid === Online.uid() && m.at === save.savedAt) { upPending = false; return true; }   // 바뀐 것 없음
     lastUp = Date.now(); try { localStorage.setItem(UP_KEY, String(lastUp)); } catch (e) { /* 무시 */ }
@@ -433,7 +437,7 @@ const Game = (() => {
         bound = false; setSyncMeta(null);
         if (m.box.querySelector('#del-local').checked) {   // 브라우저의 세이브와 백업까지 지우고 처음 화면으로
           try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem('pmdweb_save_backups'); } catch (e) { /* 무시 */ }
-          save = null; location.href = location.pathname; return;
+          save = null; leaving = true; location.href = location.pathname; return;
         }
         if (save) delete save.sos?.online;
         UI.close(m); renderAcct(); refreshTitle();
@@ -461,7 +465,7 @@ const Game = (() => {
         { label: '로그아웃하고 이 브라우저의 세이브도 지운다', fn: async () => {
           await Online.signOut(); bound = false; setSyncMeta(null);
           try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem('pmdweb_save_backups'); } catch (e) { /* 무시 */ }
-          location.href = location.pathname;
+          leaving = true; location.href = location.pathname;   // 떠나면서 옛 세이브를 다시 저장하지 않게
         } },
         { label: '그만둔다', fn: () => {} },
       ],
@@ -695,6 +699,7 @@ const Game = (() => {
     applyPad();
     if (save) sweepAutoSell();
     if (save) setTimeout(claimGlobalGifts, 400);
+    Gfx.preload(() => { if (!Dungeon.run) renderTown(); });   // 원작 아이템 아이콘: 처음 불러오면 마을 화면을 다시 그린다
     show('town-screen');
     checkUpdate();
     Sound.town();
@@ -831,7 +836,7 @@ const Game = (() => {
   function logSale(id, n, money, from) { save.soldLog = [{ id, n, money, from }, ...(save.soldLog || [])].slice(0, SOLD_LOG_MAX); }
   const storageUsed = () => storageUsedOf(save.storage);
   const storageRoom = (id, n) => !!ITEMS[id].tm || storageUsed() + (ITEMS[id].stack ? (save.storage[id] ? 0 : 1) : n) <= save.storageMax;
-  const itemLabel = id => `<span class="ico">${ITEMS[id].icon}</span> <b>${esc(ITEMS[id].n)}</b>`;
+  const itemLabel = id => `${Gfx.iconHtml(id)} <b>${esc(ITEMS[id].n)}</b>`;   // 원작 아이콘이 있으면 그림 (js/gfx.js)
 
   const DG_TABS = [['normal', '🗺 일반 던전', d => d.mode === 'normal' && !d.theme], ['theme', '👑 테마 던전', d => !!d.theme],
     ['rogue', '🌀 로그라이크', d => d.mode === 'rogue' && !d.daily], ['daily', '🗓 오늘의 도전', d => false], ['hard', '☠ 하드 (테스트 중)', d => false]];
@@ -1494,6 +1499,7 @@ const Game = (() => {
       현재 캐릭터 ${esc(spName(save.current))}: 스프라이트 by ${esc(cr[0])} / 초상화 by ${esc(cr[1] || '?')}</p>
       <p>포켓몬 데이터(이름, 능력치, 기술): <a href="https://pokeapi.co/" target="_blank" rel="noopener">PokeAPI</a></p>
       <p>원작 던전 타일셋·음악 (게임 폴더의 tiles/, music/에 들어 있는 경우): Pokémon Mystery Dungeon 시리즈 © Nintendo / Spike Chunsoft</p>
+      <p>던전의 아이템·함정·상태 이상 도트 그림: Pokémon Mystery Dungeon: Red Rescue Team © Nintendo / Spike Chunsoft (The Spriters Resource)</p>
       <p>이 게임의 소스 코드: GNU AGPL-3.0 (게임 폴더의 LICENSE 파일)</p>
       <p>버그 제보 · 문의 · 삭제 요청: <a href="https://github.com/pmd-fan-web/pmd-fan-web.github.io/issues" target="_blank" rel="noopener">GitHub Issues</a></p>
       <h3>개인정보</h3>
@@ -1660,7 +1666,7 @@ const Game = (() => {
           catch (e) { UI.alert('초기화 실패', `<p>클라우드 세이브를 지우지 못했어요. ${esc(Online.why(e))}</p>`); return; }
         }
         try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* 무시 */ }
-        location.reload(); return;
+        reloadAfterReplace(); return;
       }
     }
     persist(); renderTown();
@@ -1774,7 +1780,7 @@ const Game = (() => {
       <p class="warn">지금 진행 중인 세이브는 이 파일로 바뀝니다.</p>`, '불러온다', '그만둔다');
     if (!ok) return;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch (e) { UI.alert('불러오기 실패', '<p>브라우저에 저장할 수 없습니다.</p>'); return; }
-    location.reload();
+    reloadAfterReplace();
   }
   function noteShiny(sp) { save.shinySeen = save.shinySeen || {}; save.shinySeen[sp] = (save.shinySeen[sp] || 0) + 1; noteFirst('shiny', { sp }); }   // 엔딩: 처음 만난 이로치
   // 이로치 모습: 그 포켓몬의 이로치를 쓰러뜨리거나 영입하면 해금 (이미 이로치로 쓰던 캐릭터는 그대로 인정)
