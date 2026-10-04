@@ -226,7 +226,7 @@ const Game = (() => {
   const PRESENCE_MS = () => Online.PRESENCE_MIN * 60 * 1000 - 5000;
   const inTown = () => document.getElementById('town-screen')?.classList.contains('active');
   async function presenceTick() {
-    if (!Online.loggedIn() || document.hidden) return;
+    if (!Online.loggedIn() || document.hidden || idle) return;
     if (presUid !== Online.uid()) { presUid = Online.uid(); const o = presLoad(); presenceAt = o ? o.at || 0 : 0; countAt = o ? o.countAt || 0 : 0; if (o && o.n != null) onlineN = o.n; }
     if (Date.now() - presenceAt >= PRESENCE_MS()) {
       presenceAt = Date.now(); presSave();
@@ -256,6 +256,36 @@ const Game = (() => {
       try { await Online.takeSOS(m.docId); } catch (e) { console.warn(e); }   // 이미 구조됐거나 다른 사람이 맡았으면 그냥 둔다
     }
   }
+  // ── 마을 자리 비움 (v0.83): 마을에서 10분 동안 아무 조작이 없으면 서버 연결(접속 표시·구조 게시판 지켜보기)을 쉰다 ──
+  //  들어갈 때 남은 클라우드 저장은 먼저 올린다. 누르거나 키를 누르면 돌아온다
+  const IDLE_MS = 10 * 60 * 1000;
+  let idle = false, lastInput = Date.now();
+  function goIdle() {
+    idle = true;
+    flushUpload(0);
+    if (sosWatch) { sosWatch(); sosWatch = null; } sosWatchId = null;
+    let el = document.getElementById('idle-cover');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'idle-cover';
+      el.innerHTML = '<div class="box"><div class="z">💤</div><p><b>자리 비움</b></p><p class="dim">마을에서 10분 동안 조작이 없어서 서버 연결을 쉬고 있어요.<br>아무 곳이나 누르거나 키를 누르면 돌아옵니다.</p></div>';
+      el.addEventListener('click', e => { e.stopPropagation(); wakeIdle(); });
+      document.body.appendChild(el);
+    }
+    el.hidden = false;
+  }
+  function wakeIdle() {
+    if (!idle) return;
+    idle = false; lastInput = Date.now();
+    const el = document.getElementById('idle-cover'); if (el) el.hidden = true;
+    if (bound) watchMySOS();
+    presenceTick(); checkOnline();
+  }
+  for (const t of ['pointerdown', 'keydown', 'wheel', 'touchstart']) document.addEventListener(t, e => {
+    lastInput = Date.now();
+    if (idle && t === 'keydown') { e.preventDefault(); e.stopPropagation(); wakeIdle(); }
+  }, { capture: true, passive: t !== 'keydown' });
+  setInterval(() => { if (!idle && save && inTown() && !document.hidden && Date.now() - lastInput >= IDLE_MS) goIdle(); }, 20 * 1000);
+
   function startPresence() {
     if (presenceTimer) return;
     presenceTimer = setInterval(presenceTick, 60 * 1000);
@@ -475,6 +505,7 @@ const Game = (() => {
   // 게시판에 올린 내 구조 요청을 실시간으로 지켜본다: 구조되거나 누가 구조하러 가면 바로 확인 (던전 안이면 마을에 돌아왔을 때)
   let sosWatch = null, sosWatchId = null, sosPending = false;
   function watchMySOS() {
+    if (idle) return;
     const s = save && save.sos, id = s && s.online && !s.revived && Online.loggedIn() ? (s.docId || s.id) : null;
     if (id === sosWatchId) return;
     if (sosWatch) { sosWatch(); sosWatch = null; }
@@ -495,7 +526,7 @@ const Game = (() => {
   let sosRelinked = false;
   const claimFailed = new Set();   // 구조 완료를 서버가 거절한 요청 (이번 접속 동안은 다시 보내지 않는다)
   async function checkOnline(force) {
-    if (!save || !bound || !Online.loggedIn() || checking || (!force && Date.now() - lastCheck < 90 * 1000)) return;
+    if (idle || !save || !bound || !Online.loggedIn() || checking || (!force && Date.now() - lastCheck < 90 * 1000)) return;
     checking = true; lastCheck = Date.now();
     try {
       await flushThanks();
@@ -695,11 +726,29 @@ const Game = (() => {
     persist(); renderTown(); Sound.play('achieve');
     UI.alert('🎁 선물이 도착했어요', lines.join('<hr>'));
   }
+  // 터치 기기에서 처음 한 번: 조작 방식을 고른다 (조이스틱이 생긴 것을 모를 수 있어서, v0.83)
+  function askPadMode() {
+    if (!save || save.settings.padModeAsked || !touchDevice() || touchCtl() === 'off') return;
+    if (UI.isOpen()) { setTimeout(askPadMode, 1500); return; }   // 다른 창(탐험 재개 등)이 닫히면 묻는다
+    save.settings.padModeAsked = true; persist();
+    const pick = m => { setSetting('padMode', m); UI.toast(m === 'stick' ? '조이스틱 + ABXY로 조작합니다.' : '방향 버튼 + 아래 버튼(예전 방식)으로 조작합니다.'); };
+    UI.open({
+      title: '📱 터치 조작 방식', cancel: false,
+      html: `<p>던전에서 쓸 조작 방식을 골라 주세요. <span class="dim">(나중에 설정에서 언제든 바꿀 수 있어요)</span></p>
+        <div class="row"><b class="grow">🕹 조이스틱 + ABXY <span class="tag">새로 나옴</span></b></div>
+        <p class="dim">아래 조작 영역의 조이스틱을 끌어 8방향으로 걷고, A 공격(길게 누르면 기술) · B 자동 · X 행동 메뉴 · Y 조사. 크기·위치를 바꿀 수 있어요.</p>
+        <div class="row"><b class="grow">✛ 방향 버튼 + 아래 버튼 <span class="tag">예전 방식</span></b></div>
+        <p class="dim">게임 화면 위의 3×3 방향 버튼과 아래의 공격·자동·가방 등 버튼으로 조작해요.</p>`,
+      choices: [{ label: '🕹 조이스틱 + ABXY', fn: () => pick('stick') }, { label: '✛ 방향 버튼 (예전 방식)', fn: () => pick('dpad') },
+        { label: '⌨ 터치 조작 끄기', fn: () => { setSetting('touchCtl', 'off'); UI.toast('터치 조작을 껐습니다. 설정에서 다시 켤 수 있어요.'); } }],
+    });
+  }
   function enterTown() {
     applyPad();
     if (save) sweepAutoSell();
     if (save) setTimeout(claimGlobalGifts, 400);
-    Gfx.preload(() => { if (!Dungeon.run) renderTown(); });   // 원작 아이템 아이콘: 처음 불러오면 마을 화면을 다시 그린다
+    Gfx.preload(() => { if (!Dungeon.run) renderTown(); });
+    if (save) setTimeout(askPadMode, 900);   // 원작 아이템 아이콘: 처음 불러오면 마을 화면을 다시 그린다
     show('town-screen');
     checkUpdate();
     Sound.town();
@@ -733,7 +782,9 @@ const Game = (() => {
     while (stock.size < 8) stock.add(pick(pool));
     const held = HELD_SHOP_POOL.slice().sort(() => Math.random() - 0.5).slice(0, 3);
     if (Math.random() < SIG_SHOP_CHANCE) held.push(pick(SIG_ITEMS));   // 전용 도구는 가끔 하나
-    const tms = TM_IDS.slice().sort(() => Math.random() - 0.5).slice(0, 2);
+    // 기술머신 SHOP_TM_N개: 고른 분류(변화·물리·특수)가 있으면 그 분류에서만
+    const cat = SHOP_TM_CAT[save.tmFocus];
+    const tms = TM_IDS.filter(id => !cat || DATA.moves[ITEMS[id].mv].c === cat).sort(() => Math.random() - 0.5).slice(0, SHOP_TM_N);
     const vit = Math.random() < 0.35 ? [pick(Object.keys(VITAMINS))] : [];
     const abi = [Math.random() < 0.4 ? 'abcapsule' : null, Math.random() < 0.4 ? 'eggtm' : null, Math.random() < 0.15 ? 'abpatch' : null].filter(Boolean);
     // 구미: 가끔 하나 (무지개구미는 아주 가끔)
@@ -741,6 +792,7 @@ const Game = (() => {
     save.shop = [...stock, ...held, ...tms, ...vit, ...abi, ...gum];
     save.shopBought = {};
   }
+  const SHOP_TM_N = 3, SHOP_TM_CAT = { status: 1, phys: 2, spec: 3 };   // 오늘의 진열 기술머신 수 (v0.83에 2 → 3), 분류 → 기술 분류 번호
   // 오늘의 진열에서 이 물건을 몇 번 더 살 수 있나 (늘 파는 물건은 제한 없음)
   const shopLeft = id => shopFixedFor(save).includes(id) ? Infinity : ((save.shopBought || {})[id] ? 0 : 1);
 
@@ -1055,7 +1107,9 @@ const Game = (() => {
         <button class="btn sm" data-act="buy" data-arg="${id}" ${save.money < ITEMS[id].price || !left ? 'disabled' : ''}>₽${ITEMS[id].price}${ITEMS[id].stack ? ' (5개)' : ''}</button></div>`;
     };
     return `<h3>켈리몬 상점 <span class="dim">· 항상 판매</span></h3><div class="grid2">${shopFixedFor(save).map(id => row(id)).join('')}</div>
-      <h3>오늘의 진열 <span class="dim">· 하나씩만 (겹치는 물건은 5개 한 묶음)</span> <button class="btn sm ghost" data-act="shop-reroll" ${save.money < SHOP_REROLL_COST ? 'disabled' : ''} title="오늘 진열을 새로 뽑는다">🔄 새로고침 ₽${SHOP_REROLL_COST}</button></h3><div class="grid2">
+      <h3>오늘의 진열 <span class="dim">· 하나씩만 (겹치는 물건은 5개 한 묶음)</span> <button class="btn sm ghost" data-act="shop-reroll" ${save.money < SHOP_REROLL_COST ? 'disabled' : ''} title="오늘 진열을 새로 뽑는다">🔄 새로고침 ₽${SHOP_REROLL_COST}</button></h3>
+      <div class="row"><span class="grow">💿 기술머신 분류 <span class="dim">(고르면 다음 진열부터 그 분류의 기술머신만 ${SHOP_TM_N}개)</span></span>
+        <select data-tmfocus="1"><option value="">전체</option>${[['status', '변화'], ['phys', '물리'], ['spec', '특수']].map(([k, n]) => `<option value="${k}" ${save.tmFocus === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div><div class="grid2">
       ${save.shop.filter(id => !SHOP_FIXED.includes(id) && ITEMS[id]).map(id => row(id, true)).join('')}</div>
       ${(save.soldLog || []).length ? `<h3>↩ 최근에 판 물건 <span class="dim">(판 값 그대로 되살 수 있어요, 최근 ${SOLD_LOG_MAX}개)</span></h3>
         ${save.soldLog.map((e, i) => `<div class="row">${itemLabel(e.id)}${e.n > 1 ? ' ×' + e.n : ''}<span class="grow dim">${e.from === 'storage' ? '창고에서' : '가방에서'} 판 물건</span>
@@ -1286,6 +1340,8 @@ const Game = (() => {
       <h3>🥚 교배기술 <span class="dim">(${ITEMS.eggtm.icon}교배기술머신 ×${ownedCount('eggtm')}. 하나 쓰면 교배기술 하나를 배웁니다)</span></h3>
       ${eggSection(sp, ch)}
       <h3>영양제 <span class="dim">(능력치를 영구히 올립니다. 일반 던전에서만 적용되고 로그라이크에서는 무시)</span></h3>
+      <div class="row"><span class="grow">${ch.boost && ch.boost.off ? '⏸ 영양제·구미 효과를 <b>꺼 두었습니다</b> (먹은 기록은 남아 있어요)' : '영양제·구미 효과가 켜져 있습니다.'}</span>
+        <button class="btn sm ghost" data-act="boost-toggle">${ch.boost && ch.boost.off ? '효과 켜기' : '효과 끄기'}</button></div>
       ${vitaminSection(ch)}
       <h3>구미 <span class="dim">(아주 드문 간식. 능력치가 영구히 조금 오르고, 던전에서 먹으면 배도 찹니다)</span></h3>
       ${gummySection(ch)}
@@ -1296,6 +1352,7 @@ const Game = (() => {
       <h3>진화</h3>
       ${evos.length ? evos.map(e => `<div class="row">${portraitImg(e.to, 'portrait sm')}<div class="grow"><b>${esc(spName(e.to))}</b> ${typeBadges(DATA.species[e.to].t)}<div class="dim">${e.req}</div>${borrowNote(e.to) ? `<div class="dim tiny">${esc(borrowNote(e.to))}</div>` : ''}</div>
         <button class="btn sm" data-act="evolve" data-arg="${e.to}" ${e.ok ? '' : 'disabled'}>진화</button></div>`).join('') : '<p class="dim">더 이상 진화하지 않습니다.</p>'}
+      ${devolveSection(sp, ch)}
       ${partySection()}`;
   }
   // 왼쪽 캐릭터 카드 아래: 동료 정보와 기술·지닌 물건 변경, 작전
@@ -1634,6 +1691,8 @@ const Game = (() => {
       case 'vitamin': useVitamin(arg); break;
       case 'use-candy': return useCandy();
       case 'gummy': useGummy(arg); break;
+      case 'boost-toggle': { const ch = save.roster[save.current]; ch.boost = { ...(ch.boost || {}) }; if (ch.boost.off) delete ch.boost.off; else ch.boost.off = true; UI.toast(ch.boost.off ? '영양제·구미 효과를 껐습니다.' : '영양제·구미 효과를 켰습니다.'); break; }
+      case 'devolve': return devolve();
       case 'daily-go': return prepareDaily();
       case 'daily-share': { const rec = Progress.dailyRecord(); if (rec) codeBox('🗓 오늘의 도전 기록', '<p>친구에게 보내서 기록을 비교해 보세요.</p>', esc(Progress.shareText(rec).replace(/\n/g, ' · ')), '확인'); return; }
       case 'sos-show': if (save.sos && save.sos.online && !save.sos.revived && !Online.serverDown()) { sosPostedNote(save.sos); return; } if (save.sos) codeBox('🆘 SOS 코드', `<p>${esc(dungeonById(save.sos.dungeon).n)} ${save.sos.floor}F — ${esc(spName(save.sos.sp))} Lv${save.sos.lv}</p>${save.sos.online ? '<p class="warn">지금 서버가 막혀 있어서 구조 게시판이 동작하지 않아요. 서버가 돌아올 때까지는 이 코드로 친구에게 구조를 부탁할 수 있어요.</p>' : ''}`, sosCode(save.sos)); return;
@@ -1832,6 +1891,48 @@ const Game = (() => {
     });
   }
 
+  // ── 퇴화(초기화): 진화 계열의 가장 처음 모습, Lv5로 되돌린다 ──
+  // 기술은 Lv5에 배우는 기술로. 숙련도·특성(같은 칸)·이로치·지닌 물건·기술머신·영양제·구미 기록은 남는다 (영양제·구미는 캐릭터 탭에서 켜고 끌 수 있다)
+  const devolveRoot = sp => { const pre = preEvos(sp); return pre.length ? pre[pre.length - 1] : sp; };
+  function devolveBlock(sp, ch) {
+    const root = devolveRoot(sp);
+    if (root === sp && ch.lv <= RECRUIT_LEVEL) return '이미 처음 모습, 처음 레벨입니다.';
+    if (root !== sp && save.roster[root]) return `이미 ${spName(root)}이(가) 있어서 퇴화할 수 없어요.`;
+    if (save.sos && save.sos.sp === sp) return '구조를 기다리는 중에는 퇴화할 수 없어요.';
+    return '';
+  }
+  function devolveSection(sp, ch) {
+    const root = devolveRoot(sp), why = devolveBlock(sp, ch);
+    return `<h3>퇴화 · 초기화</h3><div class="row">${portraitImg(root, 'portrait sm', 'Normal', ch.shiny)}<div class="grow"><b>${esc(spName(root))}</b> Lv${RECRUIT_LEVEL}로 되돌리기
+      <div class="dim">${why ? esc(why) : '기술은 Lv' + RECRUIT_LEVEL + ' 기술로 바뀌고, 숙련도·특성·이로치·지닌 물건·기술머신·영양제·구미 기록은 남습니다.'}</div></div>
+      <button class="btn sm ghost danger" data-act="devolve" ${why ? 'disabled' : ''}>퇴화</button></div>`;
+  }
+  async function devolve() {
+    const sp = save.current, ch = save.roster[sp], root = devolveRoot(sp);
+    if (devolveBlock(sp, ch)) return;
+    const ok = await UI.confirm('퇴화 · 초기화', `<div class="center">${portraitImg(sp, 'portrait big', 'Normal', ch.shiny)} → ${portraitImg(root, 'portrait big', 'Normal', ch.shiny)}</div>
+      <p>${esc(spName(sp))} Lv${ch.lv}을(를) <b>${esc(spName(root))} Lv${RECRUIT_LEVEL}</b>로 되돌립니다.</p>
+      <ul><li>레벨과 경험치가 처음으로 돌아가고, 기술은 Lv${RECRUIT_LEVEL}에 배우는 기술로 바뀝니다. (기술머신·교배기술로 배운 기술은 기술 설정에서 다시 넣을 수 있어요)</li>
+      <li>숙련도·특성·이로치·지닌 물건·클리어 기록은 남습니다.</li>
+      <li>영양제·구미로 올린 능력치도 남습니다. 캐릭터 탭에서 효과를 끄고 켤 수 있어요.</li></ul>
+      <p class="warn">레벨은 되돌릴 수 없습니다.</p>`, '퇴화한다', '그만둔다');
+    if (!ok) return;
+    const entry = { ...ch, lv: RECRUIT_LEVEL, exp: expFor(RECRUIT_LEVEL), moves: defaultMoves(root, RECRUIT_LEVEL) };
+    if (root !== sp) {
+      const slot = DATA.species[sp].ab.findIndex(a => a[0] === ch.ability);
+      entry.ability = (DATA.species[root].ab[slot] || DATA.species[root].ab[0] || [0])[0];
+      delete entry.form;
+      delete save.roster[sp];
+      mergeMastery(save, sp, root);
+      if (save.clears && save.clears[sp]) { save.clears[root] = { ...save.clears[root], ...save.clears[sp] }; delete save.clears[sp]; }
+      if (isFav(sp)) save.favs = [...new Set(save.favs.map(x => x === sp ? root : x))];
+      if (save.party) save.party = save.party.map(x => x === sp ? root : x);
+    }
+    save.roster[root] = entry; save.current = root;
+    persist(); renderTown();
+    UI.toast(`${spName(root)} Lv${RECRUIT_LEVEL}로 되돌렸습니다.`);
+  }
+
   async function evolve(to) {
     const sp = save.current, e = evoOptions(sp).find(o => o.to === to);
     if (!e || !e.ok) return;
@@ -1884,7 +1985,10 @@ const Game = (() => {
         <label class="chk"><input type="checkbox" data-set="bgm" ${s.bgm !== false ? 'checked' : ''}> 배경음</label> ${volInput('bgmVol', 40, '배경음 음량')}</div>`;
   const playSettings = s => `<label class="chk"><input type="checkbox" data-set="fast" ${s.fast ? 'checked' : ''}> 빠른 연출</label>
       <label class="chk"><input type="checkbox" data-set="autoDescend" ${s.autoDescend ? 'checked' : ''}> 자동 탐색·계단(G)으로 계단에 도착하면 바로 내려가기</label>
-      <label class="chk"><input type="checkbox" data-set="dpad" ${s.dpad ? 'checked' : ''}> 던전에서 방향 버튼 항상 표시 <span class="dim">(휴대폰에서 방향 버튼이 안 보이면 켜세요)</span></label>
+      <div class="row"><span class="grow">📱 터치 조작 방식 <span class="dim">(휴대폰·태블릿)</span></span>
+        <select data-setsel="padMode"><option value="stick" ${(s.padMode || 'stick') === 'stick' ? 'selected' : ''}>조이스틱 + ABXY</option><option value="dpad" ${s.padMode === 'dpad' ? 'selected' : ''}>방향 버튼 + 아래 버튼 (예전 방식)</option></select></div>
+      <div class="row"><span class="grow">📱 터치 조작 <span class="dim">(휴대폰에서 조작 버튼이 안 보이면 '항상 켜기', 키보드로만 하려면 '끄기')</span></span>
+        <select data-setsel="touchCtl">${[['auto', '터치 기기에서만 켜기'], ['on', '항상 켜기'], ['off', '끄기']].map(([v, n]) => `<option value="${v}" ${touchCtl() === v ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       ${soundSettings(s)}`;
 
   // ── 개발용 운영자 테스트 계정 (로컬에서만): 모든 포켓몬 Lv100 영입, 영양제·구미 최대, 배울 수 있는 기술 전부, 특성 변경 아이템·돈 넉넉히, 모든 던전 클리어 ──
@@ -2721,6 +2825,7 @@ const Game = (() => {
       box.querySelectorAll('[data-dmtab]').forEach(b => b.onclick = () => { if (b.dataset.dmtab !== t) { UI.close(m); dungeonMenu(b.dataset.dmtab); } });
       box.addEventListener('change', e => {
         if (e.target.dataset.set) setSetting(e.target.dataset.set, e.target.checked);
+        if (e.target.dataset.setsel) setSetting(e.target.dataset.setsel, e.target.value);
         if (e.target.dataset.setnum) { setSetting(e.target.dataset.setnum, +e.target.value); Sound.play('menu'); }
       });
       box.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
@@ -2767,13 +2872,23 @@ const Game = (() => {
   // 휴대폰 조작: 터치가 되는 기기면 방향 버튼을 보인다. 펜·마우스가 함께 있는 기기는 브라우저가 터치 기기로 알려주지 않기도 해서 넓게 본다
   // (설정에서 '방향 버튼 항상 표시'를 켜면 어떤 기기에서든 보인다)
   const touchDevice = () => (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window || matchMedia('(any-pointer: coarse)').matches;
-  function applyPad() { document.body.classList.toggle('touch', touchDevice() || !!save?.settings?.dpad); }
+  // 터치 조작 켜기: auto(터치 기기면) / on(항상) / off(끄기). v0.83 전의 '항상 표시'(dpad) 설정은 on으로 본다
+  const touchCtl = () => save?.settings?.touchCtl || (save?.settings?.dpad ? 'on' : 'auto');
+  function applyPad() {
+    const tc = touchCtl();
+    document.body.classList.toggle('touch', tc === 'on' || (tc === 'auto' && touchDevice()));
+    document.body.classList.toggle('notouch', tc === 'off');
+    document.body.classList.toggle('vpad', (save?.settings?.padMode || 'stick') === 'stick');   // 터치 조작: 조이스틱·ABXY (기본) / 방향 버튼
+    if (typeof Dungeon !== 'undefined' && Dungeon.layoutVpad) Dungeon.layoutVpad();
+  }
 
   // 도감용: 클리어 기록이 있는 포켓몬의 메달 (기록이 없으면 빈 값)
   const hasClears = sp => Object.keys(clearsOf(sp)).length > 0;
   const dexMedals = () => { const out = {}; for (const k of new Set([...Object.keys(save?.clears || {}), ...Object.keys(save?.roster || {})])) { const ic = medalIcons(+k); if (ic) out[k] = ic; } return out; };
+  // 상점 기술머신 분류 (다음 진열부터)
+  function setTmFocus(v) { save.tmFocus = v || null; persist(); UI.toast(v ? '다음 진열부터 그 분류의 기술머신만 나와요. (🔄 새로고침하거나 다음 날)' : '기술머신 분류를 고르지 않았어요.'); }
   function setMissionFocus(id) { save.missionFocus = id || null; persist(); UI.toast(id ? `${dungeonById(id).n}의 의뢰가 더 자주 붙어요. (다음 새 의뢰부터)` : '자주 뜨는 지역을 해제했어요.'); }
-  return { logSale, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
+  return { logSale, setTmFocus, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
 })();
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -2799,8 +2914,10 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('town-tabs').onclick = e => { const b = e.target.closest('button'); if (b) Game.setTab(b.dataset.tab); };
   document.getElementById('town-screen').addEventListener('change', async e => {
     if (e.target.dataset.set) Game.setSetting(e.target.dataset.set, e.target.checked);
+    if (e.target.dataset.setsel) Game.setSetting(e.target.dataset.setsel, e.target.value);
     if (e.target.dataset.setnum) { Game.setSetting(e.target.dataset.setnum, +e.target.value); Sound.play('menu'); }
     if (e.target.dataset.mfocus) { Game.setMissionFocus(e.target.value); }
+    if (e.target.dataset.tmfocus) Game.setTmFocus(e.target.value);
     if (e.target.classList.contains('tm-only')) filterTMs();
     if (e.target.classList.contains('mission-sort')) { Game.save.missionSort = e.target.value || null; Game.renderTown(); }
     if (e.target.classList.contains('store-filter')) { Game.save.storageFilter = e.target.value; Game.renderTown(); }

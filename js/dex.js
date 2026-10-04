@@ -202,7 +202,7 @@ const Dex = (() => {
     const it = ITEMS[id];
     const sig = it.sig ? it.hold.only.filter(sp => DATA.species[sp]).map(spName).join('·') : '';
     const where = sig ? [`마을 상점에 가끔 진열 (₽${it.price})`, `${sig}이(가) 나오는 던전에서 드물게 발견`]
-      : it.special ? ['업적 「도감 완성」(모든 포켓몬을 만나고 쓰러뜨리기) 보상', `업적을 달성하면 마을 상점에 늘 진열 (₽${it.price})`]
+      : it.special ? ['업적 「도감 완성」(모든 포켓몬 만나기) 보상', `업적을 달성하면 마을 상점에 늘 진열 (₽${it.price})`]
       : [shopSet.has(id) ? `상점에서 ₽${it.price}에 구매` : '', dropSet.has(id) ? `던전 바닥에서 발견 (${dropStagesOf(id).map(i => DROP_STAGE_NAMES[i]).join('·')} 단계${ITEM_LV_RANGE[id] ? ` · 적 Lv${ITEM_LV_RANGE[id][1] < Infinity ? `${ITEM_LV_RANGE[id][1]} 미만` : `${ITEM_LV_RANGE[id][0]} 이상`} 층` : ''})` : ''].filter(Boolean);
     const how = it.vit ? '마을의 캐릭터 탭에서 먹인다. 효과는 그 포켓몬에게 영구히 남는다.' : it.tm ? `마을의 캐릭터 탭이나 던전 가방에서 사용한다. 배울 수 있는 포켓몬 ${SPECIES_IDS.filter(s => canLearnTM(+s, it.mv)).length}종.` : it.held ? '마을의 캐릭터 탭이나 던전 가방에서 지니게 하면 효과를 발휘한다. (한 번에 하나)' : it.use && it.use !== 'none' ? '던전에서 사용하거나 던질 수 있다.' : it.throw ? '던전에서 적에게 던져서 사용한다.' : id === 'stone' || id === 'link' ? '마을의 캐릭터 탭에서 진화할 때 소모된다.' : id === 'reviver' ? '가방에 있으면 쓰러질 때 자동으로 사용된다.' : '';
     const sell = Math.floor(sellOf(id));

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>미궁 탐험대</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css">
-<link rel="stylesheet" href="css/style.css?v=82">
+<link rel="stylesheet" href="css/style.css?v=83">
 </head>
 <body>
 <div id="title-screen" class="screen">
@@ -81,38 +81,48 @@
         <button data-k="look" title="K 또는 칸 우클릭">조사 <kbd>K</kbd></button>
         <button data-k="quick" title="빠른 사용 (T)">⭐ 빠른사용 <kbd>T</kbd></button>
         <button data-k="menu" title="Esc">메뉴</button>
+        <button data-k="padset" class="vp-only" title="조작 패드 설정">⚙ 조작</button>
       </div>
     </div>
+  </div>
+  <!-- 터치 화면용 조이스틱·ABXY (js/dungeon.js initVpad). 설정에서 '방향 버튼'을 고르면 숨는다 -->
+  <div id="vpad">
+    <div class="vp-grp vp-stick" data-grp="js"><div class="vp-base"><div class="vp-thumb"></div></div><button class="vp-face" title="누른 뒤 방향: 제자리에서 방향만 바꾸기">↻</button></div>
+    <div class="vp-grp vp-abxy" data-grp="abxy">
+      <button data-b="x" class="vp-x">X<small>행동</small></button><button data-b="y" class="vp-y">Y<small>조사</small></button>
+      <button data-b="a" class="vp-a">A<small>공격</small></button><button data-b="b" class="vp-b">B<small>자동</small></button>
+    </div>
+    <div class="vp-edit-note">패드를 끌어서 옮긴 뒤 아래 버튼을 누르세요 <button class="btn sm" data-vpdone>배치 끝</button></div>
   </div>
 </div>
 
 <div id="modal-root"></div>
 
-<script src="js/config.js?v=82"></script>
-<script src="js/data.js?v=82"></script>
-<script src="js/eggmoves.js?v=82"></script>
-<script src="js/extramoves.js?v=82"></script>
-<script src="js/champmoves.js?v=82"></script>
-<script src="js/extramegas.js?v=82"></script>
-<script src="js/defs.js?v=82"></script>
-<script src="js/concepts.js?v=82"></script>
-<script src="js/sprites.js?v=82"></script>
-<script src="js/mechanics.js?v=82"></script>
-<script src="js/moverules.js?v=82"></script>
-<script src="js/abilities.js?v=82"></script>
-<script src="js/forms.js?v=82"></script>
-<script src="js/ui.js?v=82"></script>
-<script src="music/loops.js?v=82" onerror="window.MUSIC_LOOPS = {}"></script>
-<script src="js/audio.js?v=82"></script>
-<script src="js/progress.js?v=82"></script>
-<script src="js/codes.js?v=82"></script>
-<script src="js/online.js?v=82"></script>
-<script src="js/tiles.js?v=82"></script>
-<script src="js/gfx.js?v=82"></script>
-<script src="js/dungeon.js?v=82"></script>
-<script src="js/dex.js?v=82"></script>
-<script src="js/guide.js?v=82"></script>
-<script src="js/starter.js?v=82"></script>
-<script src="js/main.js?v=82"></script>
+<script src="js/config.js?v=83"></script>
+<script src="js/data.js?v=83"></script>
+<script src="js/eggmoves.js?v=83"></script>
+<script src="js/extramoves.js?v=83"></script>
+<script src="js/champmoves.js?v=83"></script>
+<script src="js/extramegas.js?v=83"></script>
+<script src="js/defs.js?v=83"></script>
+<script src="js/concepts.js?v=83"></script>
+<script src="js/sprites.js?v=83"></script>
+<script src="js/mechanics.js?v=83"></script>
+<script src="js/moverules.js?v=83"></script>
+<script src="js/abilities.js?v=83"></script>
+<script src="js/forms.js?v=83"></script>
+<script src="js/ui.js?v=83"></script>
+<script src="music/loops.js?v=83" onerror="window.MUSIC_LOOPS = {}"></script>
+<script src="js/audio.js?v=83"></script>
+<script src="js/progress.js?v=83"></script>
+<script src="js/codes.js?v=83"></script>
+<script src="js/online.js?v=83"></script>
+<script src="js/tiles.js?v=83"></script>
+<script src="js/gfx.js?v=83"></script>
+<script src="js/dungeon.js?v=83"></script>
+<script src="js/dex.js?v=83"></script>
+<script src="js/guide.js?v=83"></script>
+<script src="js/starter.js?v=83"></script>
+<script src="js/main.js?v=83"></script>
 </body>
 </html>

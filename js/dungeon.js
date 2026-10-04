@@ -1038,7 +1038,8 @@ const Dungeon = (() => {
         const h = user.boss ? Math.min(move.h, BOSS_HEAL_MAX) : move.h;   // 보스는 회복량을 줄인다
         heal(t, Math.floor(t.maxhp * h * mul / 100), at);
       }
-      if (move.sc) for (const [st, ch] of move.sc) if (ch > 0) statChange(t, st, ch, at, t);
+      const scMul = R.sunSc && (abilityOf(user).megaSol || weatherNow() === 'sun') ? 2 : 1;   // 성장: 쾌청이면 2랭크씩
+      if (move.sc) for (const [st, ch] of move.sc) if (ch > 0) statChange(t, st, ch * scMul, at, t);
       if (R.cure && t.status) { t.status = null; t.statusT = 0; log(`${nm(t)}의 상태 이상이 나았다!`, at); }
       if (R.screen) { t[R.screen === 'phys' ? 'reflectT' : 'screenT'] = SCREEN_TURNS; log(`${nm(t)}에게 ${jo(R.screen === 'phys' ? '리플렉터' : '빛의장막', '이')} 생겼다! (${SCREEN_TURNS}턴)`, at); }
       D.fx.push({ kind: 'ring', x: t.x, y: t.y, at, dur: 300 * spd(), color: '#fff6a0' });
@@ -1213,7 +1214,7 @@ const Dungeon = (() => {
     if (byParty) { Progress.add('kills'); Progress.beaten(c.sp); run.kills = (run.kills || 0) + 1; checkLater(); }
     D.mons = D.mons.filter(m => m !== c);
     D.corpses.push(c);
-    if (c.item) { landItem(c.x, c.y, c.item, 1, at); c.item = null; }
+    if (c.item) { landItem(c.x, c.y, c.item, 1, at, false); c.item = null; }   // 쓰러진 적이 들고 있던 물건: 자동 탐색이 주우러 간다
     if (seen(c) || src === P()) log(`${jo(nm(c), '을')} 쓰러뜨렸다!`, at);
     if (src && src.hp > 0) {
       const sa = abilityOf(src);
@@ -1442,8 +1443,8 @@ const Dungeon = (() => {
     UI.open({ title: '🎒 동료에게 쓸 아이템', choices: [...list.map(({ b, i }) => ({ label: `${ITEMS[b.id].icon} ${esc(ITEMS[b.id].n)}${b.n > 1 ? ' ×' + b.n : ''} <span class="dim">${esc(ITEMS[b.id].d)}</span>`, fn: () => pickAllyFor(i, allyBag) })), { label: '돌아간다', fn: partyMenu }] });
   }
   function updateTacticBtn() {
-    const b = document.querySelector('#actions [data-k=tactic]'); if (!b) return;
-    b.hidden = !(run && (run.party || []).length);
+    // 동료 버튼은 늘 보인다 (예전에는 동료와 함께일 때만 보여서 버튼이 사라진 것처럼 보였다). 혼자면 누르면 '함께 온 동료가 없다'
+    const b = document.querySelector('#actions [data-k=tactic]'); if (b) b.hidden = false;
   }
   function aiTarget(e) {
     if (e.ally) {
@@ -2291,7 +2292,8 @@ const Dungeon = (() => {
   function takeFromBag(i) { const b = run.bag[i]; if (b.n > 1) b.n--; else run.bag.splice(i, 1); }
 
   // 떨어진 아이템을 놓는다: 그 칸이 막혀 있으면 가장 가까운 빈 바닥으로 튕겨 나간다 (3칸 안에 없으면 사라진다)
-  function landItem(x, y, id, n, at) {
+  // ignore: 자동 탐색이 주우러 가지 않을 물건 (탐험대가 던진 것). 쓰러진 적이 떨어뜨린 것은 false
+  function landItem(x, y, id, n, at, ignore = true) {
     const free = (tx, ty) => floorAt(tx, ty) && !itemAt(tx, ty) && !(D.stairs.x === tx && D.stairs.y === ty) && !(D.shop && D.shop.tiles.has(idx(tx, ty)));
     for (let r = 0; r <= 3; r++) {
       const ring = [];
@@ -2300,7 +2302,7 @@ const Dungeon = (() => {
       }
       if (ring.length) {
         const [tx, ty] = pick(ring);
-        D.items.push({ x: tx, y: ty, id, n }); D.ignore.add(idx(tx, ty));
+        D.items.push({ x: tx, y: ty, id, n }); if (ignore) D.ignore.add(idx(tx, ty));
         if (r && D.visible[idx(x, y)]) log(`${jo(ITEMS[id].n, '은')} 옆으로 튕겨 나갔다.`, at);
         return true;
       }
@@ -2782,6 +2784,24 @@ const Dungeon = (() => {
     else if (pendingKey) { const k = pendingKey; pendingKey = null; handleKey(k); }
   }
 
+  // 화면 세로 중심 (캔버스 좌표). 휴대폰은 위의 상태 창과 아래 메시지 창이 화면을 가리므로, 그 사이 보이는 곳의 가운데에 캐릭터를 둔다
+  const narrowMQ = matchMedia('(max-width: 800px)');
+  let camCYv = null, camCYat = -1e9;
+  function camCY(H) {
+    if (!narrowMQ.matches) { if (mini.style.top) mini.style.top = ''; return H / 2; }
+    const n = performance.now();
+    if (n - camCYat > 250) {
+      camCYat = n; camCYv = null;
+      const cr = canvas.getBoundingClientRect(), hud = document.getElementById('hud').getBoundingClientRect(), lg = document.getElementById('log').getBoundingClientRect();
+      if (cr.height > 0) {
+        const top = Math.max(0, hud.bottom - cr.top), bot = Math.min(cr.height, lg.top - cr.top);
+        if (bot - top > 60) camCYv = (top + bot) / 2 * canvas.height / cr.height;
+        mini.style.top = Math.max(8, Math.round(hud.bottom - cr.top + 6)) + 'px';   // 미니맵은 상태 창 바로 아래 오른쪽
+      }
+    }
+    return camCYv ?? H / 2;
+  }
+
   function render() {
     rafId = requestAnimationFrame(render);
     if (!D) return;
@@ -2791,7 +2811,7 @@ const Dungeon = (() => {
     const W = Math.ceil(wrap.clientWidth / scale), H = Math.ceil(wrap.clientHeight / scale);
     if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; ctx.imageSmoothingEnabled = false; }
     const p = P(), pv = vpos(p, t);
-    const ox = Math.round(pv.x * TILE + TILE / 2 - W / 2), oy = Math.round(pv.y * TILE + TILE / 2 - H / 2);
+    const ox = Math.round(pv.x * TILE + TILE / 2 - W / 2), oy = Math.round(pv.y * TILE + TILE / 2 - camCY(H));
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     ctx.drawImage(D.mapCanvas, -ox, -oy);
     // 안개
@@ -2978,14 +2998,13 @@ const Dungeon = (() => {
       const stg = Object.entries(p.stages).filter(([, v]) => v).map(([k, v]) => `<span class="${v > 0 ? 'up' : 'down'}" title="${STAT_NAMES[k]} ${(p.stageS?.[k]?.t || [p.stageT?.[k] || 0]).slice().sort((a, b) => a - b).join(' · ')}턴 남음 (랭크마다 따로)"><i class="sl">${STAT_NAMES[k]}</i><i class="ss">${STAT_SHORT[k]}</i>${v > 0 ? '+' : ''}${v}</span>`).join(' ');
       document.getElementById('hud').innerHTML = `
         <span class="floor">${run.hard ? '☠ ' : ''}${esc(dg.n)} <b>${run.floor}F</b>${weatherRaw() ? ` <span class="wx" title="${esc(WEATHERS[weatherRaw()].d)}">${WEATHERS[weatherRaw()].icon} ${WEATHERS[weatherRaw()].n}</span>` : ''}${dg.mode === 'rogue' ? ' <i class="rogue">로그라이크</i>' : ''}</span>
-        <span>Lv <b>${p.lv}</b></span>
+        <span class="lvl">Lv <b>${p.lv}</b> <span class="exp" title="다음 레벨까지 경험치"><span class="bar small"><i style="width:${p.lv >= MAX_LEVEL ? 100 : clamp(have / need * 100, 0, 100)}%;background:#6cf"></i></span></span></span>
         <span class="hpwrap">HP <b>${p.hp}</b>/${p.maxhp}<span class="bar"><i style="width:${hpPct}%;background:${hpPct > 50 ? '#4de36b' : hpPct > 20 ? '#f5d142' : '#f55'}"></i></span></span>
-        <span>배 <b class="${p.belly <= 20 ? 'warn' : ''}">${Math.ceil(p.belly)}</b>/100</span>
-        <span class="exp">EXP<span class="bar small"><i style="width:${p.lv >= MAX_LEVEL ? 100 : clamp(have / need * 100, 0, 100)}%;background:#6cf"></i></span></span>
-        <span class="money" title="쓰러지면 이번 탐험에서 주운 돈(괄호 안)을 잃습니다">₽ <b>${Game.save.money}</b>${run.money ? ` <span class="run-money">(이번 탐험 +${run.money})</span>` : ''}</span>
+        <span class="belly">배 <b class="${p.belly <= 20 ? 'warn' : ''}">${Math.ceil(p.belly)}</b>/100</span>
         ${p.held ? `<span class="held" title="${esc(ITEMS[p.held].d)}">${ITEMS[p.held].icon} ${esc(ITEMS[p.held].n)}</span>` : ''}
-        ${p.status || stg ? `<span class="stgs">${p.status ? `<span class="st">${STATUS_NAMES[p.status]}</span> ` : ''}${stg}</span>` : ''}
-        ${(run.party || []).length ? `<span class="party">${run.party.map(a => { const pc = a.fainted ? 0 : a.hp / a.maxhp * 100; return `<span class="pm${a.fainted ? ' out' : ''}" title="${esc(spName(a.sp))} Lv${a.lv} HP ${a.fainted ? 0 : a.hp}/${a.maxhp}${a.status ? ' · ' + STATUS_NAMES[a.status] : ''}">${esc(spName(a.sp))} <span class="bar small"><i style="width:${pc}%;background:${pc > 50 ? '#4de36b' : pc > 20 ? '#f5d142' : '#f55'}"></i></span></span>`; }).join('')}</span>` : ''}`;
+        ${p.status || stg ? `<span class="stgs">${p.status ? `<span class="st">${STATUS_NAMES[p.status]}</span> ` : ''}${stg ? `<span class="sgrid">${stg}</span>` : ''}</span>` : ''}
+        ${(run.party || []).length ? `<span class="party">${run.party.map(a => { const pc = a.fainted ? 0 : a.hp / a.maxhp * 100; return `<span class="pm${a.fainted ? ' out' : ''}" title="${esc(spName(a.sp))} Lv${a.lv} HP ${a.fainted ? 0 : a.hp}/${a.maxhp}${a.status ? ' · ' + STATUS_NAMES[a.status] : ''}"><span class="pmn">${esc(spName(a.sp))}</span> <span class="bar small"><i style="width:${pc}%;background:${pc > 50 ? '#4de36b' : pc > 20 ? '#f5d142' : '#f55'}"></i></span></span>`; }).join('')}</span>` : ''}
+        <span class="money" title="쓰러지면 이번 탐험에서 주운 돈(괄호 안)을 잃습니다">₽ <b>${Game.save.money}</b>${run.money ? ` <span class="run-money">(이번 탐험 +${run.money})</span>` : ''}</span>`;
     }
     const mv = p.moves.map(m => m.id + ':' + m.pp + ':' + m.max).join(',');
     if (mv !== moveCache) {
@@ -3009,6 +3028,9 @@ const Dungeon = (() => {
       logCache = lg;
       const el = document.getElementById('log');
       el.innerHTML = shown.map(l => `<div${l.cls ? ` class="${l.cls}"` : ''}>${esc(l.text)}</div>`).join('');
+      // 긴 메시지가 줄바꿈되어 넘치면 위쪽(오래된) 줄을 통째로 뺀다 (반쯤 잘린 줄이 보이지 않게)
+      const cs = getComputedStyle(el), avail = el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      while (el.children.length > 1 && [...el.children].reduce((h, c) => h + c.offsetHeight, 0) > avail + 1) el.firstElementChild.remove();
     }
     updateFace(t);
     const wl = run.turnsOnFloor >= WIND.warn[0] ? WIND.warn.filter(w => run.turnsOnFloor >= w).length : 0;
@@ -3121,7 +3143,7 @@ const Dungeon = (() => {
     const rect = canvas.getBoundingClientRect();
     const sx = (e.clientX - rect.left) * canvas.width / rect.width, sy = (e.clientY - rect.top) * canvas.height / rect.height;
     const t = now(), p = P(), pv = vpos(p, t);
-    const ox = Math.round(pv.x * TILE + TILE / 2 - canvas.width / 2), oy = Math.round(pv.y * TILE + TILE / 2 - canvas.height / 2);
+    const ox = Math.round(pv.x * TILE + TILE / 2 - canvas.width / 2), oy = Math.round(pv.y * TILE + TILE / 2 - camCY(canvas.height));
     const tx = Math.floor((sx + ox) / TILE), ty = Math.floor((sy + oy) / TILE);
     if (!inb(tx, ty)) return;
     const dx = tx - p.x, dy = ty - p.y;
@@ -3135,7 +3157,7 @@ const Dungeon = (() => {
     const rect = canvas.getBoundingClientRect();
     const sx = (e.clientX - rect.left) * canvas.width / rect.width, sy = (e.clientY - rect.top) * canvas.height / rect.height;
     const p = P(), pv = vpos(p, now());
-    const ox = Math.round(pv.x * TILE + TILE / 2 - canvas.width / 2), oy = Math.round(pv.y * TILE + TILE / 2 - canvas.height / 2);
+    const ox = Math.round(pv.x * TILE + TILE / 2 - canvas.width / 2), oy = Math.round(pv.y * TILE + TILE / 2 - camCY(canvas.height));
     return { x: Math.floor((sx + ox) / TILE), y: Math.floor((sy + oy) / TILE) };
   }
   // 조사: 지금 보이는 포켓몬 목록 (화면 밖이라도 보이는 곳이면. 보스방의 보스 등) + 칸을 눌러 조사하기
@@ -3252,9 +3274,11 @@ const Dungeon = (() => {
     canvas.addEventListener('click', onClick);
     canvas.addEventListener('contextmenu', e => { if (!D || UI.isOpen()) return; e.preventDefault(); lookAt(e); });   // 우클릭: 조사
     document.getElementById('log').addEventListener('click', () => { if (D && !UI.isOpen()) { stopAuto(); showLog(); } });
+    // 메시지 창은 게임 화면 아래쪽에 겹쳐 띄운다 (원작처럼, 휴대폰도 v0.83부터 같게)
+    document.getElementById('view-wrap').appendChild(document.getElementById('log'));
     document.getElementById('hud').addEventListener('click', e => { if (D && !UI.isOpen() && !e.target.closest('[title]')) { stopAuto(); showStatus(); } });
     mini.addEventListener('click', onMiniClick);
-    initPad();
+    initPad(); initVpad();
     document.getElementById('moves').addEventListener('contextmenu', e => {
       const b = e.target.closest('.mv'); if (!b || !D) return;
       e.preventDefault();
@@ -3265,12 +3289,29 @@ const Dungeon = (() => {
     });
     document.getElementById('actions').addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b || !D) return;
-      if (D.auto) stopAuto();
-      const k = b.dataset.k;
-      if (busy() && k !== 'menu') return;
-      ({ attack: () => act({ t: 'attack' }), explore: () => startAuto('explore'), fight: () => startAuto('fight'), tactic: partyMenu, rest: () => startAuto('rest'),
-        wait: () => act({ t: 'wait' }), stairs: tryStairs, bag: openBag, menu: () => Game.dungeonMenu(), help: showHelp,
-        mission: () => Game.showMissions(), map: () => toggleMap(), look: toggleLook, quick: quickUse })[k]?.();
+      runAction(b.dataset.k);
+    });
+  }
+
+  // 아래 버튼·조이스틱 행동 메뉴가 함께 쓰는 행동
+  function runAction(k) {
+    if (!D) return;
+    if (D.auto) stopAuto();
+    if (busy() && k !== 'menu') return;
+    ({ attack: () => act({ t: 'attack' }), explore: () => startAuto('explore'), fight: () => startAuto('fight'), tactic: partyMenu, rest: () => startAuto('rest'),
+      wait: () => act({ t: 'wait' }), stairs: tryStairs, bag: openBag, menu: () => Game.dungeonMenu(), help: showHelp,
+      mission: () => Game.showMissions(), map: () => toggleMap(), look: toggleLook, quick: quickUse, padset: padSettings })[k]?.();
+  }
+  // 조이스틱 모드의 X: 아래 버튼들을 모은 행동 메뉴 (조이스틱 모드에서는 아래 버튼 줄을 숨긴다)
+  const VP_MENU = [['bag', '🎒 가방'], ['quick', '⭐ 빠른사용'], ['stairs', '🪜 계단'], ['wait', '⏳ 대기'], ['rest', '💤 휴식'], ['map', '🗺 지도'],
+    ['mission', '📜 임무'], ['tactic', '🤝 동료'], ['padset', '⚙ 조작'], ['menu', '☰ 메뉴']];
+  function vpMenu() {
+    stopAuto();
+    const items = VP_MENU;
+    UI.open({
+      title: '행동', html: `<div class="vp-menu">${items.map(([k, n]) => `<button class="btn" data-vk="${k}">${n}</button>`).join('')}</div>`,
+      onOpen: (box, m) => box.querySelectorAll('[data-vk]').forEach(b => b.onclick = () => { UI.close(m); setTimeout(() => runAction(b.dataset.vk), 0); }),
+      choices: [{ label: '닫기', fn: () => {} }],
     });
   }
 
@@ -3309,6 +3350,168 @@ const Dungeon = (() => {
     pad.addEventListener('contextmenu', e => e.preventDefault());
   }
 
+  // ── 터치 화면 조이스틱·ABXY ──
+  // 조이스틱: 끌면 8방향으로 걷는다 (누르고 있는 동안 계속). ↻를 누른 뒤 끌면 방향만 바꾼다
+  // A 공격 (길게 누르면 정해 둔 순서대로 PP가 남은 기술) · B 자동 · X 메뉴 · Y 조사
+  // 설정(⚙ 조작): 크기, 진동, A 길게 누르기 기술 순서, 끌어서 배치 (위치는 세로·가로 화면마다 따로)
+  const VP_DEFAULT = { js: 100, ab: 85, vib: true, order: [1, 2, 3, 4] };
+  const VP_POS = { portrait: { js: [24, 52], abxy: [76, 52] }, landscape: { js: [16, 52], abxy: [84, 52] } };
+  const vpSet = () => ({ ...VP_DEFAULT, ...((Game.save && Game.save.settings.vpad) || {}) });
+  const vpOrient = () => (matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape');
+  const vibe = () => { if (vpSet().vib && navigator.vibrate) try { navigator.vibrate(12); } catch (e) { /* 무시 */ } };
+  // 화면이 좁으면 조이스틱과 ABXY가 겹치지 않게 함께 줄이고, 옮겨 둔 위치에서 겹치면 양 끝으로 붙인다
+  const VP_GAP = 10;
+  function layoutVpad() {
+    const vp = document.getElementById('vpad'); if (!vp || !Game.save) return;
+    const s = vpSet(), pos = { ...VP_POS[vpOrient()], ...((s.pos || {})[vpOrient()] || {}) };
+    let js = 140 * s.js / 100, ab = 64 * s.ab / 100;
+    const W = vp.clientWidth;
+    if (W > 0) {
+      const room = W - VP_GAP * 3, need = js + ab * 2.6;   // 양 끝과 가운데 틈을 빼고 남는 너비에 두 묶음이 들어가게
+      if (need > room) { const f = room / need; js *= f; ab *= f; }
+    }
+    const abW = ab * 2.6, H = Math.max(js, abW) + 20;
+    vp.style.setProperty('--js', Math.floor(js) + 'px');
+    vp.style.setProperty('--ab', Math.floor(ab) + 'px');
+    vp.style.height = Math.ceil(H) + 'px';
+    let [jx, jy] = pos.js, [ax, ay] = pos.abxy;
+    if (W > 0) {
+      // 위치(%)를 픽셀로 바꿔 영역 안에 두고, 두 묶음이 겹치면 왼쪽 끝·오른쪽 끝으로
+      const clampX = (x, half) => Math.min(W - half - 2, Math.max(half + 2, x / 100 * W)), clampY = (y, half) => Math.min(H - half - 2, Math.max(half + 2, y / 100 * H));
+      let jcx = clampX(jx, js / 2), jcy = clampY(jy, js / 2), acx = clampX(ax, abW / 2), acy = clampY(ay, abW / 2);
+      const overlap = Math.abs(jcx - acx) < (js + abW) / 2 + VP_GAP && Math.abs(jcy - acy) < (js + abW) / 2 + VP_GAP;
+      if (overlap) { jcx = VP_GAP + js / 2; acx = W - VP_GAP - abW / 2; jcy = acy = H / 2; }
+      jx = jcx / W * 100; jy = jcy / H * 100; ax = acx / W * 100; ay = acy / H * 100;
+    }
+    const at = { js: [jx, jy], abxy: [ax, ay] };
+    for (const g of vp.querySelectorAll('.vp-grp')) { const [x, y] = at[g.dataset.grp]; g.style.left = x + '%'; g.style.top = y + '%'; }
+  }
+  function initVpad() {
+    const vp = document.getElementById('vpad'); if (!vp) return;
+    const stick = vp.querySelector('.vp-stick'), base = vp.querySelector('.vp-base'), thumb = vp.querySelector('.vp-thumb'), faceBtn = vp.querySelector('.vp-face');
+    let pid = null, dir = null, timer = null, face = false, editing = false;
+    const setFace = v => { face = v; faceBtn.classList.toggle('on', v); };
+    // ↻ 방향만 바꾸기: 조이스틱을 누르고 있는 동안 계속 (방향을 돌리면 그쪽으로 돌아서기만), 손을 떼면 풀린다
+    let faceHeld = false;
+    const fire = (changed) => {
+      if (!D || D.dead || UI.isOpen() || bigMap || dir == null || busy()) return;
+      if (face) { if (changed) act({ t: 'face', dir }); faceHeld = true; return; }
+      act({ t: 'move', dir });
+    };
+    const release = () => { pid = null; dir = null; clearInterval(timer); timer = null; thumb.style.transform = 'translate(-50%, -50%)'; stick.classList.remove('on'); if (faceHeld) { faceHeld = false; setFace(false); } };
+    const track = e => {
+      const r = base.getBoundingClientRect(), R = r.width / 2;
+      const dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R);
+      const len = Math.hypot(dx, dy), k = len > R * 0.6 ? R * 0.6 / len : 1;
+      thumb.style.transform = `translate(calc(-50% + ${dx * k}px), calc(-50% + ${dy * k}px))`;
+      // 가운데(반지름의 30%) 안은 멈춤. 바깥은 45도씩 8방향
+      let d = null;
+      if (len > R * 0.3) { const o = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)); d = dirIndex(Math.round(Math.cos(o * Math.PI / 4)), Math.round(Math.sin(o * Math.PI / 4))); }
+      if (d !== dir) { dir = d; if (d != null) { vibe(); fire(true); } }
+      stick.classList.toggle('on', d != null);
+    };
+    base.addEventListener('pointerdown', e => {
+      if (editing || !D) return;
+      e.preventDefault();
+      if (D.auto) { stopAuto(); return; }
+      if (bigMap) { toggleMap(false); return; }
+      pid = e.pointerId; try { base.setPointerCapture(pid); } catch (x) { /* 무시 */ } track(e);
+      clearInterval(timer); timer = setInterval(fire, 40);   // 누르고 있으면 걷는 연출이 끝나는 대로 다음 칸
+    });
+    base.addEventListener('pointermove', e => { if (e.pointerId === pid) track(e); });
+    for (const ev of ['pointerup', 'pointercancel']) base.addEventListener(ev, e => { if (e.pointerId === pid) release(); });
+    faceBtn.addEventListener('pointerdown', e => { e.preventDefault(); if (!editing) { vibe(); setFace(!face); } });
+    // ABXY
+    let aTimer = null, aLong = false;
+    const longSkill = () => {
+      const p = P(); if (!p) return false;
+      for (const n of vpSet().order) { const m = p.moves[n - 1]; if (m && m.pp > 0) { act({ t: 'skill', slot: n - 1 }); return true; } }
+      log('PP가 남은 기술이 없다!', now()); return false;
+    };
+    const abxy = vp.querySelector('.vp-abxy');
+    abxy.addEventListener('pointerdown', e => {
+      const b = e.target.closest('button[data-b]'); if (!b || editing || !D) return;
+      e.preventDefault(); vibe(); b.classList.add('held');
+      const k = b.dataset.b;
+      if (k === 'a') { aLong = false; clearTimeout(aTimer); aTimer = setTimeout(() => { aLong = true; vibe(); if (!busy() && !UI.isOpen()) { stopAuto(); longSkill(); } }, 420); return; }
+      if (UI.isOpen() && k !== 'x') return;
+      if (D.auto && k !== 'b') stopAuto();
+      if (busy() && k !== 'x') return;
+      if (k === 'b') { if (D.auto) stopAuto(); else startAuto('explore'); }
+      else if (k === 'x') vpMenu();
+      else if (k === 'y') toggleLook();
+    });
+    const clearHeld = () => vp.querySelectorAll('.vp-abxy .held').forEach(x => x.classList.remove('held'));
+    abxy.addEventListener('pointerup', e => {
+      const b = e.target.closest && e.target.closest('button[data-b]');
+      clearHeld();
+      if (b && b.dataset.b === 'a' && aTimer) { clearTimeout(aTimer); aTimer = null; if (!aLong && D && !busy() && !UI.isOpen()) { stopAuto(); act({ t: 'attack' }); } }
+    });
+    abxy.addEventListener('pointercancel', () => { clearTimeout(aTimer); aTimer = null; clearHeld(); });
+    vp.addEventListener('contextmenu', e => e.preventDefault());
+    // 끌어서 배치 (조작 영역 안에서만)
+    let drag = null;
+    vp.addEventListener('pointerdown', e => {
+      if (!editing) return;
+      const g = e.target.closest('.vp-grp'); if (!g) return;
+      e.preventDefault(); drag = { g, id: e.pointerId }; try { vp.setPointerCapture(e.pointerId); } catch (x) { /* 무시 */ }
+    });
+    vp.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const r = vp.getBoundingClientRect(), gr = drag.g.getBoundingClientRect();
+      const hx = gr.width / 2 / r.width * 100, hy = gr.height / 2 / r.height * 100;
+      const x = Math.min(100 - hx, Math.max(hx, (e.clientX - r.left) / r.width * 100)), y = Math.min(100 - hy, Math.max(hy, (e.clientY - r.top) / r.height * 100));
+      drag.g.style.left = x + '%'; drag.g.style.top = y + '%';
+    });
+    vp.addEventListener('pointerup', () => { drag = null; });
+    vp.querySelector('[data-vpdone]').addEventListener('click', () => {
+      const s = vpSet(), pos = { ...(s.pos || {}) }, o = {};
+      for (const g of vp.querySelectorAll('.vp-grp')) o[g.dataset.grp] = [parseFloat(g.style.left), parseFloat(g.style.top)];
+      pos[vpOrient()] = o;
+      editing = false; vp.classList.remove('editing');
+      Game.setSetting('vpad', { ...s, pos }); UI.toast('패드 위치를 저장했어요. (' + (vpOrient() === 'portrait' ? '세로' : '가로') + ' 화면)');
+    });
+    initVpad.edit = () => { editing = true; release(); vp.classList.add('editing'); };
+    window.addEventListener('resize', layoutVpad);
+    if (window.ResizeObserver) new ResizeObserver(() => layoutVpad()).observe(vp);   // 던전 화면이 보일 때 (숨어 있을 때는 너비가 0)
+    layoutVpad();
+  }
+  // 조작 패드 설정 창
+  function padSettings() {
+    stopAuto();
+    const s = vpSet(), mode = Game.save.settings.padMode || 'stick';
+    const sel = i => `<select data-ord="${i}">${[1, 2, 3, 4].map(n => `<option value="${n}" ${s.order[i] === n ? 'selected' : ''}>${n}번</option>`).join('')}</select>`;
+    const savePadForm = () => {
+      const box = document.querySelector('.vp-set'); if (!box) return;
+      const v = { ...vpSet(), js: +box.querySelector('[data-vp=js]').value, ab: +box.querySelector('[data-vp=ab]').value, vib: box.querySelector('[data-vp=vib]').checked,
+        order: [0, 1, 2, 3].map(i => +box.querySelector(`[data-ord="${i}"]`).value) };
+      Game.setSetting('vpad', v); Game.setSetting('padMode', box.querySelector('[data-vp=mode]').value);
+    };
+    UI.open({
+      title: '조작 패드 설정', wide: true,
+      html: `<div class="vp-set">
+        <div class="row"><span>패드 방식</span><select data-vp="mode"><option value="stick" ${mode === 'stick' ? 'selected' : ''}>조이스틱 + ABXY</option><option value="dpad" ${mode === 'dpad' ? 'selected' : ''}>방향 버튼 (화면 위)</option></select></div>
+        <div class="row"><span>조이스틱 크기</span><input type="range" min="60" max="150" step="5" data-vp="js" value="${s.js}"><b class="vp-js">${s.js}%</b></div>
+        <div class="row"><span>ABXY 크기</span><input type="range" min="60" max="150" step="5" data-vp="ab" value="${s.ab}"><b class="vp-ab">${s.ab}%</b></div>
+        <label class="row chk"><input type="checkbox" data-vp="vib" ${s.vib ? 'checked' : ''}> 누를 때 짧은 진동</label>
+        <p class="dim">A를 길게 누르면 쓸 기술 순서 (PP가 없으면 다음 순서)</p>
+        <div class="vp-order">${sel(0)} → ${sel(1)} → ${sel(2)} → ${sel(3)}</div>
+        <p class="dim">A 공격 · 길게 누르면 기술 / B 자동 / X 행동 메뉴(가방·계단·대기·지도·메뉴 등) / Y 조사 · 조이스틱 옆 ↻를 누르고 조이스틱을 누르고 있는 동안은 방향만 바꿉니다.<br>위치는 세로·가로 화면마다 따로 저장되고, 아래 조작 영역 안에서만 옮길 수 있습니다.</p></div>`,
+      onOpen: box => {
+        box.addEventListener('input', e => {
+          const k = e.target.dataset.vp;
+          if (k === 'js' || k === 'ab') { box.querySelector('.vp-' + k).textContent = e.target.value + '%'; Game.save.settings.vpad = { ...vpSet(), [k]: +e.target.value }; layoutVpad(); }
+        });
+      },
+      choices: [
+        { label: '패드 끌어서 배치', fn: () => { savePadForm(); setTimeout(() => initVpad.edit && initVpad.edit(), 0); } },
+        { label: '기본값 복원', fn: () => { Game.save.settings.vpad = { ...VP_DEFAULT }; Game.setSetting('padMode', 'stick'); UI.toast('조작 패드를 기본값으로 되돌렸어요.'); } },
+        { label: '저장·닫기', fn: savePadForm },
+      ],
+      cancel: savePadForm,
+    });
+  }
+
   // 아래 버튼의 키 표시를 키 설정에 맞춘다
   const BTN_ACTION = { explore: 'auto', tactic: 'party', rest: 'rest', stairs: 'stairs', mission: 'missions', map: 'map', bag: 'bag', look: 'look', quick: 'quick', attack: 'attack', wait: 'wait' };
   function updateKeyHints() {
@@ -3337,5 +3540,5 @@ const Dungeon = (() => {
     clearInterval(logicTimer); logicTimer = 0;
     pendingKey = null;
   }
-  return { showLog, showStatus, partyMenu, floorCandidates, updateKeyHints, init, enter, leave, get run() { return run; }, get floor() { return D; }, stopAuto, showHelp, addToBag, _log: LOG };
+  return { layoutVpad, padSettings, showLog, showStatus, partyMenu, floorCandidates, updateKeyHints, init, enter, leave, get run() { return run; }, get floor() { return D; }, stopAuto, showHelp, addToBag, _log: LOG };
 })();

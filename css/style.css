@@ -201,7 +201,7 @@ i.clear { font-style: normal; font-size: 11px; background: #3a9d4d; padding: 1px
   #bottom { flex-direction: column; height: auto; }
   #log { height: 66px; padding: 5px 10px; font-size: 12px; }
   #controls { width: auto; }
-  #minimap { width: 108px; }
+  #minimap { width: 132px; }
   #town-screen { height: auto; min-height: 100%; }
 }
 
@@ -417,9 +417,9 @@ body.touch #dpad { display: grid; }
 body.touch #actions kbd { display: none; }
 @media (max-width: 800px) {
   #dungeon-screen { height: 100dvh; }
-  #town-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-  #town-tabs::-webkit-scrollbar { display: none; }
-  #town-tabs button { flex-shrink: 0; }
+  /* 휴대폰: 탭을 옆으로 넘기지 않게 두 줄 격자로 (예전에는 한 줄 가로 스크롤이라 뒤쪽 탭이 숨어 보이지 않았다) */
+  #town-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 6px; }
+  #town-tabs button { padding: 7px 1px; font-size: 12px; letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* 캐릭터 카드는 짧게: 능력치·기술은 캐릭터 탭에서 */
   #char-card { padding: 8px 10px; }
   #char-card .portrait.big { width: 56px; height: 56px; }
@@ -517,3 +517,118 @@ i.clear.me { background: #2b6cb0; margin-left: 4px; }
 .end-mine { background: #ffe0661f; border-radius: 4px; }
 .end-global .row .num { min-width: 18px; display: inline-block; }
 .end-stat .dim { margin-left: 6px; }
+
+/* 터치 화면 조이스틱·ABXY (body.vpad: js/main.js applyPad). 크기는 --js·--ab, 위치는 조작 영역 안의 % (설정에서 끌어서 배치) */
+#vpad { display: none; position: relative; height: calc(var(--js, 140px) + 24px); min-height: 110px; margin: 0 6px 6px; border-radius: 10px; background: #0b1633; border: 1px solid #fff2; touch-action: none; user-select: none; -webkit-user-select: none; flex-shrink: 0; }
+body.touch.vpad #vpad { display: block; }
+body.touch.vpad #dpad { display: none; }
+.vp-only { display: none; }
+/* 조이스틱 모드: 아래 버튼 줄은 숨기고 X(행동 메뉴)로 */
+body.touch.vpad #actions { display: none; }   /* 동료 버튼은 X(행동) 메뉴에 */
+.vp-menu { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.vp-menu .btn { padding: 12px 6px; font-size: 15px; }
+.vp-grp { position: absolute; transform: translate(-50%, -50%); touch-action: none; }
+.vp-base { width: var(--js, 140px); height: var(--js, 140px); border-radius: 50%; background: radial-gradient(circle, #1d2c55 0 55%, #14224a 56%); border: 2px solid #ffffff30; position: relative; box-shadow: inset 0 0 12px #0008; }
+.vp-base::before, .vp-base::after { content: ''; position: absolute; left: 50%; top: 50%; width: 70%; height: 2px; background: #ffffff10; transform: translate(-50%, -50%); }
+.vp-base::after { transform: translate(-50%, -50%) rotate(90deg); }
+.vp-thumb { position: absolute; left: 50%; top: 50%; width: 38%; height: 38%; border-radius: 50%; transform: translate(-50%, -50%); background: radial-gradient(circle at 35% 30%, #9db3e0, #4d6496); border: 2px solid #ffffff60; box-shadow: 0 3px 8px #0009; }
+.vp-stick.on .vp-thumb { background: radial-gradient(circle at 35% 30%, #bfe4ff, #5d8fd0); }
+.vp-face { position: absolute; left: -6px; top: -6px; width: 34px; height: 34px; border-radius: 50%; font: inherit; font-size: 16px; color: #fff; background: #0b1633cc; border: 1px solid #fff5; padding: 0; touch-action: none; }
+.vp-face.on { background: var(--accent); color: #1b1b1b; }
+.vp-abxy { width: calc(var(--ab, 64px) * 2.6); height: calc(var(--ab, 64px) * 2.6); }
+.vp-abxy button { position: absolute; width: var(--ab, 64px); height: var(--ab, 64px); border-radius: 50%; font: inherit; font-size: calc(var(--ab, 64px) * .34); font-weight: bold; color: #fff; border: 2px solid #ffffff55; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; padding: 0; touch-action: none; -webkit-tap-highlight-color: transparent; box-shadow: 0 3px 6px #0008; }
+.vp-abxy button small { font-size: calc(var(--ab, 64px) * .17); font-weight: normal; margin-top: 2px; opacity: .9; }
+.vp-abxy .vp-x { left: 50%; top: 0; transform: translateX(-50%); background: #3e5aa8; }
+.vp-abxy .vp-y { left: 0; top: 50%; transform: translateY(-50%); background: #3f7a5c; }
+.vp-abxy .vp-a { right: 0; top: 50%; transform: translateY(-50%); background: #a8434b; }
+.vp-abxy .vp-b { left: 50%; bottom: 0; transform: translateX(-50%); background: #b0883a; }
+.vp-abxy button.held { filter: brightness(1.4); box-shadow: 0 0 0 3px #fff8; }
+.vp-edit-note { display: none; position: absolute; left: 50%; top: 4px; transform: translateX(-50%); font-size: 12px; color: var(--accent); background: #000a; padding: 3px 8px; border-radius: 6px; white-space: nowrap; z-index: 2; }
+#vpad.editing .vp-edit-note { display: block; }
+#vpad.editing .vp-grp { outline: 2px dashed var(--accent); outline-offset: 4px; border-radius: 12px; }
+.vp-set .row { gap: 8px; align-items: center; }
+.vp-set input[type=range] { flex: 1; }
+.vp-order { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* 휴대폰: 한 줄(.row)에 그림·버튼이 많으면 설명 글이 한 글자 폭으로 눌려 세로로 길게 나오던 문제
+   글은 최소 9em을 지키고, 남는 칸이 모자라면 다음 줄로 넘어간다 (빈 .grow는 칸 띄우기용이라 그대로) */
+@media (max-width: 800px) {
+  .row { flex-wrap: wrap; row-gap: 4px; }
+  .row .grow { flex: 1 1 9em; }
+  .row .grow:empty { flex-basis: 0; }
+}
+
+/* PC: 상태 정보를 게임 화면 왼쪽 위에 여러 줄로 겹쳐 띄운다 (오른쪽 위는 미니맵). 휴대폰은 위쪽 한 줄 그대로 */
+@media (min-width: 801px) {
+  #dungeon-screen { position: relative; }
+  #hud { position: absolute; left: 14px; top: 14px; z-index: 3; margin: 0; flex-direction: column; align-items: flex-start; flex-wrap: nowrap; gap: 3px;
+    max-width: 280px; padding: 8px 12px; background: #0b1633d9; line-height: 1.4; }
+  #hud .money { margin-left: 0; font-size: 13px; }
+  #hud .party { flex-direction: column; gap: 2px; }
+  /* 동료 이름 칸을 고정 폭으로: 이름 길이와 상관없이 체력바가 한 줄로 맞는다 (긴 이름은 …) */
+  #hud .pm .pmn { display: inline-block; width: 6.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+  #minimap { width: 260px; }
+  #hud .stgs { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+  #view-wrap { margin-top: 6px; }
+  /* 자동 탐색·바람 표시는 상태 창과 겹치지 않게 위쪽 가운데로 */
+  #auto-ind, #wind-ind { left: 50%; transform: translateX(-50%); white-space: nowrap; }
+}
+
+/* PC: 메시지는 게임 화면 아래쪽에 반투명하게 (최근 4줄, 누르면 전체 기록). 아래 띠에는 기술 4칸 한 줄 + 버튼 */
+@media (min-width: 801px) {
+  #view-wrap #log { position: absolute; left: 114px; right: 14px; bottom: 8px; max-width: 640px; height: 84px; z-index: 2;   /* 왼쪽 아래 얼굴 그림 바로 옆 */
+    background: #0b1633cc; border: 2px solid #ffffff40; border-radius: 8px; padding: 6px 12px; flex: none; box-sizing: border-box; }
+  body.touch #view-wrap #log { right: 170px; }   /* 화면 위 방향 버튼과 겹치지 않게 */
+  #bottom { height: auto; }
+  /* 기술 2×2는 왼쪽, 그 옆에 공격·자동 등 버튼 */
+  #controls { width: 100%; flex-direction: row; align-items: stretch; }
+  #moves { grid-template-columns: 1fr 1fr; flex: 0 0 46%; align-content: start; }
+  #actions { flex: 1; align-content: start; }
+}
+
+/* 마을 자리 비움 (10분 동안 조작이 없으면 서버 연결을 쉰다) */
+#idle-cover { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; background: #050a18d0; cursor: pointer; }
+#idle-cover[hidden] { display: none; }
+#idle-cover .box { text-align: center; padding: 20px 28px; border: 2px solid #ffffff40; border-radius: 12px; background: #0b1633; max-width: min(90vw, 380px); }
+#idle-cover .z { font-size: 40px; }
+
+/* 휴대폰: 상태 정보는 맨 위 띠(게임 화면 밖)에 줄 바꿈으로 촘촘히, 미니맵은 그 아래 게임 화면 오른쪽 위. 메시지는 왼쪽 아래 얼굴 그림 옆에 겹쳐 띄운다 */
+@media (max-width: 800px) {
+  /* 게임 화면 맨 위에 반투명하게 겹쳐 띄운다. 왼쪽: 지역·층 / Lv·경험치·배 / HP (+지닌 물건), 오른쪽: 랭크 변화 / 동료 체력 */
+  #dungeon-screen { position: relative; }
+  #hud { position: absolute; left: 8px; right: 8px; top: 8px; z-index: 3; margin: 0; padding: 4px 8px; background: #0b1633d9; font-size: 11px; line-height: 1.35;
+    display: grid; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "floor floor stgs" "lvl belly stgs" "hp hp party" "held held party"; gap: 1px 6px; align-items: start; }
+  #hud .floor { grid-area: floor; } #hud .lvl { grid-area: lvl; } #hud .belly { grid-area: belly; } #hud .hpwrap { grid-area: hp; }
+  #hud .floor, #hud .lvl, #hud .belly, #hud .hpwrap, #hud .held, #hud .pm { white-space: nowrap; }
+  #hud .held { grid-area: held; justify-self: start; }
+  #hud .stgs { grid-area: stgs; justify-self: end; }
+  #hud .party { grid-area: party; justify-self: end; flex-direction: column; align-items: flex-end; }
+  #hud .money { display: none; }
+  #hud .exp .bar { width: 36px; }
+  #hud .exp { display: inline; }
+  #hud .held { display: inline; }
+  /* 긴 메시지는 잘리지 않게 줄바꿈 (오래된 줄은 위로 밀려 사라지고, 누르면 전체 기록) */
+  #view-wrap #log div { white-space: normal; overflow: visible; text-overflow: clip; }
+  #hud .bar { width: 50px; }
+  #hud .party { gap: 1px; }
+  #hud .pm .pmn { display: inline-block; max-width: 5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+  #view-wrap { margin-top: 4px; }
+  #auto-ind, #wind-ind { left: 50%; transform: translateX(-50%); white-space: nowrap; }
+  #face { width: 52px; height: 52px; }
+  #face-box { left: 6px; bottom: 6px; }
+  #view-wrap #log { position: absolute; left: 80px; right: 6px; bottom: 6px; height: 72px; z-index: 2;
+    background: #0b1633cc; border: 2px solid #ffffff40; border-radius: 8px; padding: 3px 8px; font-size: 11px; line-height: 1.4; flex: none; box-sizing: border-box; }
+  /* 예전 방향 버튼: 메시지 창 위로 올린다 */
+  body.touch:not(.vpad) #dpad { bottom: 84px; }
+}
+
+/* 랭크 변화: PC는 예전처럼 이름 그대로 이어서, 휴대폰은 줄임말을 고정 폭 칸(한 줄 4칸)에 가지런히 */
+#hud .sgrid { display: contents; }
+@media (max-width: 800px) {
+  #hud .stgs { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 4px; }
+  #hud .sgrid { display: grid; grid-template-columns: repeat(4, 3.5em); gap: 1px 4px; font-size: 10px; }
+  #hud .sgrid > span { white-space: nowrap; text-align: left; }
+}
+
+/* 설정에서 터치 조작을 끈 경우: 터치 기기여도 방향 버튼·조이스틱을 숨긴다 */
+body.notouch #dpad, body.notouch #vpad { display: none !important; }
