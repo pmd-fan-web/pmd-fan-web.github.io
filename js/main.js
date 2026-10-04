@@ -742,7 +742,7 @@ const Game = (() => {
     save.shopBought = {};
   }
   // 오늘의 진열에서 이 물건을 몇 번 더 살 수 있나 (늘 파는 물건은 제한 없음)
-  const shopLeft = id => SHOP_FIXED.includes(id) ? Infinity : ((save.shopBought || {})[id] ? 0 : 1);
+  const shopLeft = id => shopFixedFor(save).includes(id) ? Infinity : ((save.shopBought || {})[id] ? 0 : 1);
 
   // 게시판에서 고른 "자주 뜨는 지역": 새 의뢰의 30~50%쯤이 그 던전에서 (MISSION_FOCUS_RATE, v0.69에 50% → 40%)
   // 받을 수 있는 임무 MISSION_MAX개, 게시판 의뢰 MISSION_BOARD개 (v0.69에 4 → 8, 6 → 10)
@@ -1054,7 +1054,7 @@ const Game = (() => {
       return `<div class="row">${itemLabel(id)}<span class="grow dim">${esc(ITEMS[id].d)}${daily && !left ? ' <span class="warn">(매진)</span>' : ''}</span>
         <button class="btn sm" data-act="buy" data-arg="${id}" ${save.money < ITEMS[id].price || !left ? 'disabled' : ''}>₽${ITEMS[id].price}${ITEMS[id].stack ? ' (5개)' : ''}</button></div>`;
     };
-    return `<h3>켈리몬 상점 <span class="dim">· 항상 판매</span></h3><div class="grid2">${SHOP_FIXED.map(id => row(id)).join('')}</div>
+    return `<h3>켈리몬 상점 <span class="dim">· 항상 판매</span></h3><div class="grid2">${shopFixedFor(save).map(id => row(id)).join('')}</div>
       <h3>오늘의 진열 <span class="dim">· 하나씩만 (겹치는 물건은 5개 한 묶음)</span> <button class="btn sm ghost" data-act="shop-reroll" ${save.money < SHOP_REROLL_COST ? 'disabled' : ''} title="오늘 진열을 새로 뽑는다">🔄 새로고침 ₽${SHOP_REROLL_COST}</button></h3><div class="grid2">
       ${save.shop.filter(id => !SHOP_FIXED.includes(id) && ITEMS[id]).map(id => row(id, true)).join('')}</div>
       ${(save.soldLog || []).length ? `<h3>↩ 최근에 판 물건 <span class="dim">(판 값 그대로 되살 수 있어요, 최근 ${SOLD_LOG_MAX}개)</span></h3>
@@ -1251,12 +1251,14 @@ const Game = (() => {
   }
 
   function evoOptions(sp) {
-    const ch = save.roster[sp];
-    return DATA.species[sp].v.map(([to, lv, item]) => {
+    const ch = save.roster[sp], v = DATA.species[sp].v;
+    // 이미 영입한 진화형(또는 그 뒤 갈래를 모두 영입한 진화형)으로는 진화하지 않는다: 다른 갈래로
+    // 단 갈 수 있는 진화가 모두 이미 있으면 (크랩·킹크랩을 둘 다 영입한 경우 등) 진화해서 그 포켓몬과 합친다
+    const covered = v.map(([to]) => familyCovered(to, save.roster)), allCovered = covered.every(Boolean);
+    return v.map(([to, lv, item], i) => {
       const itemId = item === 1 ? 'stone' : item === 2 ? 'link' : null;
       const hasItem = !itemId || save.bag.some(b => b.id === itemId) || save.storage[itemId] > 0;
-      // 이미 영입한 진화형(또는 그 뒤 갈래를 모두 영입한 진화형)으로는 진화하지 않는다: 다른 갈래로
-      const taken = familyCovered(to, save.roster);
+      const taken = covered[i] && !allCovered;
       const req = taken ? '이미 영입한 포켓몬이라 이쪽으로는 진화할 수 없어요' : [lv ? `Lv ${lv} 이상` : '', itemId ? ITEMS[itemId].n + ' 필요' : ''].filter(Boolean).join(', ');
       return { to, lv, itemId, ok: !taken && ch.lv >= lv && hasItem, req };
     });
@@ -1536,7 +1538,7 @@ const Game = (() => {
         }
         else UI.toast(`${jo(it.n, '을')} 샀습니다.`);
         save.money -= it.price;
-        if (!SHOP_FIXED.includes(arg)) (save.shopBought = save.shopBought || {})[arg] = 1;
+        if (!shopFixedFor(save).includes(arg)) (save.shopBought = save.shopBought || {})[arg] = 1;
         break;
       }
       case 'shop-reroll': {
@@ -1835,23 +1837,26 @@ const Game = (() => {
     if (!e || !e.ok) return;
     let msg = `<p>${esc(jo(spName(sp), '이'))} ${esc(jo(spName(to), '으로'))} 진화합니다.</p>`;
     if (borrowNote(to)) msg += `<p class="dim">${esc(borrowNote(to))}</p>`;
-    if (save.roster[to]) msg += `<p class="warn">이미 있는 ${esc(spName(to))}의 기록(Lv${save.roster[to].lv})을 덮어씁니다.</p>`;
+    const other = save.roster[to];   // 이미 있는 진화형: 둘을 합친다 (레벨이 높은 쪽의 기록이 남는다)
+    if (other) msg += `<p class="warn">이미 있는 ${esc(spName(to))}(Lv${other.lv})와 합칩니다. 레벨이 더 높은 쪽(Lv${Math.max(other.lv, save.roster[sp].lv)})의 기록이 남고, 숙련도·클리어 기록은 합쳐집니다.</p>`;
     if (!(await UI.confirm('진화', msg, '진화한다', '그만둔다'))) return;
     if (e.itemId) {
       const bi = save.bag.findIndex(b => b.id === e.itemId);
       if (bi >= 0) save.bag.splice(bi, 1); else { save.storage[e.itemId]--; if (save.storage[e.itemId] <= 0) delete save.storage[e.itemId]; }
     }
-    const entry = save.roster[sp];
+    let entry = save.roster[sp];
     if (shinyOk(sp)) { save.shinyOwned = save.shinyOwned || {}; save.shinyOwned[to] = true; }
+    const keepOther = other && other.lv > entry.lv;   // 합칠 때 이미 있던 쪽이 레벨이 더 높으면 그쪽 기록을 쓴다
     delete save.roster[sp];
-    if (isFav(sp)) save.favs = save.favs.map(x => x === sp ? to : x);   // 즐겨찾기도 진화한 모습으로
+    if (isFav(sp)) save.favs = [...new Set(save.favs.map(x => x === sp ? to : x))];   // 즐겨찾기도 진화한 모습으로
     // 진화 후 레벨에서 새로 배우는 기술이 있으면 빈 칸에 추가
     for (const mid of learnedAt(to, entry.lv).concat(learnedAt(to, 1))) if (entry.moves.length < 4 && !entry.moves.includes(mid)) entry.moves.push(mid);
     const slot = DATA.species[sp].ab.findIndex(a => a[0] === entry.ability);
     entry.ability = (DATA.species[to].ab[slot] || DATA.species[to].ab[0] || [0])[0];
     delete entry.form;   // 골라 둔 모습은 진화 전 포켓몬의 것
     mergeMastery(save, sp, to);   // 숙련도도 진화한 모습으로
-    save.roster[to] = entry; save.current = to;
+    save.roster[to] = keepOther ? other : entry; save.current = to;   // 합칠 때는 레벨이 높은 쪽
+    entry = save.roster[to];
     if (save.sos && save.sos.sp === sp) save.sos.sp = to;   // 구조를 기다리는 포켓몬이 진화하면 구조 요청도 진화한 모습으로
     // 클리어 기록도 진화한 모습으로 옮긴다
     if (save.clears && save.clears[sp]) { save.clears[to] = { ...save.clears[to], ...save.clears[sp] }; delete save.clears[sp]; }

@@ -3,7 +3,7 @@
 
 // 게임 버전: 업데이트할 때 올리고, index.html의 ?v= 숫자도 같이 올린다
 // (친구와 구조 코드·오늘의 도전을 주고받으려면 버전이 같아야 한다)
-const GAME_VERSION = '0.81';
+const GAME_VERSION = '0.82';
 // 버전 비교: '0.25' > '0.9' 처럼 숫자로 비교한다
 function cmpVer(a, b) {
   const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
@@ -12,6 +12,7 @@ function cmpVer(a, b) {
 }
 const GAME_DATE = '2026-10-01';
 const VERSION_NOTES = [
+  ["0.82", ["새 업적 「도감 완성」: 모든 포켓몬을 만나고 쓰러뜨리면 빛나는부적을 받습니다. 리더가 지니면 이로치를 만날 확률이 2배(1/80 → 1/40)입니다. 업적을 달성하면 마을 상점에 늘 진열되어, 잃어버려도 ₽50000에 다시 살 수 있습니다", "진화: 갈 수 있는 진화형을 모두 이미 영입했으면(예: 크랩과 킹크랩을 둘 다 영입) 다시 진화해서 그 포켓몬과 합칠 수 있습니다. 레벨이 더 높은 쪽의 기록이 남고, 숙련도·클리어 기록은 합쳐집니다. 다른 갈래가 남아 있으면(가디안만 있는 킬리아 등) 지금처럼 남은 갈래로만 진화합니다"]],
   ["0.81", ["로그라이크 던전: 얻는 경험치가 1.3배입니다 (행복의알과 함께 쓰면 곱해집니다)", "로그라이크 던전: 아이템 단계를 적 레벨 대신 층 진행으로 정합니다. 전체 층을 넷으로 나눠 초반 → 중반 → 후반 → 최종 아이템이 나옵니다. 영양제·구미도 일반 던전보다 4배 잘 나와서 파밍할 수 있습니다", "오늘의 도전 보상을 10배로 늘렸습니다: 도달한 층마다 ₽400, 완주하면 ₽10000을 더 받습니다", "아이템 드롭: 던전 진행 단계(초반 Lv0~19 · 중반 Lv20~44 · 후반 Lv45~69 · 최종 Lv70~)마다 드롭 표를 따로 정했습니다. 회복은 초반 오랭열매 → 중반 자뭉열매·좋은상처약 → 후반·최종 자뭉열매·회복약, 식량은 사과 → 큰사과, PP는 과사열매 → 맥스엘릭서, 던지는 도구는 쇠가시·자갈 → 금바늘로 바뀝니다. 씨앗은 뒤로 갈수록 줄고, 구슬·리샘열매·부활씨·능력 열매·사탕·영양제·지닌 물건·기술머신은 뒤로 갈수록 많아집니다. 강한 지닌 물건(생명의구슬 등)은 후반부터 나옵니다. 단계별 표는 가이드의 '던전 아이템 단계'에서 볼 수 있습니다", "던전 켈리몬 상점: 팔 물건을 여러 개 골라 한 번에 팝니다. '자동 판매 목록 고르기'·'전부 고르기'로 한 번에 고를 수 있고 합계 금액이 보입니다. ₽1000 이상이거나 지닌 물건이 섞여 있으면 한 번 더 묻고, 판 물건은 마을 상점의 '최근에 판 물건'에서 되살 수 있습니다", "도감: 영입한 포켓몬의 진화 전 모습도 만난 포켓몬으로 칩니다 (가디안을 영입하면 랄토스·킬리아도 도감에 채워집니다. 진화해서 목록에서 빠진 진화 전 모습도 같습니다)", "영입·진화: 이미 영입한 진화형으로는 진화하지 않고 다른 갈래로만 진화합니다. 진화 전 모습은 아직 아무도 차지하지 않은 진화가 남아 있을 때만 영입됩니다 (가디안만 있으면 랄토스·킬리아를 영입해 엘레이드로 진화. 가디안과 랄토스가 있으면 랄토스가 엘레이드를 맡으므로 랄토스·킬리아는 더 영입되지 않음. 이브이는 진화시킨 뒤 새 이브이를 영입해 다른 진화로)"]],
   ["0.80", ["진화: 레어코일→자포코일, 코코파스→대코파스, 전지충이→투구뿌논, 오기지게→모단단게, 이브이→리피아·글레이시아가 Lv25로 잘못 되어 있던 것을 원작대로 진화의 돌로 바꿨습니다. 빈티나→밀로틱은 연결의끈입니다", "치유파동·플라워힐: 원작처럼 같은 편 하나의 HP를 최대 HP의 절반만큼 회복합니다. 바로 앞의 같은 편, 없으면 주변 3칸에서 HP 비율이 가장 낮은 같은 편을 회복하고, 자신은 회복하지 못합니다 (혼자일 때는 실패합니다). 동료는 다친 같은 편이 있으면 이 기술로 회복해 줍니다"]],
   ["0.79", ["구조 요청: 서버가 사용량 한도 초과 등으로 막혀 있을 때는 구조 게시판에 올린 요청도 SOS 코드를 다시 볼 수 있습니다. 서버가 돌아오면 다시 가려집니다"]],
@@ -262,6 +263,7 @@ const HELD_ITEMS = {
   .forEach(([id, n, t]) => { HELD_ITEMS[id] = { n, d: `${DATA.types[t - 1]} 타입 기술의 위력이 1.2배.`, price: 600, icon: '🔸', hold: { typeMul: { [t]: 1.2 } } }; });
 // 스카프·리본
 Object.assign(HELD_ITEMS, {
+  shinycharm:  { n: '빛나는부적', d: '색이 다른 포켓몬(이로치)을 만날 확률이 2배 (1/80 → 1/40). (리더가 지닐 때만)', price: 1, icon: '💫', hold: { shinyMul: 2 }, special: true },
   friendbow:   { n: '친구리본',   d: '쓰러뜨린 적이 동료가 되고 싶어 할 확률이 1.5배. (리더가 지닐 때만)', price: 2500, icon: '🎀', hold: { recruitMul: 1.5 } },
   healribbon:  { n: '치유리본',   d: '상태이상이 절반의 시간에 낫는다.', price: 900, icon: '💗', hold: { statusShort: true } },
   goldribbon:  { n: '황금리본',   d: '공격·방어·특공·특방·스피드가 모두 1.1배.', price: 4000, icon: '🏅', hold: { atkMul: 1.1, defMul: 1.1, spaMul: 1.1, spdMul: 1.1, speedMul: 1.1 } },
@@ -311,7 +313,7 @@ const SHOP_POOL = ['oran', 'oran', 'sitrus', 'apple', 'apple', 'bigapple', 'heal
   'superpotion', 'fullrestore', 'xattack', 'xdefense', 'xspatk', 'xspeed', 'xaccuracy', 'poisonseed', 'confuseseed', 'goldthorn', 'radar', 'trapbust', 'paraorb', 'sloworb',
   'cheri', 'chesto', 'pecha', 'rawst', 'persim', 'lum', 'leppa'];
 // 마을 상점은 매일 지닌 물건 몇 개도 진열한다 (전용 도구는 따로 가끔)
-const HELD_SHOP_POOL = Object.keys(HELD_ITEMS).filter(id => !HELD_ITEMS[id].sig);
+const HELD_SHOP_POOL = Object.keys(HELD_ITEMS).filter(id => !HELD_ITEMS[id].sig && !HELD_ITEMS[id].special);   // special: 업적 보상·전용 진열만 (빛나는부적)
 const SIG_ITEMS = Object.keys(HELD_ITEMS).filter(id => HELD_ITEMS[id].sig);
 const SIG_SHOP_CHANCE = 0.08;   // 마을 상점에 전용 도구가 하나 진열될 확률 (하루)
 // 전용 도구는 그 포켓몬이 나오는 던전에서만 드물게 떨어진다
@@ -787,6 +789,7 @@ TM_MOVES.forEach((mid, i) => {
 // (지닌 물건 배율을 곱한 뒤 기준, 파는 값도 따라 오른다)
 const CHEAP_LIMIT = 3000, CHEAP_MUL = 2, PRICEY_MUL = 1.5;
 for (const it of Object.values(ITEMS)) if (it.price > 0) it.price = Math.round(it.price * (it.price <= CHEAP_LIMIT ? CHEAP_MUL : PRICEY_MUL) / 10) * 10;
+ITEMS.shinycharm.price = 50000;   // 빛나는부적: 도감 완성 업적 뒤 상점에서 (가격 올리기와 따로)
 // 상점에 늘 있는 기본 물건은 값을 따로 더 올린다 (오랭열매·사과·과사열매 2배), 탈출구슬은 비싸게
 for (const id of ['oran', 'apple', 'leppa']) ITEMS[id].price *= 2;
 ITEMS.escape.price = 3000;
@@ -816,6 +819,9 @@ for (const id of TM_IDS) ITEMS[id].price -= TM_DISCOUNT;
 for (const id of ['oran', 'apple', 'leppa']) { const it = ITEMS[id]; it.sellAt = sellOf(id); it.price = Math.round(it.price / 2 / 10) * 10; }
 // 상점에 늘 있는 물건 (맨 위에 고정). 나머지 진열은 날마다 바뀐다
 const SHOP_FIXED = ['oran', 'apple', 'leppa', 'stone', 'link'];
+// 업적을 달성하면 늘 진열되는 물건: 물건 → 업적 id (빛나는부적: 도감 완성. 처음 한 번은 업적 보상으로 받고, 잃어버리면 여기서 산다)
+const SHOP_UNLOCK = { shinycharm: 'dexAll' };
+const shopFixedFor = s => [...SHOP_FIXED, ...Object.keys(SHOP_UNLOCK).filter(id => s && s.ach && s.ach[SHOP_UNLOCK[id]])];
 
 // ── 아이템 등급 (상점 가격·보상 분류용. 바닥 드롭은 위의 단계별 표 DROP_STAGES) ──
 // 1 흔함 (처음부터) · 2 조금 드묾 · 3 드묾 · 4 아주 드묾

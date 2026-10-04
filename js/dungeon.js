@@ -201,7 +201,7 @@ const Dungeon = (() => {
     sp = sp || (D.want && D.want.size ? weighted(D.pool.map(id => [id, D.want.has(+id) ? WANT_W : 1])) : pick(D.pool));
     const c = makeCreature(sp, run.hard ? run.hardLv : clamp((lv || D.lvl) + rint(-1, 1), 1, MAX_LEVEL));   // 하드모드: 레벨 고정
     c.enemy = true; c.x = pos.x; c.y = pos.y; c.dir = rand(8);
-    c.shiny = !!DATA.species[sp].sh && Math.random() < SHINY_CHANCE;
+    c.shiny = !!DATA.species[sp].sh && Math.random() < SHINY_CHANCE * (heldOf(run.p).shinyMul || 1);   // 빛나는부적: 리더가 지니면 2배
     Sprites.load(sp, c.shiny);
     rollEnemyForm(c);
     if (run.hard) c.moves = hardMoves(c);
