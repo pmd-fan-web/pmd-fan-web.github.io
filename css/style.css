@@ -363,7 +363,9 @@ i.clear { font-style: normal; font-size: 11px; background: #3a9d4d; padding: 1px
 .dg-info details { margin: 4px 0; background: #ffffff08; border-radius: 6px; padding: 4px 8px; }
 .dg-info summary { cursor: pointer; }
 .dg-mons { margin: 6px 0; }
-.dg-mons .rcard { width: 76px; }
+.dg-mons .rcard { width: 76px; position: relative; }
+.dg-mons .rcard i { position: absolute; left: 4px; top: 2px; font-style: normal; font-size: 11px; }
+.dg-mons .rcard i.dex-shiny { top: 18px; }
 .rcard.unseen img { filter: grayscale(1) brightness(.45); }
 .rcard.unseen span { color: var(--dim); }
 .dg-items { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0; font-size: 13px; }

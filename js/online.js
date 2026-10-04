@@ -379,15 +379,16 @@ const Online = (() => {
     try { localStorage.removeItem(END_KEY); } catch (e) { /* 무시 */ }
   }
   // 엔딩 통계는 하루에 한 번만 읽는다 (낸 직후에는 새로)
-  const END_KEY = 'pmdweb_endings';
+  // 아직 아무도 없던 결과는 END_EMPTY_MS 동안만 쓴다 (그 사이 누가 엔딩을 보면 그날 안에 보이게. 예전에는 하루 내내 '없음'으로 남았다)
+  const END_KEY = 'pmdweb_endings', END_EMPTY_MS = 30 * 60 * 1000;
   async function endingStats() {
     const day = new Date().toLocaleDateString('sv');
     let cached = null;
     try { cached = JSON.parse(localStorage.getItem(END_KEY)); } catch (e) { /* 무시 */ }
-    if (cached && cached.day === day && cached.d) return cached;
+    if (cached && cached.day === day && cached.d && (cached.d.n > 0 || Date.now() - (cached.at || 0) < END_EMPTY_MS)) return cached;
     if (!await init()) throw new Error('offline');
     const d = await db.collection('stats').doc('endings').get();
-    const out = { day, d: d.exists ? d.data() : { n: 0 } };
+    const out = { day, at: Date.now(), d: d.exists ? d.data() : { n: 0 } };
     try { localStorage.setItem(END_KEY, JSON.stringify(out)); } catch (e) { /* 무시 */ }
     return out;
   }

@@ -169,7 +169,8 @@ const Game = (() => {
   //  서버 규칙은 20초에 한 번까지만 받아 준다. 탭을 자주 오가도 FLUSH_GAP 안에는 다시 올리지 않는다
   // 클라우드 세이브 최대 크기 (보안 규칙과 같게. 문서 한도 1MB 안, v0.64에 40만 → 90만 자)
   const CLOUD_SAVE_MAX = 900000;
-  const UPLOAD_GAP = 30 * 60 * 1000, FLUSH_GAP = 2 * 60 * 1000;   // 무료 한도(쓰기)를 아끼려고 10분 → 20분(v0.47) → 30분(v0.51), 창을 숨길 때 30초 → 2분
+  const UPLOAD_GAP = 30 * 60 * 1000, FLUSH_GAP = 2 * 60 * 1000;
+  const RETURN_GAP = 10 * 60 * 1000;   // 던전에서 돌아올 때 (v0.76: 2분 → 10분. 짧은 탐험을 자주 돌면 돌아올 때마다 쓰기가 나갔다)   // 무료 한도(쓰기)를 아끼려고 10분 → 20분(v0.47) → 30분(v0.51), 창을 숨길 때 30초 → 2분
   // 마지막 클라우드 저장 시각도 브라우저에 남긴다 (새로고침 직후 다시 올리다 20초 제한에 걸리지 않게)
   const UP_KEY = 'pmdweb_lastup';
   let bound = false, upTimer = null, lastUp = (() => { try { return +localStorage.getItem(UP_KEY) || 0; } catch (e) { return 0; } })(), upPending = false, syncing = null, cloudErr = null, onlineBoot = null;
@@ -198,8 +199,14 @@ const Game = (() => {
     catch (e) { cloudErr = Online.why(e); console.warn(e); scheduleUpload(); return false; }   // 실패하면 다음 주기에 다시
   }
   // 올릴 게 남아 있으면 바로 올린다 (창을 닫거나 숨길 때, 던전에서 돌아왔을 때)
-  function flushUpload() {
-    if (!upPending || Date.now() - lastUp < FLUSH_GAP) return;
+  // gap: 지난 저장 뒤 이만큼 지났으면 바로 올린다. 안 지났으면 (던전에서 돌아왔을 때) 그 시각에 올리도록 예약
+  function flushUpload(gap = FLUSH_GAP) {
+    if (!upPending) return;
+    const wait = lastUp + gap - Date.now();
+    if (wait > 0) {
+      if (gap !== FLUSH_GAP && bound && Online.loggedIn()) { clearTimeout(upTimer); upTimer = setTimeout(() => { upTimer = null; if (!inDungeon()) uploadNow(); }, wait); }
+      return;
+    }
     clearTimeout(upTimer); upTimer = null; uploadNow();
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) flushUpload(); });
@@ -959,7 +966,9 @@ const Game = (() => {
       for (let f = a; f <= b; f++) if (!isBossFloor(dg, f) || f !== dg.floors) { const fc = Dungeon.floorCandidates(dg, f); fc.concept.forEach(id => set.add(id)); fc.cand.forEach(o => set.add(o.id)); }
       bands.push({ a, b, ids: [...set].sort((x, y) => x - y) });
     }
-    const mon = ids => `<div class="roster dg-mons">${ids.map(k => `<button class="rcard${Progress.isSeen(k) ? '' : ' unseen'}" data-dexpoke="${k}">${portraitImg(k, 'portrait sm')}<span>${esc(spName(k))}</span></button>`).join('')}</div>`;
+    // 도감처럼: 🤝 영입한 포켓몬(영입한 포켓몬의 진화 전 모습 포함) / ✨ 이로치를 얻은 포켓몬
+    const ownSet = new Set(Object.keys(save.roster).flatMap(k => [+k, ...preEvos(+k)]));
+    const mon = ids => `<div class="roster dg-mons">${ids.map(k => `<button class="rcard${Progress.isSeen(k) ? '' : ' unseen'}" data-dexpoke="${k}">${portraitImg(k, 'portrait sm')}<span>${esc(spName(k))}</span>${ownSet.has(+k) ? '<i class="dex-own" title="영입한 포켓몬">🤝</i>' : ''}${DATA.species[k].sh && shinyOk(+k) ? '<i class="dex-shiny" title="이로치를 얻었어요">✨</i>' : ''}</button>`).join('')}</div>`;
     const seenIn = ids => ids.filter(k => Progress.isSeen(k)).length;
     // 보스
     const finals = bossPool(dg).length ? bossPool(dg) : BOSSES[dg.id] && DATA.species[BOSSES[dg.id]] ? [BOSSES[dg.id]] : [];
@@ -2629,7 +2638,7 @@ const Game = (() => {
     const got = Progress.check();
     if (got.length) lines.push(...got.map(a => `🏆 업적 달성: <b>${esc(a.n)}</b>`));
     persist();
-    flushUpload();   // 던전을 마치면 클라우드에 바로 올린다
+    flushUpload(RETURN_GAP);   // 던전을 마치면 클라우드에 올린다 (지난 저장 뒤 10분이 안 됐으면 10분이 될 때)
     Sound.town();
     show('town-screen');
     tab = 'dungeon';
