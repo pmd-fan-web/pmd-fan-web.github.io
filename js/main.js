@@ -998,16 +998,15 @@ const Game = (() => {
       dg.mode === 'rogue' ? `로그라이크: Lv${ROGUE_LEVEL}, 기본 가방으로 입장 (지닌 물건은 그대로)` : '',
     ].filter(Boolean);
     // 아이템: 마지막 층 기준 드롭 확률 (앞쪽 층은 등급이 낮은 아이템만)
-    const table = dropTable(dg.lv[1], dg);
+    const table = dropTable(dropLvFor(dg, dg.floors, dg.lv[1]), dg);
     const total = table.reduce((a, d) => a + d[1], 0) / (1 - (table.money || 0));   // 돈 무더기로 바뀌는 몫까지 포함한 전체
     const groups = { heal: ['🍎 회복·음식', []], berry: ['🍒 열매', []], throw: ['📌 던지는 도구', []], misc: ['🔮 씨앗·구슬·기타', []], rare: ['💎 희귀 (영양제·구미·사탕 등)', []], held: ['🎗 지닌 물건', []], tm: ['💿 기술머신', []] };
     const merged = {};
     for (const [iid, w] of table) merged[iid] = (merged[iid] || 0) + w;
-    const tiers = Object.entries(TIER_LV).filter(([t, lv]) => +t > 1 && lv <= dg.lv[1]).map(([t, lv]) => [TIER_NAMES[t], firstAt(lv)]);
-    const highF = firstAt(HIGH_LV);
-    const tierNote = (!tiers.length ? '일반 등급 아이템만 나온다' : tiers.every(([, f]) => f <= 1) ? '처음부터 좋은 등급이 나온다'
-      : `좋은 아이템은 깊은 층부터: ${tiers.map(([n, f]) => `${n} ${f}층~`).join(', ')}`)
-      + (highF ? ` · ${highF}층부터는 일반 등급 대신 식량·회복만` : '');
+    // 아이템 단계: 층마다 적 레벨로 정해진다 (초반·중반·후반·최종)
+    const stages = [];
+    for (let f = 1; f <= dg.floors; f++) { const st = dropStage(dropLvFor(dg, f, floorLv(f))); if (!stages.length || stages[stages.length - 1][0] !== st) stages.push([st, f]); }
+    const tierNote = stages.length <= 1 ? `${DROP_STAGE_NAMES[stages[0][0]]} 단계 아이템` : `아이템 단계: ${stages.map(([st, f]) => `${DROP_STAGE_NAMES[st]} ${f}층~`).join(', ')}`;
     for (const [iid, w] of Object.entries(merged)) groups[itemGroup(iid)][1].push([iid, w]);
     const pctT = w => { const p = w / total * 100; return p >= 1 ? p.toFixed(1) + '%' : p >= 0.1 ? p.toFixed(2) + '%' : p.toFixed(3) + '%'; };
     const itemHtml = Object.values(groups).filter(g => g[1].length).map(([name, list]) => {
@@ -1029,7 +1028,7 @@ const Game = (() => {
         ${bands.map((b, i) => `<details${i === 0 ? ' open' : ''}><summary><b>${b.a === b.b ? b.a : `${b.a}~${b.b}`}층</b> <span class="dim">Lv${floorLv(b.a)}~${floorLv(b.b)} · ${b.ids.length}종 (만남 ${seenIn(b.ids)})</span></summary>${mon(b.ids)}</details>`).join('')}
         <h3>나오는 아이템 <span class="dim">마지막 층 기준 확률 · 한 층에 아이템 ${ITEMS_PER_FLOOR[0]}~${ITEMS_PER_FLOOR[1]}개, 돈 2~4무더기 · ${tierNote}</span></h3>
         ${itemHtml}
-        ${table.money ? `<p>💰 <b>돈 무더기</b> <span class="dim">${pctT(total * table.money)} · 열매 ${GROUP_CAP.berry * 100}%, 씨앗·구슬·기타 ${GROUP_CAP.misc * 100}%를 넘는 몫은 아이템 대신 돈이 놓인다</span></p>` : ''}
+        ${table.money ? `<p>💰 <b>돈 무더기</b> <span class="dim">${pctT(total * table.money)} · 아이템 자리에 대신 놓이는 돈</span></p>` : ''}
         ${megaHere.length ? `<p><b>♾️ 메가스톤</b> <span class="dim">레벨 ${MEGA_MIN_LV} 이상인 층에서만 · 보스·이로치 ${+(MEGA_RATE.boss * (dg.megaMul || 1) * 100).toFixed(2)}%, 바닥 아이템·적이 떨어뜨리는 아이템 ${+(MEGA_RATE.floor * (dg.megaMul || 1) * 100).toFixed(2)}%${dg.megaMul ? ` (이 던전은 ${dg.megaMul}배)` : ''} · 던전 타입에 맞는 ${megaHere.length}종</span>
           <details><summary class="dim">눌러서 펼치기</summary><div class="dg-items">${megaHere.map(iid => `<span class="dg-item" data-dexitem="${iid}">${ITEMS[iid].icon} ${esc(ITEMS[iid].n)}</span>`).join('')}</div></details></p>` : ''}
         ${sigHere.length ? `<p><b>전용 도구</b> <span class="dim">주인 포켓몬이 나오는 층에서 드물게 떨어진다 (보스가 주인이면 더 자주)</span><br>${sigHere.map(iid => `<span class="dg-item" data-dexitem="${iid}">${ITEMS[iid].icon} ${esc(ITEMS[iid].n)}</span>`).join(' ')}</p>` : ''}
@@ -1256,8 +1255,10 @@ const Game = (() => {
     return DATA.species[sp].v.map(([to, lv, item]) => {
       const itemId = item === 1 ? 'stone' : item === 2 ? 'link' : null;
       const hasItem = !itemId || save.bag.some(b => b.id === itemId) || save.storage[itemId] > 0;
-      const req = [lv ? `Lv ${lv} 이상` : '', itemId ? ITEMS[itemId].n + ' 필요' : ''].filter(Boolean).join(', ');
-      return { to, lv, itemId, ok: ch.lv >= lv && hasItem, req };
+      // 이미 영입한 진화형(또는 그 뒤 갈래를 모두 영입한 진화형)으로는 진화하지 않는다: 다른 갈래로
+      const taken = familyCovered(to, save.roster);
+      const req = taken ? '이미 영입한 포켓몬이라 이쪽으로는 진화할 수 없어요' : [lv ? `Lv ${lv} 이상` : '', itemId ? ITEMS[itemId].n + ' 필요' : ''].filter(Boolean).join(', ');
+      return { to, lv, itemId, ok: !taken && ch.lv >= lv && hasItem, req };
     });
   }
 
@@ -2185,7 +2186,7 @@ const Game = (() => {
       <li>${dg.floors}층짜리 로그라이크 던전입니다. 오늘은 누구나 같은 포켓몬, 같은 맵으로 도전합니다.</li>
       <li><b>하루 한 번</b>만 도전할 수 있습니다. 도중에 창을 닫으면 그 층의 처음부터 이어집니다.</li>
       <li>가방은 오랭열매 2개와 사과 1개로 시작합니다. 내 캐릭터와 가방은 그대로 보존됩니다.</li>
-      <li>보상: 도달한 층 × ₽40 (완주하면 ₽1000 추가). 쓰러져도 받을 수 있어요.</li></ul>`, '도전한다', '그만둔다');
+      <li>보상: 도달한 층 × ₽${Progress.DAILY_REWARD.floor} (완주하면 ₽${Progress.DAILY_REWARD.clear} 추가). 쓰러져도 받을 수 있어요.</li></ul>`, '도전한다', '그만둔다');
     if (!ok) return;
     const p = makeCreature(dg.hero, ROGUE_LEVEL, { player: true });
     p.belly = 100;
@@ -2767,7 +2768,7 @@ const Game = (() => {
   const hasClears = sp => Object.keys(clearsOf(sp)).length > 0;
   const dexMedals = () => { const out = {}; for (const k of new Set([...Object.keys(save?.clears || {}), ...Object.keys(save?.roster || {})])) { const ic = medalIcons(+k); if (ic) out[k] = ic; } return out; };
   function setMissionFocus(id) { save.missionFocus = id || null; persist(); UI.toast(id ? `${dungeonById(id).n}의 의뢰가 더 자주 붙어요. (다음 새 의뢰부터)` : '자주 뜨는 지역을 해제했어요.'); }
-  return { shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
+  return { logSale, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
 })();
 
 window.addEventListener('DOMContentLoaded', () => {

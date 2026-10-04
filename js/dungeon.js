@@ -308,7 +308,7 @@ const Dungeon = (() => {
     // 전용 도구의 주인이 보스면 가끔 그 도구를 떨어뜨린다
     const sig = sigItemsFor([b.sp]);
     // 초반 보스는 조금 드문 아이템, 그 뒤로는 지닌 물건·기술머신·사탕 (층 레벨보다 한 등급 위까지)
-    const id = sig.length && Math.random() < SIG_DROP.boss ? pick(sig) : (rollMega('boss', b.lv, D.dg) || weighted(rewardPool(D.lvl + 10, D.dg)));
+    const id = sig.length && Math.random() < SIG_DROP.boss ? pick(sig) : (rollMega('boss', b.lv, D.dg) || weighted(rewardPool(D.dropLv + 10, D.dg)));
     for (const [dx, dy] of [[0, 0], ...DIRS]) {
       const x = b.x + dx, y = b.y + dy;
       if (floorAt(x, y) && !itemAt(x, y) && !(x === D.stairs.x && y === D.stairs.y)) { D.items.push({ x, y, id, n: 1 }); break; }
@@ -352,6 +352,7 @@ const Dungeon = (() => {
       prompts: [], learnQueue: [], delayed: [], traps: [], shop: null, houses: [], seq: 0, turn: 0, spawnT: run.hard ? 20 : 40, auto: null, ignore: new Set(), regen: 0, dg };
     const { pool, lvl } = makePool(dg, run.floor);
     D.pool = pool; D.lvl = lvl + (run.hard ? HARD_DROP_LV : 0);   // 하드모드: 아이템·돈은 한 등급 위 (적 레벨은 run.hardLv)
+    D.dropLv = dropLvFor(dg, run.floor, D.lvl);   // 아이템 단계를 정하는 레벨 (로그라이크는 층 진행으로)
     D.weather = rollWeather(dg); CUR_WEATHER = D.weather; D.baseWeather = D.weather; D.wxLock = null;
     pool.forEach(id => Sprites.load(id));
     // 탐험대가 바뀔 수 있는 모습(메가진화·폼체인지)의 그림도 미리 받아 둔다
@@ -386,7 +387,7 @@ const Dungeon = (() => {
     for (let h = houseN(); h > 0 && freeRooms.length; h--) {
       const room = freeRooms.splice(rand(freeRooms.length), 1)[0];
       D.houses.push({ room, triggered: false });
-      for (let i = rint(3, 6); i > 0; i--) { const t = randomRoomTile({ room, noItem: true }); if (t) { const id = rollMega('floor', lvl, D.dg) || pickDrop(lvl, D.dg); D.items.push(id ? { ...t, id, n: 1 } : { ...t, money: moneyPile(lvl) }); } }
+      for (let i = rint(3, 6); i > 0; i--) { const t = randomRoomTile({ room, noItem: true }); if (t) { const id = rollMega('floor', lvl, D.dg) || pickDrop(D.dropLv, D.dg); D.items.push(id ? { ...t, id, n: 1 } : { ...t, money: moneyPile(lvl) }); } }
     }
     if (lvl >= FEATURE_LV.trap) {
       const kinds = Object.keys(TRAPS);
@@ -398,7 +399,7 @@ const Dungeon = (() => {
     }
     // 아이템 / 돈
     const nItems = rint(ITEMS_PER_FLOOR[0], ITEMS_PER_FLOOR[1]);
-    for (let i = 0; i < nItems; i++) { const t = randomRoomTile({ noItem: true }); if (t) { const id = rollMega('floor', lvl, D.dg) || pickDrop(lvl, D.dg); D.items.push(id ? { ...t, id, n: 1 } : { ...t, money: moneyPile(lvl) }); } }
+    for (let i = 0; i < nItems; i++) { const t = randomRoomTile({ noItem: true }); if (t) { const id = rollMega('floor', lvl, D.dg) || pickDrop(D.dropLv, D.dg); D.items.push(id ? { ...t, id, n: 1 } : { ...t, money: moneyPile(lvl) }); } }
     // 전용 도구: 그 주인이 이 층에 나오면 드물게 바닥에 하나
     const sig = sigItemsFor(pool);
     if (sig.length && Math.random() < SIG_DROP.floor) { const t = randomRoomTile({ noItem: true }); if (t) D.items.push({ ...t, id: pick(sig), n: 1 }); }
@@ -568,7 +569,7 @@ const Dungeon = (() => {
       if (A.download) statChange(p, p.atk >= p.spa ? 2 : 4, 1, at, p);
       if (A.floorStart) statChange(p, A.floorStart[0], A.floorStart[1], at, p);
       if (A.floorRandom) statChange(p, pick([2, 3, 4, 5, 7, 8]), 1, at, p);
-      if (A.pickup && Math.random() < A.pickup) { const id = weighted(dropTable(D.lvl, D.dg)); if (addToBag(id)) abLog(p, `${jo(nm(p), '이')} ${jo(ITEMS[id].n, '을')} 주워 왔다!`, at); }
+      if (A.pickup && Math.random() < A.pickup) { const id = weighted(dropTable(D.dropLv, D.dg)); if (addToBag(id)) abLog(p, `${jo(nm(p), '이')} ${jo(ITEMS[id].n, '을')} 주워 왔다!`, at); }
       if (A.honey && Math.random() < 0.2 && addToBag('apple')) abLog(p, `${jo(nm(p), '이')} 사과를 발견했다!`, at);
       return;
     }
@@ -578,7 +579,7 @@ const Dungeon = (() => {
     if (A.download) statChange(p, p.atk >= p.spa ? 2 : 4, 1, at, p);
     if (A.floorStart) statChange(p, A.floorStart[0], A.floorStart[1], at, p);
     if (A.floorRandom) statChange(p, pick([2, 3, 4, 5, 7, 8]), 1, at, p);
-    if (A.pickup && Math.random() < A.pickup) { const id = weighted(dropTable(D.lvl, D.dg)); if (addToBag(id)) abLog(p, `${jo(ITEMS[id].n, '을')} 주워 왔다!`, at); }
+    if (A.pickup && Math.random() < A.pickup) { const id = weighted(dropTable(D.dropLv, D.dg)); if (addToBag(id)) abLog(p, `${jo(ITEMS[id].n, '을')} 주워 왔다!`, at); }
     if (A.honey && Math.random() < 0.2 && addToBag('apple')) abLog(p, '사과를 발견했다!', at);
   }
   // ── 괴짜(메타몽): 처음 마주친 상대로 변신 ──
@@ -1003,9 +1004,9 @@ const Dungeon = (() => {
       if (c.dmg) { const amt = pctDmg(user, 1 / c.dmg); abLog(tgt, `${jo(nm(user), '은')} 상처를 입었다!`, at); damage(user, amt, tgt, at); }
       if (c.st) statChange(user, c.st, c.ch, at, tgt);
       if (c.flinch && Math.random() * 100 < c.flinch) setFlinch(user, at);
-      if (c.item && tgt.player && Math.random() * 100 < c.item) { const id = weighted(dropTable(D.lvl, D.dg)); if (addToBag(id)) abLog(tgt, `${jo(ITEMS[id].n, '을')} 빼앗았다!`, at); }
+      if (c.item && tgt.player && Math.random() * 100 < c.item) { const id = weighted(dropTable(D.dropLv, D.dg)); if (addToBag(id)) abLog(tgt, `${jo(ITEMS[id].n, '을')} 빼앗았다!`, at); }
     }
-    if (A.magician && party(user) && Math.random() < 0.1) { const id = weighted(dropTable(D.lvl, D.dg)); if (addToBag(id)) abLog(user, `${jo(ITEMS[id].n, '을')} 손에 넣었다!`, at); }
+    if (A.magician && party(user) && Math.random() < 0.1) { const id = weighted(dropTable(D.dropLv, D.dg)); if (addToBag(id)) abLog(user, `${jo(ITEMS[id].n, '을')} 손에 넣었다!`, at); }
   }
   function applySelf(user, move, at, R = {}) {
     if (R.setWx) {
@@ -1220,16 +1221,16 @@ const Dungeon = (() => {
     }
     if (src && abilityOf(c).aftermath && src.hp > 0) { abLog(c, `${jo(nm(src), '은')} 폭발에 휘말렸다!`, at); damage(src, pctDmg(src, 1 / 4), c, at); }
     if (byParty) {
-      const expOf = m => Math.floor(expGain(c, m.lv) * (c.outlaw || c.boss ? BOSS_EXP_MUL : 1) * (c.shiny ? 2 : 1) * (heldOf(m).expMul || 1));
+      const expOf = m => Math.floor(expGain(c, m.lv) * (c.outlaw || c.boss ? BOSS_EXP_MUL : 1) * (c.shiny ? 2 : 1) * (heldOf(m).expMul || 1) * (run.mode === 'rogue' ? ROGUE_EXP_MUL : 1));
       gainExp(expOf(P()), at);
       for (const a of allies()) allyExp(a, expOf(a), at);   // 동료도 같은 방식으로 경험치를 받는다
       const free = !itemAt(c.x, c.y) && !(D.stairs.x === c.x && D.stairs.y === c.y);
       const sig = sigItemsFor([c.sp]);
-      if (c.shiny && free) D.items.push({ x: c.x, y: c.y, id: rollMega('shiny', c.lv, D.dg) || weighted(rewardPool(D.lvl + 10, D.dg)), n: 1 });   // 이로치: 보스 보상과 같은 등급
+      if (c.shiny && free) D.items.push({ x: c.x, y: c.y, id: rollMega('shiny', c.lv, D.dg) || weighted(rewardPool(D.dropLv + 10, D.dg)), n: 1 });   // 이로치: 보스 보상과 같은 등급
       else if (sig.length && !c.boss && free && Math.random() < SIG_DROP.defeat) D.items.push({ x: c.x, y: c.y, id: pick(sig), n: 1 });
-      else if (Math.random() < ENEMY_DROP_CHANCE && free) { const id = rollMega('floor', c.lv, D.dg) || pickDrop(D.lvl, D.dg); D.items.push(id ? { x: c.x, y: c.y, id, n: 1 } : { x: c.x, y: c.y, money: moneyPile(D.lvl) }); }
+      else if (Math.random() < ENEMY_DROP_CHANCE && free) { const id = rollMega('floor', c.lv, D.dg) || pickDrop(D.dropLv, D.dg); D.items.push(id ? { x: c.x, y: c.y, id, n: 1 } : { x: c.x, y: c.y, money: moneyPile(D.lvl) }); }
       if (c.shiny && Game.unlockShiny(c.sp)) log(`✨ 이제 캐릭터 탭에서 ${jo(spName(c.sp), '과')} 그 진화 계열의 이로치 모습을 고를 수 있다!`, at + 300);
-      if (run.mode === 'normal' && !c.outlaw && !NO_RECRUIT.includes(c.sp) && !Game.save.roster[c.sp]) {
+      if (run.mode === 'normal' && !c.outlaw && !NO_RECRUIT.includes(c.sp) && canRecruit(c.sp, Game.save.roster)) {   // 남은 진화가 없으면 진화 전 모습은 영입하지 않는다 (js/defs.js)
         const rate = recruitRate(P().lv) * (DATA.species[c.sp].lg ? 0.5 : 1) * (heldOf(P()).recruitMul || 1);
         if (Math.random() < rate) D.prompts.push(() => recruitPrompt(c));
       }
@@ -2006,21 +2007,56 @@ const Dungeon = (() => {
     const k = D.mons.find(m => m.shopkeeper); if (!k) return;
     k.letPass = true; act({ t: 'move', dir: P().dir }); k.letPass = false;   // 방금 말을 건 방향으로 한 칸 (켈리몬과 자리를 바꾼다)
   }
+  // 물건 팔기: 여러 개를 골라 한 번에 판다 (자동 판매 목록·전부 고르기, 합계 표시). 판 물건은 마을 상점에서 되살 수 있다
+  const SELL_CONFIRM_PRICE = 1000;   // 이보다 비싼 물건이나 지닌 물건이 섞여 있으면 한 번 더 묻는다
   function sellMenu() {
     if (!run.bag.length) { UI.alert('켈리몬 상점', '<p>팔 물건이 없다.</p>'); return; }
+    const auto = new Set(Game.save.autoSell || []);
+    let box = null;
+    const picked = () => box ? [...box.querySelectorAll('input[data-sell]:checked')].map(x => +x.dataset.sell) : [];
+    const refresh = () => {
+      const idx = picked(), sum = idx.reduce((s, i) => s + sellValue(run.bag[i]), 0);
+      box.querySelector('.sell-sum').textContent = idx.length ? `${idx.length}개 고름 · 합계 ₽${sum}` : '고른 물건이 없어요';
+    };
     UI.open({
       title: `물건 팔기 (가진 돈 ₽${Game.save.money})`, wide: true,
-      choices: run.bag.map((b, i) => ({
-        label: `${ITEMS[b.id].icon} ${esc(ITEMS[b.id].n)}${b.n > 1 ? ' ×' + b.n : ''} — ₽${sellValue(b)}`,
-        fn: () => {
-          const v = sellValue(b);
-          run.bag.splice(i, 1); Game.save.money += v;
-          log(`${jo(ITEMS[b.id].n, '을')} ₽${v}에 팔았다.`, now());
-          sellMenu();
-        },
-      })),
-      cancel: shopMenu,
+      html: `<div class="btns"><button class="btn sm ghost" data-pick="auto" ${run.bag.some(b => auto.has(b.id)) ? '' : 'disabled'}>자동 판매 목록 고르기</button>
+          <button class="btn sm ghost" data-pick="all">전부 고르기</button> <button class="btn sm ghost" data-pick="none">모두 해제</button></div>
+        <div class="sell-list">${run.bag.map((b, i) => `<label class="row chk"><input type="checkbox" data-sell="${i}">${Gfx.iconHtml(b.id)} <b>${esc(ITEMS[b.id].n)}</b>${b.n > 1 ? ' ×' + b.n : ''}
+          <span class="grow"></span>${auto.has(b.id) ? '<span class="tag">자동 판매</span> ' : ''}<span>₽${sellValue(b)}</span></label>`).join('')}</div>
+        <p class="center"><b class="sell-sum"></b></p>`,
+      onOpen: b => {
+        box = b;
+        b.querySelectorAll('[data-pick]').forEach(btn => btn.onclick = () => {
+          const k = btn.dataset.pick;
+          b.querySelectorAll('input[data-sell]').forEach(x => { x.checked = k === 'all' || (k === 'auto' && auto.has(run.bag[+x.dataset.sell].id)); });
+          refresh();
+        });
+        b.addEventListener('change', refresh);
+        refresh();
+      },
+      choices: [
+        { label: '고른 물건을 판다', fn: () => { const idx = picked(); setTimeout(() => sellPicked(idx), 0); } },
+        { label: '그만둔다', fn: () => setTimeout(shopMenu, 0) },
+      ],
+      cancel: () => setTimeout(shopMenu, 0),
     });
+  }
+  async function sellPicked(idx) {
+    if (!idx.length) { sellMenu(); return; }
+    const items = idx.map(i => run.bag[i]), sum = items.reduce((s, b) => s + sellValue(b), 0);
+    const risky = items.filter(b => sellValue(b) >= SELL_CONFIRM_PRICE || ITEMS[b.id].held);
+    if (risky.length && !(await UI.confirm('물건 팔기', `<p>아래 물건도 함께 팝니다. 괜찮을까요?</p>
+        <p>${risky.map(b => `${Gfx.iconHtml(b.id)} ${esc(ITEMS[b.id].n)}${b.n > 1 ? ' ×' + b.n : ''} (₽${sellValue(b)})`).join('<br>')}</p>
+        <p class="dim">판 물건은 마을 상점의 '최근에 판 물건'에서 판 값 그대로 되살 수 있어요.</p>`, `${items.length}개를 ₽${sum}에 판다`, '다시 고른다'))) { sellMenu(); return; }
+    for (const i of idx.slice().sort((a, b) => b - a)) {
+      const b = run.bag[i], v = sellValue(b);
+      run.bag.splice(i, 1); Game.save.money += v;
+      Game.logSale(b.id, b.n, v, 'bag');
+    }
+    Sound.play('money');
+    log(`${items.length}개를 ₽${sum}에 팔았다.`, now());
+    if (run.bag.length) sellMenu(); else shopMenu();
   }
 
   // 영입: 쓰러진 적이 동료가 되고 싶어 한다

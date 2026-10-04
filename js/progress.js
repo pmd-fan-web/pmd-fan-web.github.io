@@ -17,8 +17,14 @@ const Progress = (() => {
   // ── 도감 수집 ──
   function seen(sp) { const s = ensure(); if (!s.dex.seen[sp]) s.dex.seen[sp] = 1; }
   function beaten(sp) { const s = ensure(); seen(sp); s.dex.beaten[sp] = (s.dex.beaten[sp] || 0) + 1; }
-  // 플레이한 포켓몬도 만난 것으로 친다
-  const isSeen = sp => !!(ensure().dex.seen[sp] || S().roster[sp]);
+  // 플레이한 포켓몬도 만난 것으로 친다. 그 진화 전 모습도 (가디안을 영입했으면 랄토스·킬리아도)
+  let preKey = '', preSet = new Set();
+  function ownedPre() {
+    const ks = Object.keys(S().roster);
+    if (ks.join(',') !== preKey) { preKey = ks.join(','); preSet = new Set(ks.flatMap(k => preEvos(+k))); }
+    return preSet;
+  }
+  const isSeen = sp => !!(ensure().dex.seen[sp] || S().roster[sp] || ownedPre().has(+sp));
   const beatCount = sp => ensure().dex.beaten[sp] || 0;
   function dexCounts() {
     const ids = SPECIES_IDS;
@@ -150,7 +156,7 @@ const Progress = (() => {
       <div class="daily-body">${portraitImg(hero, 'portrait sm')}<div class="grow">
         <div>오늘의 주인공 <b>${esc(spName(hero))}</b> Lv${ROGUE_LEVEL}</div>
         <div class="dim">${DAILY_FLOORS}층 · ${typeBadges(dg.types)}${dg.wx.length ? ` · ${WEATHERS[dg.wx[0][0]].icon}${WEATHERS[dg.wx[0][0]].n}` : ''}</div></div></div>
-      <div class="note">같은 날에는 모두 같은 포켓몬과 같은 맵으로 도전합니다. 하루 한 번! 도달한 층만큼 보상을 받고, 기록을 친구와 비교해 보세요.</div>
+      <div class="note">같은 날에는 모두 같은 포켓몬과 같은 맵으로 도전합니다. 하루 한 번! 보상은 도달한 층마다 ₽${DAILY_REWARD.floor}, 완주하면 ₽${DAILY_REWARD.clear} 추가. 기록을 친구와 비교해 보세요.</div>
       ${rec ? `<div class="note ms">오늘의 기록: <b>${rec.floor}F</b>${rec.clear ? ' 완주!' : ''} · ${rec.turns}턴</div>` : ''}
       ${best ? `<div class="dim tiny">지금까지 최고 ${best}F</div>` : ''}
       <div class="btns">${rec ? `<button class="btn" data-act="daily-share">📋 기록 공유</button> <button class="btn ghost" disabled>내일 다시 도전</button>`
@@ -159,6 +165,8 @@ const Progress = (() => {
   function shareText(rec) {
     return `🗓 미궁 탐험대 · 오늘의 도전 ${rec.date}\n${spName(rec.sp)} · ${rec.clear ? '완주! ' : ''}${rec.floor}F / ${DAILY_FLOORS}F · ${rec.turns}턴 · Lv${rec.lv}${rec.kills != null ? ` · ${rec.kills}마리 쓰러뜨림` : ''}`;
   }
+  // 오늘의 도전 보상: 도달한 층마다 + 완주 (v0.81에 10배: 층마다 ₽40 → ₽400, 완주 ₽1000 → ₽10000)
+  const DAILY_REWARD = { floor: 400, clear: 10000 };
   function recordDaily(r, outcome, reached) {
     const s = ensure();
     const rec = { date: r.daily, sp: r.p.sp, floor: reached, clear: outcome === 'clear', turns: r.turns || 0, lv: r.p.lv, kills: r.kills || 0 };
@@ -166,11 +174,11 @@ const Progress = (() => {
     add('dailies');
     if (rec.clear) add('dailyClears');
     max('dailyBest', reached);
-    const reward = reached * 40 + (rec.clear ? 1000 : 0);
+    const reward = reached * DAILY_REWARD.floor + (rec.clear ? DAILY_REWARD.clear : 0);
     s.money += reward;
     return { rec, reward };
   }
 
   return { add, max, stat, seen, beaten, isSeen, beatCount, dexCounts, check, renderAch, ACH,
-    today, setupDaily, seedFloor, unseed, dailyRecord, dailyCard, shareText, recordDaily, get DAILY() { return DAILY; } };
+    today, setupDaily, seedFloor, unseed, dailyRecord, dailyCard, shareText, recordDaily, DAILY_REWARD, get DAILY() { return DAILY; } };
 })();

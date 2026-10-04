@@ -3,7 +3,7 @@
 
 // 게임 버전: 업데이트할 때 올리고, index.html의 ?v= 숫자도 같이 올린다
 // (친구와 구조 코드·오늘의 도전을 주고받으려면 버전이 같아야 한다)
-const GAME_VERSION = '0.80';
+const GAME_VERSION = '0.81';
 // 버전 비교: '0.25' > '0.9' 처럼 숫자로 비교한다
 function cmpVer(a, b) {
   const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
@@ -12,6 +12,7 @@ function cmpVer(a, b) {
 }
 const GAME_DATE = '2026-10-01';
 const VERSION_NOTES = [
+  ["0.81", ["로그라이크 던전: 얻는 경험치가 1.3배입니다 (행복의알과 함께 쓰면 곱해집니다)", "로그라이크 던전: 아이템 단계를 적 레벨 대신 층 진행으로 정합니다. 전체 층을 넷으로 나눠 초반 → 중반 → 후반 → 최종 아이템이 나옵니다. 영양제·구미도 일반 던전보다 4배 잘 나와서 파밍할 수 있습니다", "오늘의 도전 보상을 10배로 늘렸습니다: 도달한 층마다 ₽400, 완주하면 ₽10000을 더 받습니다", "아이템 드롭: 던전 진행 단계(초반 Lv0~19 · 중반 Lv20~44 · 후반 Lv45~69 · 최종 Lv70~)마다 드롭 표를 따로 정했습니다. 회복은 초반 오랭열매 → 중반 자뭉열매·좋은상처약 → 후반·최종 자뭉열매·회복약, 식량은 사과 → 큰사과, PP는 과사열매 → 맥스엘릭서, 던지는 도구는 쇠가시·자갈 → 금바늘로 바뀝니다. 씨앗은 뒤로 갈수록 줄고, 구슬·리샘열매·부활씨·능력 열매·사탕·영양제·지닌 물건·기술머신은 뒤로 갈수록 많아집니다. 강한 지닌 물건(생명의구슬 등)은 후반부터 나옵니다. 단계별 표는 가이드의 '던전 아이템 단계'에서 볼 수 있습니다", "던전 켈리몬 상점: 팔 물건을 여러 개 골라 한 번에 팝니다. '자동 판매 목록 고르기'·'전부 고르기'로 한 번에 고를 수 있고 합계 금액이 보입니다. ₽1000 이상이거나 지닌 물건이 섞여 있으면 한 번 더 묻고, 판 물건은 마을 상점의 '최근에 판 물건'에서 되살 수 있습니다", "도감: 영입한 포켓몬의 진화 전 모습도 만난 포켓몬으로 칩니다 (가디안을 영입하면 랄토스·킬리아도 도감에 채워집니다. 진화해서 목록에서 빠진 진화 전 모습도 같습니다)", "영입·진화: 이미 영입한 진화형으로는 진화하지 않고 다른 갈래로만 진화합니다. 진화 전 모습은 아직 아무도 차지하지 않은 진화가 남아 있을 때만 영입됩니다 (가디안만 있으면 랄토스·킬리아를 영입해 엘레이드로 진화. 가디안과 랄토스가 있으면 랄토스가 엘레이드를 맡으므로 랄토스·킬리아는 더 영입되지 않음. 이브이는 진화시킨 뒤 새 이브이를 영입해 다른 진화로)"]],
   ["0.80", ["진화: 레어코일→자포코일, 코코파스→대코파스, 전지충이→투구뿌논, 오기지게→모단단게, 이브이→리피아·글레이시아가 Lv25로 잘못 되어 있던 것을 원작대로 진화의 돌로 바꿨습니다. 빈티나→밀로틱은 연결의끈입니다", "치유파동·플라워힐: 원작처럼 같은 편 하나의 HP를 최대 HP의 절반만큼 회복합니다. 바로 앞의 같은 편, 없으면 주변 3칸에서 HP 비율이 가장 낮은 같은 편을 회복하고, 자신은 회복하지 못합니다 (혼자일 때는 실패합니다). 동료는 다친 같은 편이 있으면 이 기술로 회복해 줍니다"]],
   ["0.79", ["구조 요청: 서버가 사용량 한도 초과 등으로 막혀 있을 때는 구조 게시판에 올린 요청도 SOS 코드를 다시 볼 수 있습니다. 서버가 돌아오면 다시 가려집니다"]],
   ["0.78", ["세이브 불러오기·백업 복원·초기화가 적용되지 않던 문제를 고쳤습니다. 새로고침하는 순간 원래 세이브가 다시 저장되어 바꾼 세이브를 덮어썼습니다 (로그아웃하며 브라우저 세이브를 지울 때도 같았습니다)", "능력 리셋 함정은 처음부터 보입니다 (지도에는 초록색). 떨어진 능력을 되돌리고 싶을 때 찾아가서 밟을 수 있습니다", "던전 화면: 바닥의 아이템, 함정, 포켓몬의 상태 이상(잠듦·독·화상·혼란·얼음)이 원작 불가사의 던전의 도트 그림으로 보입니다. 도감과 마을의 상점·창고 목록의 아이템 아이콘도 같은 그림입니다. 그림이 없는 아이템(메가스톤 등)과 마비는 지금처럼 아이콘으로 보입니다", "자동 탐색: 12걸음 안에 있는 바닥의 아이템은 안 가 본 곳보다 먼저 주우러 갑니다", "자동 탐색: 가방이 가득 차서 못 주운 아이템도, 가방에 자리가 생기면 다시 주우러 갑니다 (일부러 내려놓거나 던진 아이템은 그대로 두고 지나갑니다)", "자동 탐색·이동: 길이가 같은 길이 여럿이면 곧은 방향을 먼저 골라서, 두 칸 너비 복도에서 지그재그로 걷지 않습니다"]],
@@ -321,20 +322,45 @@ const sigItemsFor = sps => SIG_ITEMS.filter(id => HELD_ITEMS[id].hold.only.some(
 const ITEMS_PER_FLOOR = [2, 4];
 const ENEMY_DROP_CHANCE = 0.05;
 
-// 바닥 드롭 테이블 (가중치)
-const DROP_TABLE = [['oran', 18], ['sitrus', 4], ['apple', 12], ['bigapple', 3], ['heal', 6], ['elixir', 3], ['reviver', 1.2], ['blast', 6],
-  ['sleep', 5], ['warp', 5], ['stun', 5], ['thorn', 8], ['gravel', 8], ['escape', 1.5], ['lumi', 2], ['foesleep', 1.2], ['candy', 0.8],
-  ['superpotion', 3], ['fullrestore', 0.6], ['xattack', 1.5], ['xdefense', 1.5], ['xspatk', 1.5], ['xspeed', 1.5], ['xaccuracy', 1], ['poisonseed', 3], ['confuseseed', 3],
-  ['goldthorn', 2], ['radar', 1.2], ['trapbust', 1], ['paraorb', 0.8], ['sloworb', 0.8]];
-// 지닌 물건은 가끔 바닥에서 발견된다 (종류마다 드물게)
-for (const id of HELD_SHOP_POOL) DROP_TABLE.push([id, 0.12]);
-for (const id of Object.keys(VITAMINS)) DROP_TABLE.push([id, 0.15]);
-DROP_TABLE.push(['abcapsule', 0.1], ['eggtm', 0.1], ['abpatch', 0.04]);
-// 열매: 상태이상 열매는 흔하게, 능력 열매는 가끔
-DROP_TABLE.push(['cheri', 3], ['chesto', 2], ['pecha', 3], ['rawst', 3], ['persim', 2], ['lum', 1], ['leppa', 1.5],
-  ['liechi', 0.6], ['ganlon', 0.6], ['petaya', 0.6], ['apicot', 0.6], ['salac', 0.6], ['starf', 0.2], ['lansat', 0.2]);
-// 구미: 아주 드물다 (무지개구미는 더)
-for (const id of Object.keys(GUMMIES)) DROP_TABLE.push([id, id === 'rainbowgummy' ? 0.01 : 0.05]);
+// ── 바닥·적 드롭: 던전 진행 단계마다 따로 정한 표 (v0.81) ──
+// 단계는 그 층의 적 레벨로 정한다 (로그라이크·하드모드도 같은 기준)
+//   초반 Lv0~19: 작은 숲·해변 동굴·수정 동굴·번개 초원 (+시련의 동굴)
+//   중반 Lv20~44: 독안개 늪·불꽃 화산·유사 사막·얼음 산·폭풍의 바다·어둠의 숲
+//   후반 Lv45~69: 강철 광산·용의 협곡·하늘의 탑·테마 던전 대부분
+//   최종 Lv70~: 별의 정상·운석 낙하지점·영웅의 숲·메가 진화의 탑·울트라 차원의 틈·에리어 제로
+// 값은 그 단계에서 아이템 한 자리가 그 물건일 비율(%). 0이면 그 단계에서는 나오지 않는다
+const DROP_STAGE_LV = [0, 20, 45, 70];
+const DROP_STAGE_NAMES = ['초반', '중반', '후반', '최종'];
+const dropStage = lvl => DROP_STAGE_LV.filter(v => lvl >= v).length - 1;
+const MONEY_SHARE = [0.08, 0.14, 0.16, 0.16];   // 아이템 대신 돈 무더기가 놓일 비율
+const DROP_STAGES = {
+  // 식량: 초반 사과 → 후반 큰사과
+  apple: [12, 9, 4, 1], bigapple: [2, 5, 8, 9],
+  // HP 회복: 초반 오랭열매 → 중반 자뭉열매·좋은상처약 → 후반·최종 자뭉열매·회복약
+  oran: [18, 4, 0, 0], sitrus: [1, 9, 8, 6], superpotion: [0, 6, 5, 2], fullrestore: [0, 0.5, 3, 6],
+  // PP 회복: 과사열매 → 맥스엘릭서
+  leppa: [3, 3, 2, 1], elixir: [0, 2, 3, 4],
+  // 상태 이상: 치료씨·상태 열매 → 리샘열매
+  heal: [5, 3, 1.5, 1], cheri: [2, 1.5, 0.8, 0.5], chesto: [1.5, 1, 0.8, 0.5], pecha: [2, 1.5, 0.8, 0.5], rawst: [2, 1.5, 0.8, 0.5], persim: [1.5, 1, 0.8, 0.5], lum: [0, 1.5, 2.5, 3],
+  reviver: [0.5, 1.5, 2.5, 3.5],
+  // 던지는 도구: 쇠가시·자갈 → 금바늘 (쇠가시는 Lv30까지, 금바늘은 Lv30부터: ITEM_LV_RANGE)
+  thorn: [9, 4, 0, 0], gravel: [8, 3, 0, 0], goldthorn: [0, 4, 6, 6],
+  // 공격·보조 씨앗: 초반에 많고 뒤로 갈수록 줄어든다
+  blast: [5, 4, 3, 2.5], sleep: [4, 3, 2, 1.5], warp: [4, 3, 2, 1.5], stun: [4, 3, 2, 1.5], poisonseed: [2.5, 2, 1, 0.8], confuseseed: [2.5, 2, 1, 0.8],
+  // 구슬: 중반부터
+  escape: [1, 1.5, 2, 2.4], lumi: [1, 1.5, 1.5, 1.8], foesleep: [0.5, 1.2, 1.5, 1.8], radar: [0, 1, 1.2, 1.4], trapbust: [0, 0.8, 1, 1.2], paraorb: [0, 0.8, 1, 1.2], sloworb: [0, 0.8, 1, 1.2],
+  // 능력 올리는 도구
+  xattack: [0.6, 1, 1.2, 1.2], xdefense: [0.6, 1, 1.2, 1.2], xspatk: [0.6, 1, 1.2, 1.2], xspeed: [0.6, 1, 1.2, 1.2], xaccuracy: [0.4, 0.6, 1, 1],
+  // 능력 열매: 중반부터, 스타·랑사열매는 더 드물게
+  liechi: [0, 0.4, 0.8, 1.2], ganlon: [0, 0.4, 0.8, 1.2], petaya: [0, 0.4, 0.8, 1.2], apicot: [0, 0.4, 0.8, 1.2], salac: [0, 0.4, 0.8, 1.2], starf: [0, 0.1, 0.2, 0.3], lansat: [0, 0.1, 0.2, 0.3],
+  // 희귀 소모품: 뒤로 갈수록 많이
+  candy: [0.3, 0.6, 1, 1.5], abcapsule: [0, 0.08, 0.12, 0.15], eggtm: [0, 0.08, 0.12, 0.15], abpatch: [0, 0.03, 0.05, 0.08],
+};
+const VITAMIN_DROP = [0.05, 0.12, 0.2, 0.3], GUMMY_DROP = [0.02, 0.05, 0.08, 0.12], RAINBOW_DROP = [0, 0.01, 0.02, 0.03];
+// 지닌 물건·기술머신: 종류가 많아서 묶음 전체의 몫을 정하고 종류끼리 나눈다 (강한 지닌 물건은 후반부터)
+const HELD_DROP = [1, 3, 4, 5], TM_DROP = [0.5, 1.5, 2.5, 3];
+// 도감·가이드용: 바닥에서 나오는 물건 목록
+const DROP_TABLE = [];
 
 // 타입 ID: 1노말 2격투 3비행 4독 5땅 6바위 7벌레 8고스트 9강철 10불꽃 11물 12풀 13전기 14에스퍼 15얼음 16드래곤 17악 18페어리
 // 목록 순서는 바꾸지 않는다 (SOS 코드가 던전을 목록 번호로 적는다). 화면에는 적 레벨 순으로 보여준다
@@ -474,6 +500,31 @@ const hardUnlocked = s => !!s && hardDungeons().every(d => s.cleared && s.cleare
 // 밀로틱은 고운비늘을 지니고 통신교환 → 연결의끈. [진화 전, 진화 후, 레벨, 아이템(1 진화의돌 · 2 연결의끈)]
 const EVO_FIX = [[82, 462, 0, 1], [299, 476, 0, 1], [737, 738, 0, 1], [739, 740, 0, 1], [133, 470, 0, 1], [133, 471, 0, 1], [349, 350, 0, 2]];
 for (const [from, to, lv, item] of EVO_FIX) { const e = DATA.species[from] && DATA.species[from].v.find(v => v[0] === to); if (e) { e[1] = lv; e[2] = item; } }
+// 이 포켓몬으로 갈 수 있는 진화가 모두 이미 있는지: 영입했거나, 모든 갈래의 진화형을 영입했으면 true
+// (가디안이 있으면 킬리아→가디안은 막히고, 킬리아→엘레이드 갈래는 열려 있다)
+function familyCovered(sp, roster, depth = 0) {
+  if (roster[sp]) return true;
+  const v = (DATA.species[sp] && DATA.species[sp].v) || [];
+  return depth < 4 && v.length > 0 && v.every(e => familyCovered(e[0], roster, depth + 1));
+}
+// 끝까지 진화한 모습들 (진화하지 않는 포켓몬은 자신)
+function evoFinals(sp, depth = 0) {
+  const v = (DATA.species[sp] && DATA.species[sp].v) || [];
+  if (!v.length || depth > 4) return [sp];
+  return [...new Set(v.flatMap(e => evoFinals(e[0], depth + 1)))];
+}
+// 영입할 수 있는지: 아직 아무도 차지하지 않은 최종 진화가 남아 있을 때만
+// 남은 최종 진화(영입하지 않은 것) 수가, 그쪽으로 진화할 수 있는 이미 영입한 진화 전 포켓몬 수보다 많아야 한다
+// 예) 가디안만: 랄토스·킬리아 영입 가능 (엘레이드용) / 가디안+랄토스: 랄토스가 엘레이드를 맡으니 킬리아도 막힘
+//     이브이가 샤미드로 진화했으면 새 이브이를 영입해 다른 진화로
+function canRecruit(sp, roster) {
+  if (roster[sp]) return false;
+  const fin = evoFinals(sp), open = fin.filter(f => !roster[f]);
+  if (!open.length) return false;
+  if (fin.length === 1 && fin[0] === +sp) return true;
+  const takers = Object.keys(roster).map(Number).filter(m => m !== +sp && ((DATA.species[m] || {}).v || []).length && evoFinals(m).some(f => open.includes(f))).length;
+  return open.length > takers;
+}
 // 그 레벨에 맞는 모습: 진화 조건 레벨보다 낮으면 진화 전으로 (돌·통신 진화처럼 레벨 조건이 없으면 1단 진화 Lv20, 2단 진화 Lv36으로 본다)
 function devolveFor(sp, lv) {
   const s = DATA.species[sp], base = s && s.f ? +s.f[0] : +sp;
@@ -730,7 +781,6 @@ TM_MOVES.forEach((mid, i) => {
     price: m.c === 1 ? 1500 : 800 + (m.p || 0) * 15,
   };
   TM_IDS.push(id);
-  DROP_TABLE.push([id, 0.015]);
 });
 
 // 가격 올리기: 값이 CHEAP_LIMIT 이하인 물건은 CHEAP_MUL배, 그보다 비싼 물건은 PRICEY_MUL배
@@ -767,7 +817,7 @@ for (const id of ['oran', 'apple', 'leppa']) { const it = ITEMS[id]; it.sellAt =
 // 상점에 늘 있는 물건 (맨 위에 고정). 나머지 진열은 날마다 바뀐다
 const SHOP_FIXED = ['oran', 'apple', 'leppa', 'stone', 'link'];
 
-// ── 아이템 등급: 층의 적 레벨이 낮으면 좋은 아이템은 떨어지지 않는다 ──
+// ── 아이템 등급 (상점 가격·보상 분류용. 바닥 드롭은 위의 단계별 표 DROP_STAGES) ──
 // 1 흔함 (처음부터) · 2 조금 드묾 · 3 드묾 · 4 아주 드묾
 const TIER_LV = { 1: 0, 2: 10, 3: 20, 4: 28, 5: 35 };
 const TIER_NAMES = { 1: '일반', 2: '고급', 3: '희귀', 4: '유니크', 5: '전설' };
@@ -785,10 +835,6 @@ function itemTier(id) {
   if (TIER2.includes(id)) return 2;
   return 1;
 }
-// 그 레벨의 층에서 쓰는 드롭 테이블
-// 높은 층(적 Lv HIGH_LV 이상)에서는 흔한 등급이 나오지 않는다. 단 식량·회복 아이템은 살아남는 데 꼭 필요해서 계속 나온다
-const HIGH_LV = 20;
-const ALWAYS_DROP = ['apple', 'bigapple', 'oran', 'sitrus', 'elixir'];
 // 등급과 상관없이 나오는 레벨을 따로 정한 아이템 [최소, 최대) : 던지는 가시는 Lv30 전까지 쇠가시, 그 뒤로 금바늘
 const ITEM_LV_RANGE = { thorn: [0, 30], goldthorn: [30, Infinity] };
 const ITEM_LV_STEPS = [...new Set(Object.values(ITEM_LV_RANGE).flat().filter(v => v > 0 && v < Infinity))];
@@ -812,63 +858,65 @@ function itemGroup(id) {
   return 'misc';
 }
 const dropCache = {}, baseCache = {};
-// 던전 바닥·적 드롭에서 몫을 정해 둔 아이템: 지닌 물건 전체 3% (지닌 물건끼리의 비율은 그대로). DROP_SHARE에 아이템별 몫을 더할 수 있다
-// (그 층에서 나올 수 있을 때만. 나머지 아이템은 서로의 비율을 그대로 두고 남은 몫을 나눈다)
-const HELD_DROP_SHARE = 0.03;
-const DROP_SHARE = {};
-// 로그라이크(긴 던전)는 PP가 모자라기 쉬워서 PP 회복 아이템이 더 잘 나온다
-const ROGUE_DROP_MUL = { leppa: 4, elixir: 2 };
-function dropTable(lvl, dg) {
-  const base = baseTable(lvl, dg), key = base.key;
-  if (dropCache[key]) return dropCache[key];
-  const group = id => (DROP_SHARE[id] ? id : ITEMS[id].held ? 'held' : null);
-  const share = { ...DROP_SHARE, held: HELD_DROP_SHARE }, sum = {};
-  let rest = 0;
-  for (const [id, w] of base) { const g = group(id); if (g) sum[g] = (sum[g] || 0) + w; else rest += w; }
-  const fixed = Object.keys(sum).reduce((a, g) => a + share[g], 0);
-  const total = rest / (1 - fixed);
-  const out = base.map(([id, w]) => { const g = group(id); return g ? [id, w / sum[g] * share[g] * total] : [id, w]; });
-  // 분류별 상한: 넘치는 만큼은 아이템 대신 돈 무더기가 된다 (out.money: 아이템 한 자리가 돈이 될 확률)
-  const gw = {};
-  for (const [id, w] of out) gw[itemGroup(id)] = (gw[itemGroup(id)] || 0) + w;
-  let moneyW = 0;
-  for (const [g, cap] of Object.entries(GROUP_CAP)) if (gw[g] > cap * total) {
-    const k = cap * total / gw[g];
-    moneyW += gw[g] - cap * total;
-    for (const d of out) if (itemGroup(d[0]) === g) d[1] *= k;
-  }
-  out.money = moneyW / total;
-  return (dropCache[key] = out);
+// 로그라이크(긴 던전)는 PP가 모자라기 쉬워서 PP 회복 아이템이 더 잘 나온다. 영양제·구미도 ROGUE_RARE_MUL배 (파밍할 수 있게)
+const ROGUE_DROP_MUL = { leppa: 4, elixir: 2 }, ROGUE_RARE_MUL = 4;
+const ROGUE_EXP_MUL = 1.3;   // 로그라이크: 낮은 레벨로 시작해서 적 레벨을 따라가기 어려워 경험치를 더 준다
+// 로그라이크는 적 레벨 대신 층 진행으로 단계를 정한다: 전체 층을 넷으로 나눠 초반 → 중반 → 후반 → 최종
+// (그 단계의 대표 레벨로 표를 고른다. 중반 32는 쇠가시 대신 금바늘이 나오는 Lv30 뒤)
+const ROGUE_STAGE_LV = [10, 32, 55, 80];
+function dropLvFor(dg, floor, lvl) {
+  if (!dg || dg.mode !== 'rogue') return lvl;
+  return ROGUE_STAGE_LV[Math.min(3, Math.floor((floor - 1) / dg.floors * 4))];
 }
-// 바닥·적 드롭에서 분류별로 차지할 수 있는 최대 몫 (열매 30%, 씨앗·구슬·기타 10%)
-const GROUP_CAP = { berry: 0.30, misc: 0.10 };
+const strongHeld = id => itemTier(id) === 5;
+// 그 층에서 쓰는 드롭 표 (돈 무더기 비율 out.money 포함)
+function dropTable(lvl, dg) {
+  const base = baseTable(lvl, dg);
+  if (dropCache[base.key]) return dropCache[base.key];
+  const out = base.map(d => d.slice());
+  out.money = MONEY_SHARE[dropStage(lvl)];
+  return (dropCache[base.key] = out);
+}
 // 바닥에 놓일 아이템 하나: 아이템 id, 또는 돈 무더기면 null
 function pickDrop(lvl, dg) {
   const t = dropTable(lvl, dg);
   return Math.random() < t.money ? null : weighted(t);
 }
 const moneyPile = lvl => Math.round(rint(4, 12) * (1 + lvl / 6));
-// 레벨·던전 타입으로 거른 원래 가중치 (보스·이로치 보상은 이걸 쓴다)
+// 단계·던전 타입으로 고른 가중치 (보스·이로치 보상도 이걸 쓴다)
 function baseTable(lvl, dg) {
-  const rogue = !!(dg && dg.mode === 'rogue');
-  const key = Object.values(TIER_LV).filter(v => lvl >= v).length + (lvl >= HIGH_LV ? 'h' : '') + ITEM_LV_STEPS.filter(v => lvl >= v).length + '|' + (dg && dg.types ? dg.types.join(',') : '*') + (rogue ? '|r' : '');
+  const st = dropStage(lvl), rogue = !!(dg && dg.mode === 'rogue');
+  const key = st + '|' + ITEM_LV_STEPS.filter(v => lvl >= v).length + '|' + (dg && dg.types ? dg.types.join(',') : '*') + (rogue ? '|r' : '');
   if (baseCache[key]) return baseCache[key];
-  const out = baseCache[key] = DROP_TABLE.filter(([id]) => {
-    const t = itemTier(id), range = ITEM_LV_RANGE[id];
-    if (!typeFits(dg, id)) return false;
-    if (range) return lvl >= range[0] && lvl < range[1];
-    if (lvl < TIER_LV[t]) return false;
-    return !(lvl >= HIGH_LV && t === 1 && !ALWAYS_DROP.includes(id));
-  }).map(([id, w]) => [id, rogue && ROGUE_DROP_MUL[id] ? w * ROGUE_DROP_MUL[id] : w]);
+  const out = [];
+  const add = (id, w) => { if (w > 0 && ITEMS[id]) out.push([id, !rogue ? w : ROGUE_DROP_MUL[id] ? w * ROGUE_DROP_MUL[id] : VITAMINS[id] || GUMMIES[id] ? w * ROGUE_RARE_MUL : w]); };
+  for (const [id, ws] of Object.entries(DROP_STAGES)) {
+    const range = ITEM_LV_RANGE[id];
+    if (range && !(lvl >= range[0] && lvl < range[1])) continue;
+    add(id, ws[st]);
+  }
+  for (const id of Object.keys(VITAMINS)) add(id, VITAMIN_DROP[st]);
+  for (const id of Object.keys(GUMMIES)) add(id, id === 'rainbowgummy' ? RAINBOW_DROP[st] : GUMMY_DROP[st]);
+  const held = HELD_SHOP_POOL.filter(id => st >= 2 || !strongHeld(id));
+  for (const id of held) add(id, HELD_DROP[st] / held.length);
+  const tms = TM_IDS.filter(id => typeFits(dg, id));
+  for (const id of tms) add(id, TM_DROP[st] / tms.length);
   out.key = key;
-  return out;
+  return (baseCache[key] = out);
 }
+// 이 물건이 바닥에서 나오는 단계들 (도감용)
+const dropStagesOf = id => {
+  const ws = DROP_STAGES[id] || (VITAMINS[id] ? VITAMIN_DROP : GUMMIES[id] ? (id === 'rainbowgummy' ? RAINBOW_DROP : GUMMY_DROP) : ITEMS[id] && ITEMS[id].tm ? TM_DROP
+    : HELD_SHOP_POOL.includes(id) ? HELD_DROP.map((w, i) => (strongHeld(id) && i < 2 ? 0 : w)) : null);
+  return ws ? ws.map((w, i) => (w > 0 ? i : -1)).filter(i => i >= 0) : [];
+};
+for (const id of Object.keys(ITEMS)) if (dropStagesOf(id).length) DROP_TABLE.push([id, 1]);
 // 보상용 좋은 아이템 (보스·이로치·구조 보답): 그 레벨에서 나오는 지닌 물건·기술머신·사탕
 // 메가스톤은 여기에 없고 따로 굴린다 (js/forms.js의 rollMega)
 function rewardPool(lvl, dg) {
   const table = baseTable(lvl, dg);
   const pool = table.filter(d => ITEMS[d[0]].held || ITEMS[d[0]].tm || d[0] === 'candy' || d[0] === 'reviver');
-  return pool.length >= 5 ? pool : table.filter(d => itemTier(d[0]) >= 2);
+  return pool.length >= 5 ? pool : table;
 }
 const tmBits = {};
 function canLearnTM(sp, mid) {
