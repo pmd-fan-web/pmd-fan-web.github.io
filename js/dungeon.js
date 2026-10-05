@@ -2791,10 +2791,20 @@ const Dungeon = (() => {
     if (c.shopkeeper) { ctx.fillStyle = '#ffe066'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('상점', cx, cy - 20); }
     if (c.boss && !c.dead) { ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('BOSS', cx, cy - 22); }
     if (c.outlaw) { ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('WANTED', cx, cy - 20); }
-    if (c.status && !c.dead && Gfx.drawStatus(ctx, c.status, cx, cy, t, c.id)) {}   // 원작 상태 이상 그림 (마비는 이모지)
-    else if (c.status && !c.dead) {
-      const ic = { psn: '☠', brn: '🔥', par: '⚡', slp: 'z', frz: '❄', cnf: '?' }[c.status];
-      ctx.font = '9px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(ic, cx + 9, cy - 10);
+    // 머리 위 표시: 상태 이상 · 랭크 업(칼) · 랭크 다운(화살표) · 벽(방패) · HP 적음(느낌표, 우리 편만). 여러 개면 원작처럼 번갈아 (얼음은 늘 덮는다)
+    if (!c.dead) {
+      const marks = [];
+      if (c.status === 'frz') Gfx.drawStatus(ctx, 'frz', cx, cy, t, c.id); else if (c.status) marks.push(c.status);
+      const st = Object.values(c.stages || {});
+      if (st.some(v => v > 0)) marks.push('up');
+      if (st.some(v => v < 0)) marks.push('down');
+      if (c.reflectT || c.screenT) marks.push('wall');
+      if ((c.player || c.ally) && c.hp > 0 && c.hp <= c.maxhp / 4) marks.push('low');
+      const mk = marks.length ? marks[Math.floor((t + (c.id || 0) * 97) / 1400) % marks.length] : null;
+      if (mk && !Gfx.drawStatus(ctx, mk, cx, cy, t, c.id)) {   // 그림이 없으면 (마비 등) 글자로
+        const ic = { psn: '☠', brn: '🔥', par: '⚡', slp: 'z', cnf: '?', up: '▲', down: '▼', wall: '🛡', low: '!' }[mk];
+        if (ic) { ctx.font = '9px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(ic, cx + 9, cy - 10); }
+      }
     }
   }
 

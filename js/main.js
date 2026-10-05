@@ -642,7 +642,7 @@ const Game = (() => {
     let list;
     try { list = await Online.listSOS(); } catch (e) { UI.alert('📋 구조 게시판', `<p>${esc(Online.why(e))}</p>`); return; }
     list = list.filter(s => dungeonById(s.dungeon) && hasKey(DATA.species, s.sp) && Number.isInteger(s.floor) && Number.isInteger(s.lv) && s.lv >= 1 && s.lv <= MAX_LEVEL)
-      .map(s => ({ ...s, sp: +s.sp, name: Online.cleanName(s.name), created: +s.created || Date.now() }));
+      .map(s => ({ ...s, sp: +s.sp, name: Online.cleanName(s.name), created: +s.created || Date.now(), floor: Math.min(+s.floor || 1, dungeonById(s.dungeon)?.floors || 99) }));   // 층수가 줄어든 던전의 예전 요청은 마지막 층으로 보인다
     const taken = sid => !!((save.rescued || {})[sid] || save.missions.accepted.some(m => m.sosId === sid));
     const ago = t => { const mnt = Math.max(1, Math.round((Date.now() - t) / 60000)); return mnt < 60 ? `${mnt}분 전` : mnt < 1440 ? `${Math.round(mnt / 60)}시간 전` : `${Math.round(mnt / 1440)}일 전`; };
     const rows = list.map(s => {
@@ -2356,6 +2356,7 @@ const Game = (() => {
     if (s.run) { const was = s.run.floor; fit(s.run); if (s.run.floor !== was) s.run.bossDone = null; }
     (s.missions && s.missions.accepted || []).forEach(fit); (s.missions && s.missions.board || []).forEach(fit);
     fit(s.sos);
+    for (const [id, f] of Object.entries(s.best || {})) { const dg = dungeonById(id); if (dg && f > dg.floors) s.best[id] = dg.floors; }   // 최고 기록도 (예: 25층 던전에 '최고 28F'가 나오지 않게)
   }
   function saveRunSnapshot(r) {
     const p = r.p;
