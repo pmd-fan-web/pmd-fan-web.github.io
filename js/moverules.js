@@ -284,6 +284,23 @@ for (const [id, m] of Object.entries(LEGEND_NEW_MOVES)) if (!DATA.moves[id]) DAT
 for (const [mid, sps] of [[781, [888, 1237]], [782, [889, 1238]], [462, [486]], [717, [785, 786, 787, 788]], [849, [488]]]) {
   for (const sp of sps) { const s = DATA.species[sp]; if (s && !s.l.some(x => x[1] === mid)) { s.l.push([40, mid]); s.l.sort((a, b) => a[0] - b[0]); } }
 }
+// 버드렉스 기수 모습 전용기 (v0.86): 주변 범위
+const RIDER_MOVES = {
+  824: { n: '블리자드랜스', t: 15, p: 120, a: 100, pp: 5, c: 2, r: 'r', d: '블리자포스가 얼음 창을 내던져 상대를 공격한다.' },
+  825: { n: '아스트랄비트', t: 8, p: 120, a: 100, pp: 5, c: 3, r: 'r', d: '수많은 유령을 상대에게 부딪쳐서 공격한다.' },
+};
+for (const [id, m] of Object.entries(RIDER_MOVES)) if (!DATA.moves[id]) DATA.moves[id] = { ...m, id: +id };
+// 버드렉스 기수 모습: SpriteCollab에 던전 그림이 없어서 노멀폼 그림을 빌린다 (sb, 초상화도 원래 모습). 마을에서 고르는 모습 (블리자포스·레이스포스를 영입해야, js/forms.js FORM_NEEDS)
+// 번호는 tools/form_ids.json에도 적어 둔다 (세이브·구조 코드가 깨지지 않게)
+const CALYREX_RIDERS = [
+  [1244, 'calyrex-ice', '버드렉스 (백마 탄 모습)', 'Calyrex (Ice Rider)', [14, 15], [100, 165, 150, 85, 130, 50], 266, 824, '0001'],
+  [1245, 'calyrex-shadow', '버드렉스 (흑마 탄 모습)', 'Calyrex (Shadow Rider)', [14, 8], [100, 85, 80, 165, 100, 150], 267, 825, '0002'],
+];
+for (const [id, fi, n, e, t, b, ab, sig, path] of CALYREX_RIDERS) {
+  const base = DATA.species[898];
+  if (!base || DATA.species[id]) continue;
+  DATA.species[id] = { ...base, n, e, t, b, x: 340, l: [[1, sig], ...base.l], v: [], ab: [[ab, 0]], em: '', sem: '', f: [898, path], fc: 'select', fi, sb: 898 };
+}
 rule([462], { pow: 'crush', text: '위력 = 120 × 상대의 남은 HP 비율 (HP가 가득이면 120).' });
 rule([717], { text: '던전에서는 상대 HP를 절반으로 줄이는 대신 위력 90으로 공격한다.' });
 rule([849], { team: true, cure: true, text: '자신과 주변(3칸 안)의 같은 편 모두의 HP를 최대 HP의 1/4 회복하고 상태 이상을 고친다.' });

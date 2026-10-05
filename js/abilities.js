@@ -36,6 +36,8 @@ const NEW_ABILITIES = {
   311: { n: '하바네로분출', d: '공격 기술로 데미지를 받으면 공격한 상대를 화상 상태로 만든다.', fi: ['scovillain-mega'] },
   313: { n: '불꽃의갈기', d: '불꽃타입 기술의 위력이 올라간다.', fi: ['pyroar-mega'] },
   314: { n: '파동의방호', d: '접촉하는 기술로 받는 데미지가 절반이 된다.', fi: ['lucario-mega-z'] },
+  266: { n: '혼연일체', d: '버드렉스의 긴장감과 블리자포스의 백의울음 두 가지 특성을 겸비한다.', fi: ['calyrex-ice'] },
+  267: { n: '혼연일체', d: '버드렉스의 긴장감과 레이스포스의 흑의울음 두 가지 특성을 겸비한다.', fi: ['calyrex-shadow'] },
 };
 for (const [id, a] of Object.entries(NEW_ABILITIES)) {
   if (!DATA.abilities[id]) DATA.abilities[id] = { n: a.n, d: a.d };
@@ -46,6 +48,8 @@ ab_(310, { megaSol: true, dungeon: '자기 기술은 늘 쾌청일 때처럼 쓴
 ab_(311, { spicySpray: true, dungeon: '공격 기술로 데미지를 받으면 공격한 상대가 화상에 걸린다.' });   // 하바네로분출
 ab_(313, { typeMul: { 10: 1.5 } });   // 불꽃의갈기
 ab_(314, { contactResist: 0.5 });   // 파동의방호
+ab_(266, { unnerve: true, onKO: 'atk', dungeon: '긴장감(적이 기술을 쓰는 확률 절반) + 적을 쓰러뜨리면 공격이 1단계 오른다.' });   // 혼연일체 (백마)
+ab_(267, { unnerve: true, onKO: 'spa', dungeon: '긴장감(적이 기술을 쓰는 확률 절반) + 적을 쓰러뜨리면 특수공격이 1단계 오른다.' });   // 혼연일체 (흑마)
 ab_(186, { typeMul: { 17: 1.33 } }); ab_(187, { typeMul: { 18: 1.33 } });
 ab_(200, { typeMul: { 9: 1.5 } }); ab_(262, { typeMul: { 13: 1.3 } }); ab_(263, { typeMul: { 16: 1.5 } });
 ab_(79, { rival: true, dungeon: '자신과 같은 타입을 가진 적에게 위력이 1.25배.' });
@@ -427,7 +431,7 @@ function abilityExact(r) {
   if (r.unaware) o.push('상대의 능력 변화를 무시');
   if (r.defiant) o.push(`상대가 능력을 떨어뜨리면 ${S(r.defiant)} 2단계 상승`);
   if (r.angerPoint) o.push('급소에 맞으면 공격이 최대(6단계)로 상승');
-  if (r.onKO) o.push(`적을 쓰러뜨리면 ${r.onKO === 'best' ? '공격·특수공격 중 높은 쪽' : '공격'} 1단계 상승`);
+  if (r.onKO) o.push(`적을 쓰러뜨리면 ${r.onKO === 'best' ? '공격·특수공격 중 높은 쪽' : r.onKO === 'spa' ? '특수공격' : '공격'} 1단계 상승`);
   if (r.contact) {
     const c = r.contact, ail = c.ail === 'spore' ? '독·마비·잠듦 중 하나' : c.ail ? STATUS_NAMES[c.ail] + ' 상태' : '';
     if (c.ail) o.push(`접촉한 적을 ${c.c}% 확률로 ${ail}로 만듦`);

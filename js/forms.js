@@ -123,7 +123,15 @@ function resetBattleForm(c, weather) {
 // 적으로 나올 때: 골라 둘 수 있는 모습이 있으면 가끔 그 모습
 function rollEnemyForm(c) {
   const sel = formsOfKind(c.sp, 'select');
-  if (sel.length && Math.random() < 0.5) c.selForm = pick(sel);
+  if (sel.length && Math.random() < 0.5) { c.selForm = pick(sel); giveFormSig(c); }
+}
+// 이 모습을 고르려면 영입해 둬야 하는 포켓몬 (버드렉스 백마·흑마: 블리자포스·레이스포스)
+const FORM_NEEDS = { 1244: 896, 1245: 897 };
+// 모습 전용기: 적이 그 모습으로 나오면 이 기술을 쓴다 (플레이어는 캐릭터 탭의 기술 설정에서)
+const FORM_SIG = { 1244: 824, 1245: 825 };
+function giveFormSig(c) {
+  const mv = FORM_SIG[c.selForm];
+  if (mv && DATA.moves[mv] && !c.moves.some(m => m.id === mv)) c.moves[0] = newMove(c, mv);
 }
 // 도감·설명용
 const FORM_KIND_NAMES = { item: '도구', mega: '메가진화', select: '모습 고르기', battle: '던전에서 변신' };

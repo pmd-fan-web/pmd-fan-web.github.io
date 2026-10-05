@@ -256,9 +256,15 @@ const Dungeon = (() => {
   // 보스의 모습: 모습을 바꾸는 도구(원시회귀 구슬·금강옥 등·가면·녹슨검/방패)를 지니고, 고르는 모습(테오키스·큐레무·쉐이미·후파)은 하나를 고른다.
   // 적 Lv BOSS_MEGA_LV 이상 던전의 최종 보스는 메가진화 (레쿠쟈는 화룡점정). 싸우는 도중 바뀌는 포켓몬(지가르데·메로엣타 등)은 그 규칙대로
   const BOSS_MEGA_LV = 60;
+  const BOSS_NO_MEGA = new Set(['sky']);   // 메가진화하지 않는 보스 (하늘의 탑 레쿠쟈는 원래 모습으로, v0.86)
   function bossForm(b, final) {
     const sp = b.sp;
     if (BATTLE_FORMS[sp]) return;
+    if (BOSS_NO_MEGA.has(D.dg.id)) {   // 화룡점정을 알면 메가진화하므로 다른 기술로 바꿔 둔다
+      const mv = MEGA_NO_STONE[sp], i = mv ? b.moves.findIndex(m => m.id === mv) : -1;
+      if (i >= 0) { const alt = [406, 242, 349, 245].find(id => !b.moves.some(m => m.id === id)); b.moves[i] = newMove(b, alt); }
+      return;
+    }
     const items = Object.keys(ITEMS).filter(k => ITEMS[k].formTo && DATA.species[ITEMS[k].formTo].f[0] === sp);
     const formItems = items.filter(k => !ITEMS[k].mega), megas = items.filter(k => ITEMS[k].mega);
     if (formItems.length) { b.held = pick(formItems); return; }
@@ -268,7 +274,7 @@ const Dungeon = (() => {
       if (mv && FORM_KINDS_MEGA(sp)) { if (!b.moves.some(m => m.id === mv)) b.moves[0] = newMove(b, mv); return; }
     }
     const sel = formsOfKind(sp, 'select');
-    if (sel.length) b.selForm = pick(sel);
+    if (sel.length) { b.selForm = pick(sel); giveFormSig(b); }
   }
   const FORM_KINDS_MEGA = sp => formsOfKind(sp, 'mega').length > 0;
   function bossIntro() {
@@ -312,6 +318,14 @@ const Dungeon = (() => {
     for (const [dx, dy] of [[0, 0], ...DIRS]) {
       const x = b.x + dx, y = b.y + dy;
       if (floorAt(x, y) && !itemAt(x, y) && !(x === D.stairs.x && y === D.stairs.y)) { D.items.push({ x, y, id, n: 1 }); break; }
+    }
+    // 로그라이크 중간 보스: 큰사과·맥스엘릭서를 하나씩 꼭 떨어뜨린다 (v0.86)
+    if (D.dg.mode === 'rogue' && run.floor !== D.dg.floors) {
+      for (const fid of ['bigapple', 'elixir']) for (const [dx, dy] of [[0, 0], ...DIRS, [0, 2], [2, 0], [0, -2], [-2, 0]]) {
+        const x = b.x + dx, y = b.y + dy;
+        if (floorAt(x, y) && !itemAt(x, y) && !(x === D.stairs.x && y === D.stairs.y)) { D.items.push({ x, y, id: fid, n: 1 }); break; }
+      }
+      log('중간 보스가 큰사과와 맥스엘릭서를 떨어뜨렸다!', at + 400);
     }
   }
 
@@ -1218,7 +1232,7 @@ const Dungeon = (() => {
     if (seen(c) || src === P()) log(`${jo(nm(c), '을')} 쓰러뜨렸다!`, at);
     if (src && src.hp > 0) {
       const sa = abilityOf(src);
-      if (sa.onKO) statChange(src, sa.onKO === 'best' ? (src.atk >= src.spa ? 2 : 4) : 2, 1, at, src);
+      if (sa.onKO) statChange(src, sa.onKO === 'best' ? (src.atk >= src.spa ? 2 : 4) : sa.onKO === 'spa' ? 4 : 2, 1, at, src);
     }
     if (src && abilityOf(c).aftermath && src.hp > 0) { abLog(c, `${jo(nm(src), '은')} 폭발에 휘말렸다!`, at); damage(src, pctDmg(src, 1 / 4), c, at); }
     if (byParty) {
@@ -3542,12 +3556,15 @@ const Dungeon = (() => {
     if (!navigator.getGamepads) return;
     let raf = 0, prev = [], prevDir = null, uiRepeat = 0, aAt = 0, aLong = false, faceDir = null;
     const pad = () => [...navigator.getGamepads()].find(g => g && g.connected);
+    // 스틱의 쉬는 위치: 처음 본 값을 기준으로 삼는다 (가만히 있어도 축이 -1 등으로 치우친 장치가 저절로 걷거나 자동 탐색을 끊지 않게)
+    const rest = {};
+    const axis = (g, i) => { const k = g.index + ':' + i, v = g.axes[i] || 0; if (!(k in rest)) rest[k] = Math.abs(v) > 0.3 ? v : 0; return v - rest[k]; };
     const uiKey = code => UI.key({ code, target: null, preventDefault() {} });
     const stickDir = g => {
       const b = i => !!(g.buttons[i] && g.buttons[i].pressed);
       let dx = (b(GP.RIGHT) ? 1 : 0) - (b(GP.LEFT) ? 1 : 0), dy = (b(GP.DOWN) ? 1 : 0) - (b(GP.UP) ? 1 : 0);
       if (!dx && !dy) {
-        const x = g.axes[0] || 0, y = g.axes[1] || 0;
+        const x = axis(g, 0), y = axis(g, 1);
         if (Math.hypot(x, y) < 0.5) return null;
         const a = Math.round(Math.atan2(y, x) / (Math.PI / 4));   // 8방향
         dx = Math.round(Math.cos(a * Math.PI / 4)); dy = Math.round(Math.sin(a * Math.PI / 4));
@@ -3673,6 +3690,7 @@ const Dungeon = (() => {
     }
   }
   function enter(r) {
+    ROGUE_LEARNER = r.mode === 'rogue' ? (r.p.rsp || r.p.sp) : null;   // 로그라이크: 들어간 포켓몬이 배울 수 있는 기술머신만 나온다
     updateKeyHints();
     run = r; LOG.length = 0; hudCache = logCache = moveCache = quickCache = '';
     Gfx.preload();

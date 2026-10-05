@@ -578,7 +578,7 @@ body.touch.vpad #actions { display: none; }   /* 동료 버튼은 X(행동) 메�
 @media (min-width: 801px) {
   #view-wrap #log { position: absolute; left: 114px; right: 14px; bottom: 8px; max-width: 640px; height: 84px; z-index: 2;   /* 왼쪽 아래 얼굴 그림 바로 옆 */
     background: #0b1633cc; border: 2px solid #ffffff40; border-radius: 8px; padding: 6px 12px; flex: none; box-sizing: border-box; }
-  body.touch #view-wrap #log { right: 170px; }   /* 화면 위 방향 버튼과 겹치지 않게 */
+  body.touch:not(.vpad) #view-wrap #log { right: 170px; }   /* 화면 위 방향 버튼과 겹치지 않게 */
   #bottom { height: auto; }
   /* 기술 2×2는 왼쪽, 그 옆에 공격·자동 등 버튼 */
   #controls { width: 100%; flex-direction: row; align-items: stretch; }
@@ -607,8 +607,6 @@ body.touch.vpad #actions { display: none; }   /* 동료 버튼은 X(행동) 메�
   #hud .exp .bar { width: 36px; }
   #hud .exp { display: inline; }
   #hud .held { display: inline; }
-  /* 긴 메시지는 잘리지 않게 줄바꿈 (오래된 줄은 위로 밀려 사라지고, 누르면 전체 기록) */
-  #view-wrap #log div { white-space: normal; overflow: visible; text-overflow: clip; }
   #hud .bar { width: 50px; }
   #hud .party { gap: 1px; }
   #hud .pm .pmn { display: inline-block; max-width: 5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
@@ -664,3 +662,16 @@ body.gp-skill #moves .mv[data-slot="2"] .k::after { content: "X"; } body.gp-skil
 @media (max-width: 800px) {
   .store-list { max-height: 45vh; overflow-y: auto; overscroll-behavior: contain; padding: 2px 6px; border: 1px solid #ffffff26; border-radius: 6px; background: #0003; }
 }
+
+/* 게임 화면 위 메시지 창: 긴 메시지는 잘리지 않게 줄바꿈 (PC·태블릿·휴대폰 모두. 넘치면 오래된 줄부터 통째로 빠지고, 누르면 전체 기록) */
+#view-wrap #log div { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+
+/* 고르기 창·동료 카드: 지닌 물건 아이콘 (초상화 오른쪽 아래) */
+.pk-held { position: absolute; right: 4px; top: 30px; font-size: 14px; line-height: 1; background: #0b1633cc; border-radius: 4px; padding: 1px 2px; pointer-events: auto; }
+.rcard { position: relative; }
+
+/* 터치 기기(특히 iOS 사파리): 버튼을 길게 누를 때 글자가 선택·드래그되거나 메뉴(돋보기·복사)가 뜨지 않게.
+   입력칸·코드 칸(input, textarea)은 그대로 복사·붙여넣기 된다 */
+button, .btn, .rcard, .pk, .mv, .vit, #town-tabs, #actions, #moves, #vpad, #dpad, #hud, #log, #view, #minimap, .modal .choices, .roster, .dg-mons {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+button img, .rcard img, .pk img, #face { -webkit-user-drag: none; user-drag: none; -webkit-touch-callout: none; }
