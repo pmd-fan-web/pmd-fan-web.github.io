@@ -619,7 +619,7 @@ body.touch.vpad #actions { display: none; }   /* 동료 버튼은 X(행동) 메�
   #view-wrap #log { position: absolute; left: 80px; right: 6px; bottom: 6px; height: 72px; z-index: 2;
     background: #0b1633cc; border: 2px solid #ffffff40; border-radius: 8px; padding: 3px 8px; font-size: 11px; line-height: 1.4; flex: none; box-sizing: border-box; }
   /* 예전 방향 버튼: 메시지 창 위로 올린다 */
-  body.touch:not(.vpad) #dpad { bottom: 84px; }
+  #dpad { bottom: 84px; }
 }
 
 /* 랭크 변화: PC는 예전처럼 이름 그대로 이어서, 휴대폰은 줄임말을 고정 폭 칸(한 줄 4칸)에 가지런히 */
@@ -632,3 +632,30 @@ body.touch.vpad #actions { display: none; }   /* 동료 버튼은 X(행동) 메�
 
 /* 설정에서 터치 조작을 끈 경우: 터치 기기여도 방향 버튼·조이스틱을 숨긴다 */
 body.notouch #dpad, body.notouch #vpad { display: none !important; }
+
+/* 리플렉터·빛의장막 등 턴 효과 (상태 창) */
+#hud .effs { display: flex; flex-wrap: wrap; gap: 2px 6px; }
+#hud .eff { padding: 0 5px; border-radius: 4px; white-space: nowrap; font-size: 12px; }
+#hud .eff.good { background: #2e6fd04d; color: #bfe0ff; } #hud .eff.bad { background: #c0404d4d; color: #ffc4c4; }
+#hud .peff { font-style: normal; font-size: 10px; margin-left: 2px; }
+@media (max-width: 800px) {
+  #hud .effs { grid-area: effs; } #hud .eff { font-size: 10px; padding: 0 4px; }
+  #hud { grid-template-areas: "floor floor stgs" "lvl belly stgs" "hp hp party" "held held party" "effs effs party"; }
+}
+
+/* 조작 패드 설정: ABXY 버튼 할당 */
+.vp-btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin-bottom: 8px; }
+@media (max-width: 800px) { .vp-btns { grid-template-columns: minmax(0, 1fr); } }
+.vp-btns label { display: flex; align-items: center; gap: 6px; }
+.vp-btns select { flex: 1; min-width: 0; }
+
+/* 컨트롤러: RB를 누르고 있는 동안 기술 칸에 누를 버튼 표시 */
+body.gp-skill #moves .mv { box-shadow: 0 0 0 2px var(--accent); }
+body.gp-skill #moves .mv .k::after { color: #fff; background: #0008; border-radius: 4px; padding: 0 4px; margin-left: 3px; }
+body.gp-skill #moves .mv[data-slot="0"] .k::after { content: "A"; } body.gp-skill #moves .mv[data-slot="1"] .k::after { content: "B"; }
+body.gp-skill #moves .mv[data-slot="2"] .k::after { content: "X"; } body.gp-skill #moves .mv[data-slot="3"] .k::after { content: "Y"; }
+
+/* PC에서 조이스틱 모드: 기술 2×2 오른쪽(버튼 줄 자리)에 조이스틱·ABXY */
+@media (min-width: 801px) {
+  #controls #vpad { flex: 1; min-width: 0; margin: 0; }
+}

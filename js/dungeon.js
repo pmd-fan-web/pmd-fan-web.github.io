@@ -439,7 +439,7 @@ const Dungeon = (() => {
     const fname = `${dg.n} ${run.floor}F`;
     log(`— ${fname} —`, now());
     const here = dg.mode === 'normal' && !run.hard ? Game.save.missions.accepted.filter(ms => ms.dungeon === dg.id && ms.floor === run.floor && !run.done.includes(ms.id)) : [];
-    if (here.length) { log(`📜 이 층에 임무 대상이 있다! (${here.length}개, J로 확인)`, now()); Sound.play('mission', now() + 500); }
+    if (here.length) { log(`📜 이 층에 임무 대상이 있다! (${here.length}개, J로 확인)`, now()); Sound.play('mission', now() + 500); D.prompts.push(() => { stopAuto(); Game.missionAlert(here); }); }   // 메시지만으로는 놓치기 쉬워서 알림 창도 (v0.84)
     if (D.weather) log(`날씨: ${WEATHERS[D.weather].icon} ${WEATHERS[D.weather].n} — ${WEATHERS[D.weather].d}`, now());
     showFloorBanner(fname + (D.weather ? `\n${WEATHERS[D.weather].icon} ${WEATHERS[D.weather].n}` : ''));
     run.turnsOnFloor = 0;
@@ -2986,15 +2986,20 @@ const Dungeon = (() => {
     if (bigMap) { mctx.strokeStyle = '#000'; mctx.lineWidth = 2; mctx.strokeRect(p.x * S - 1, p.y * S - 1, S + 2, S + 2); }
   }
 
+  // 턴이 정해진 효과 (상태 창에 아이콘과 남은 턴으로): 리플렉터·빛의장막은 좋은 것, 도발·하품·씨뿌리기는 나쁜 것
+  const timedEffects = c => [c.reflectT && ['🛡', '리플렉터', c.reflectT, 'good'], c.screenT && ['✨', '빛의장막', c.screenT, 'good'],
+    c.tauntT && ['💢', '도발', c.tauntT, 'bad'], c.yawnT && ['🥱', '하품', c.yawnT, 'bad'], c.seeded && ['🌱', '씨뿌리기', c.seeded.t, 'bad']].filter(Boolean);
+  const effKey = c => timedEffects(c).map(e => e[0] + e[2]).join('');
   function updateHud(t) {
     const p = P(), dg = D.dg;
-    const pt = (run.party || []).map(a => `${a.sp}:${a.lv}:${a.hp}:${a.maxhp}:${a.fainted ? 1 : 0}:${a.status}`).join(',');
-    const hud = `${pt}|${p.held}|${weatherRaw()}|${dg.n}|${run.floor}|${p.lv}|${p.hp}|${p.maxhp}|${Math.ceil(p.belly)}|${Game.save.money}|${run.money}|${p.status}|${p.exp}|${JSON.stringify(p.stages)}|${JSON.stringify(p.stageS || {})}`;
+    const pt = (run.party || []).map(a => `${a.sp}:${a.lv}:${a.hp}:${a.maxhp}:${a.fainted ? 1 : 0}:${a.status}:${a.fainted ? '' : effKey(a)}`).join(',');
+    const hud = `${pt}|${p.held}|${weatherRaw()}|${dg.n}|${run.floor}|${p.lv}|${p.hp}|${p.maxhp}|${Math.ceil(p.belly)}|${Game.save.money}|${run.money}|${p.status}|${p.exp}|${JSON.stringify(p.stages)}|${JSON.stringify(p.stageS || {})}|${effKey(p)}`;
     if (hud !== hudCache) {
       hudCache = hud;
       const hpPct = p.hp / p.maxhp * 100;
       const need = expFor(p.lv + 1) - expFor(p.lv), have = p.exp - expFor(p.lv);
       // 랭크 변화: 넓은 화면은 이름 그대로, 휴대폰은 줄임말 (css .sl / .ss)
+      const effs = timedEffects(p).map(([i, n, tl, k]) => `<span class="eff ${k}" title="${n} ${tl}턴 남음">${i}${n} ${tl}</span>`).join(' ');
       const stg = Object.entries(p.stages).filter(([, v]) => v).map(([k, v]) => `<span class="${v > 0 ? 'up' : 'down'}" title="${STAT_NAMES[k]} ${(p.stageS?.[k]?.t || [p.stageT?.[k] || 0]).slice().sort((a, b) => a - b).join(' · ')}턴 남음 (랭크마다 따로)"><i class="sl">${STAT_NAMES[k]}</i><i class="ss">${STAT_SHORT[k]}</i>${v > 0 ? '+' : ''}${v}</span>`).join(' ');
       document.getElementById('hud').innerHTML = `
         <span class="floor">${run.hard ? '☠ ' : ''}${esc(dg.n)} <b>${run.floor}F</b>${weatherRaw() ? ` <span class="wx" title="${esc(WEATHERS[weatherRaw()].d)}">${WEATHERS[weatherRaw()].icon} ${WEATHERS[weatherRaw()].n}</span>` : ''}${dg.mode === 'rogue' ? ' <i class="rogue">로그라이크</i>' : ''}</span>
@@ -3003,7 +3008,8 @@ const Dungeon = (() => {
         <span class="belly">배 <b class="${p.belly <= 20 ? 'warn' : ''}">${Math.ceil(p.belly)}</b>/100</span>
         ${p.held ? `<span class="held" title="${esc(ITEMS[p.held].d)}">${ITEMS[p.held].icon} ${esc(ITEMS[p.held].n)}</span>` : ''}
         ${p.status || stg ? `<span class="stgs">${p.status ? `<span class="st">${STATUS_NAMES[p.status]}</span> ` : ''}${stg ? `<span class="sgrid">${stg}</span>` : ''}</span>` : ''}
-        ${(run.party || []).length ? `<span class="party">${run.party.map(a => { const pc = a.fainted ? 0 : a.hp / a.maxhp * 100; return `<span class="pm${a.fainted ? ' out' : ''}" title="${esc(spName(a.sp))} Lv${a.lv} HP ${a.fainted ? 0 : a.hp}/${a.maxhp}${a.status ? ' · ' + STATUS_NAMES[a.status] : ''}"><span class="pmn">${esc(spName(a.sp))}</span> <span class="bar small"><i style="width:${pc}%;background:${pc > 50 ? '#4de36b' : pc > 20 ? '#f5d142' : '#f55'}"></i></span></span>`; }).join('')}</span>` : ''}
+        ${effs ? `<span class="effs">${effs}</span>` : ''}
+        ${(run.party || []).length ? `<span class="party">${run.party.map(a => { const pc = a.fainted ? 0 : a.hp / a.maxhp * 100; return `<span class="pm${a.fainted ? ' out' : ''}" title="${esc(spName(a.sp))} Lv${a.lv} HP ${a.fainted ? 0 : a.hp}/${a.maxhp}${a.status ? ' · ' + STATUS_NAMES[a.status] : ''}"><span class="pmn">${esc(spName(a.sp))}</span>${a.fainted ? '' : timedEffects(a).map(([i, n, tl]) => `<i class="peff" title="${n} ${tl}턴">${i}</i>`).join('')} <span class="bar small"><i style="width:${pc}%;background:${pc > 50 ? '#4de36b' : pc > 20 ? '#f5d142' : '#f55'}"></i></span></span>`; }).join('')}</span>` : ''}
         <span class="money" title="쓰러지면 이번 탐험에서 주운 돈(괄호 안)을 잃습니다">₽ <b>${Game.save.money}</b>${run.money ? ` <span class="run-money">(이번 탐험 +${run.money})</span>` : ''}</span>`;
     }
     const mv = p.moves.map(m => m.id + ':' + m.pp + ':' + m.max).join(',');
@@ -3231,6 +3237,7 @@ const Dungeon = (() => {
           ${row('특수공격', p.spa, p.stages[4] ? `(${p.stages[4] > 0 ? '+' : ''}${p.stages[4]}단계)` : '')}${row('특수방어', p.spd, p.stages[5] ? `(${p.stages[5] > 0 ? '+' : ''}${p.stages[5]}단계)` : '')}
           ${row('스피드', p.spe, p.stages[6] ? `(${p.stages[6] > 0 ? '+' : ''}${p.stages[6]}단계)` : '')}</table>
         ${st ? `<p>능력 변화: ${esc(st)}</p>` : ''}
+        ${timedEffects(p).length ? `<p>효과: ${timedEffects(p).map(([i, n, tl]) => `${i} ${n} <b>${tl}</b>턴 남음`).join(' · ')}</p>` : ''}
         <div class="cc-moves">${p.moves.map(m => `<div class="move-row">${moveLine(m.id, m.pp, m.max)}</div>`).join('')}</div>`,
       choices: [{ label: '닫기', fn: () => {} }],
     });
@@ -3261,7 +3268,26 @@ const Dungeon = (() => {
       <tr><td>스피드</td><td>상대보다 빠를수록 명중률이 오르고 상대의 공격을 잘 피한다 (최대 ±20%). 마비는 스피드 절반.</td></tr>
       <tr><td>날씨</td><td>던전에 따라 층마다 날씨가 생긴다. 화면 위 날씨 아이콘에 마우스를 올리면 효과를 볼 수 있다.</td></tr>
       <tr><td>가방</td><td>I / B</td></tr>
-      <tr><td>메뉴</td><td>Esc / M</td></tr></table>`);
+      <tr><td>메뉴</td><td>Esc / M</td></tr>
+      <tr><td>🎮 컨트롤러</td><td>${GP_GUIDE_SHORT}</td></tr></table>`);
+  }
+  // 컨트롤러 조작 안내 (처음 연결했을 때 한 번, 그 뒤로는 행동 메뉴·조작 패드 설정·조작법에서)
+  const GP_GUIDE_SHORT = '스틱·십자키 이동 · LB+이동 방향만 · <b>RB를 누른 채 A·B·X·Y = 기술 1~4</b> · A·B·X·Y는 버튼 할당대로 · RT 빠른사용 · Back 지도 · Start 메뉴';
+  function gamepadGuide() {
+    const b = vpSet().btns, nm = k => esc((VP_ACTS[b[k]] || ['?'])[0]);
+    UI.open({
+      title: '🎮 컨트롤러 조작', wide: true,
+      html: `<table class="help">
+        <tr><td>왼쪽 스틱 / 십자키</td><td>이동 (누르고 있으면 계속 걷기, 스틱은 대각선도)</td></tr>
+        <tr><td>LB + 이동</td><td>제자리에서 방향만 바꾸기</td></tr>
+        <tr><td><b>RB + A·B·X·Y</b></td><td><b>기술 1·2·3·4번</b> (RB를 누르고 있는 동안 기술 칸에 버튼이 표시됩니다)</td></tr>
+        <tr><td>A · B · X · Y</td><td>A ${nm('a')} · B ${nm('b')} · X ${nm('x')} · Y ${nm('y')} <span class="dim">(공격 버튼을 길게 누르면 정해 둔 순서로 기술)</span></td></tr>
+        <tr><td>RT</td><td>빠른사용</td></tr>
+        <tr><td>Back(Select) / Start</td><td>지도 / 메뉴</td></tr>
+        <tr><td>창이 열려 있을 때</td><td>십자키 위아래로 고르기, A 확인, B 닫기</td></tr></table>
+        <p class="dim">A·B·X·Y에 둘 행동은 행동 메뉴의 '⚙ 조작'에서 바꿀 수 있어요. 이 안내는 행동 메뉴의 '🎮 컨트롤러'와 조작법(?)에서 다시 볼 수 있어요.</p>`,
+      choices: [{ label: '알겠다', fn: () => {} }],
+    });
   }
 
   // ───────────────────────── 시작 / 종료 ─────────────────────────
@@ -3276,9 +3302,17 @@ const Dungeon = (() => {
     document.getElementById('log').addEventListener('click', () => { if (D && !UI.isOpen()) { stopAuto(); showLog(); } });
     // 메시지 창은 게임 화면 아래쪽에 겹쳐 띄운다 (원작처럼, 휴대폰도 v0.83부터 같게)
     document.getElementById('view-wrap').appendChild(document.getElementById('log'));
+    // PC(넓은 화면): 조이스틱 패드는 아래 띠의 기술 오른쪽(버튼 줄 자리)에 둔다. 휴대폰은 맨 아래 그대로
+    const vpEl = document.getElementById('vpad'), vpHome = vpEl.parentElement, wideMQ = matchMedia('(min-width: 801px)');
+    const placeVpad = () => {
+      const to = wideMQ.matches ? document.getElementById('controls') : vpHome;
+      if (vpEl.parentElement !== to) { to.appendChild(vpEl); layoutVpad(); }
+    };
+    wideMQ.addEventListener ? wideMQ.addEventListener('change', placeVpad) : wideMQ.addListener(placeVpad);
+    placeVpad();
     document.getElementById('hud').addEventListener('click', e => { if (D && !UI.isOpen() && !e.target.closest('[title]')) { stopAuto(); showStatus(); } });
     mini.addEventListener('click', onMiniClick);
-    initPad(); initVpad();
+    initPad(); initVpad(); initGamepad();
     document.getElementById('moves').addEventListener('contextmenu', e => {
       const b = e.target.closest('.mv'); if (!b || !D) return;
       e.preventDefault();
@@ -3300,14 +3334,18 @@ const Dungeon = (() => {
     if (busy() && k !== 'menu') return;
     ({ attack: () => act({ t: 'attack' }), explore: () => startAuto('explore'), fight: () => startAuto('fight'), tactic: partyMenu, rest: () => startAuto('rest'),
       wait: () => act({ t: 'wait' }), stairs: tryStairs, bag: openBag, menu: () => Game.dungeonMenu(), help: showHelp,
-      mission: () => Game.showMissions(), map: () => toggleMap(), look: toggleLook, quick: quickUse, padset: padSettings })[k]?.();
+      mission: () => Game.showMissions(), map: () => toggleMap(), look: toggleLook, quick: quickUse, padset: padSettings, gpguide: gamepadGuide })[k]?.();
   }
   // 조이스틱 모드의 X: 아래 버튼들을 모은 행동 메뉴 (조이스틱 모드에서는 아래 버튼 줄을 숨긴다)
-  const VP_MENU = [['bag', '🎒 가방'], ['quick', '⭐ 빠른사용'], ['stairs', '🪜 계단'], ['wait', '⏳ 대기'], ['rest', '💤 휴식'], ['map', '🗺 지도'],
-    ['mission', '📜 임무'], ['tactic', '🤝 동료'], ['padset', '⚙ 조작'], ['menu', '☰ 메뉴']];
-  function vpMenu() {
+  const VP_MENU = [['explore', '🧭 자동 탐색'], ['look', '🔍 조사'], ['bag', '🎒 가방'], ['quick', '⭐ 빠른사용'], ['stairs', '🪜 계단'], ['wait', '⏳ 대기'], ['rest', '💤 휴식'], ['map', '🗺 지도'],
+    ['mission', '📜 임무'], ['tactic', '🤝 동료'], ['padset', '⚙ 조작'], ['gpguide', '🎮 컨트롤러'], ['menu', '☰ 메뉴']];
+  function vpMenu(viaPad) {
     stopAuto();
-    const items = VP_MENU;
+    const onBtn = Object.values(vpSet().btns);   // ABXY에 둔 행동은 빼고 보여 준다 (조작·메뉴는 늘)
+    const hasPad = navigator.getGamepads && [...navigator.getGamepads()].some(g => g && g.connected);
+    const items = VP_MENU.filter(([k]) => k === 'gpguide' ? hasPad : k === 'padset' || k === 'menu' || !onBtn.includes(k));
+    // 컨트롤러: 십자키로 고를 수 있게 목록으로
+    if (viaPad) return UI.open({ title: '행동', choices: [...items.map(([k, n]) => ({ label: n, fn: () => setTimeout(() => runAction(k), 0) })), { label: '닫기', fn: () => {} }] });
     UI.open({
       title: '행동', html: `<div class="vp-menu">${items.map(([k, n]) => `<button class="btn" data-vk="${k}">${n}</button>`).join('')}</div>`,
       onOpen: (box, m) => box.querySelectorAll('[data-vk]').forEach(b => b.onclick = () => { UI.close(m); setTimeout(() => runAction(b.dataset.vk), 0); }),
@@ -3354,15 +3392,26 @@ const Dungeon = (() => {
   // 조이스틱: 끌면 8방향으로 걷는다 (누르고 있는 동안 계속). ↻를 누른 뒤 끌면 방향만 바꾼다
   // A 공격 (길게 누르면 정해 둔 순서대로 PP가 남은 기술) · B 자동 · X 메뉴 · Y 조사
   // 설정(⚙ 조작): 크기, 진동, A 길게 누르기 기술 순서, 끌어서 배치 (위치는 세로·가로 화면마다 따로)
-  const VP_DEFAULT = { js: 100, ab: 85, vib: true, order: [1, 2, 3, 4] };
+  // ABXY에 둘 수 있는 행동: [버튼에 쓰는 짧은 이름, 설정 창의 이름]
+  const VP_ACTS = { attack: ['공격', '⚔ 공격 (길게 누르면 기술)'], explore: ['자동', '🧭 자동 탐색 (다시 누르면 멈춤)'], vpmenu: ['행동', '📋 행동 메뉴'], look: ['조사', '🔍 조사'],
+    stairs: ['계단', '🪜 계단'], quick: ['빠른', '⭐ 빠른사용'], bag: ['가방', '🎒 가방'], wait: ['대기', '⏳ 대기'], rest: ['휴식', '💤 휴식'],
+    map: ['지도', '🗺 지도'], mission: ['임무', '📜 임무'], tactic: ['동료', '🤝 동료'], menu: ['메뉴', '☰ 메뉴'] };
+  const VP_BTNS = { a: 'attack', b: 'explore', x: 'vpmenu', y: 'look' };
+  const VP_DEFAULT = { js: 100, ab: 85, vib: true, order: [1, 2, 3, 4], btns: VP_BTNS };
   const VP_POS = { portrait: { js: [24, 52], abxy: [76, 52] }, landscape: { js: [16, 52], abxy: [84, 52] } };
-  const vpSet = () => ({ ...VP_DEFAULT, ...((Game.save && Game.save.settings.vpad) || {}) });
+  const vpSet = () => { const v = { ...VP_DEFAULT, ...((Game.save && Game.save.settings.vpad) || {}) }; v.btns = { ...VP_BTNS, ...(v.btns || {}) }; return v; };
+  // ABXY 아래 작은 이름을 할당에 맞춘다
+  function vpLabels() {
+    const btns = vpSet().btns;
+    for (const b of document.querySelectorAll('#vpad .vp-abxy button[data-b]')) { const sm = b.querySelector('small'), n = (VP_ACTS[btns[b.dataset.b]] || [''])[0]; if (sm && sm.textContent !== n) sm.textContent = n; }
+  }
   const vpOrient = () => (matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape');
   const vibe = () => { if (vpSet().vib && navigator.vibrate) try { navigator.vibrate(12); } catch (e) { /* 무시 */ } };
   // 화면이 좁으면 조이스틱과 ABXY가 겹치지 않게 함께 줄이고, 옮겨 둔 위치에서 겹치면 양 끝으로 붙인다
   const VP_GAP = 10;
   function layoutVpad() {
     const vp = document.getElementById('vpad'); if (!vp || !Game.save) return;
+    vpLabels();
     const s = vpSet(), pos = { ...VP_POS[vpOrient()], ...((s.pos || {})[vpOrient()] || {}) };
     let js = 140 * s.js / 100, ab = 64 * s.ab / 100;
     const W = vp.clientWidth;
@@ -3432,20 +3481,19 @@ const Dungeon = (() => {
     abxy.addEventListener('pointerdown', e => {
       const b = e.target.closest('button[data-b]'); if (!b || editing || !D) return;
       e.preventDefault(); vibe(); b.classList.add('held');
-      const k = b.dataset.b;
-      if (k === 'a') { aLong = false; clearTimeout(aTimer); aTimer = setTimeout(() => { aLong = true; vibe(); if (!busy() && !UI.isOpen()) { stopAuto(); longSkill(); } }, 420); return; }
-      if (UI.isOpen() && k !== 'x') return;
-      if (D.auto && k !== 'b') stopAuto();
-      if (busy() && k !== 'x') return;
-      if (k === 'b') { if (D.auto) stopAuto(); else startAuto('explore'); }
-      else if (k === 'x') vpMenu();
-      else if (k === 'y') toggleLook();
+      const k = vpSet().btns[b.dataset.b];   // 버튼에 둔 행동
+      if (k === 'attack') { aLong = false; clearTimeout(aTimer); aTimer = setTimeout(() => { aLong = true; vibe(); if (!busy() && !UI.isOpen()) { stopAuto(); longSkill(); } }, 420); return; }
+      if (UI.isOpen() && k !== 'vpmenu') return;
+      if (k === 'explore') { if (D.auto) stopAuto(); else if (!busy()) startAuto('explore'); return; }
+      if (D.auto) stopAuto();
+      if (k === 'vpmenu') { vpMenu(); return; }
+      runAction(k);
     });
     const clearHeld = () => vp.querySelectorAll('.vp-abxy .held').forEach(x => x.classList.remove('held'));
     abxy.addEventListener('pointerup', e => {
       const b = e.target.closest && e.target.closest('button[data-b]');
       clearHeld();
-      if (b && b.dataset.b === 'a' && aTimer) { clearTimeout(aTimer); aTimer = null; if (!aLong && D && !busy() && !UI.isOpen()) { stopAuto(); act({ t: 'attack' }); } }
+      if (b && vpSet().btns[b.dataset.b] === 'attack' && aTimer) { clearTimeout(aTimer); aTimer = null; if (!aLong && D && !busy() && !UI.isOpen()) { stopAuto(); act({ t: 'attack' }); } }
     });
     abxy.addEventListener('pointercancel', () => { clearTimeout(aTimer); aTimer = null; clearHeld(); });
     vp.addEventListener('contextmenu', e => e.preventDefault());
@@ -3476,15 +3524,105 @@ const Dungeon = (() => {
     if (window.ResizeObserver) new ResizeObserver(() => layoutVpad()).observe(vp);   // 던전 화면이 보일 때 (숨어 있을 때는 너비가 0)
     layoutVpad();
   }
+  // ── 게임 컨트롤러 (Gamepad API, v0.84) ──
+  //  왼쪽 스틱·십자키: 이동 (누르고 있으면 계속, 대각선 가능) / LB를 누른 채: 방향만 바꾸기
+  //  A·B·X·Y: 조작 패드 설정의 버튼 할당 그대로 (기본 A 공격·길게 기술 / B 자동 / X 행동 메뉴 / Y 조사)
+  //  RB를 누른 채 A·B·X·Y: 기술 1·2·3·4 / RT 빠른사용 · Back(Select) 지도 · Start 메뉴. 창이 열려 있으면 십자키 위아래로 고르고 A 확인, B 닫기
+  const GP = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, BACK: 8, START: 9, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
+  const GP_SKILL = [GP.A, GP.B, GP.X, GP.Y];   // RB + 이 버튼 = 기술 1~4
+  const GP_NAME = { [GP.A]: 'a', [GP.B]: 'b', [GP.X]: 'x', [GP.Y]: 'y' };
+  function initGamepad() {
+    if (!navigator.getGamepads) return;
+    let raf = 0, prev = [], prevDir = null, uiRepeat = 0, aAt = 0, aLong = false, faceDir = null;
+    const pad = () => [...navigator.getGamepads()].find(g => g && g.connected);
+    const uiKey = code => UI.key({ code, target: null, preventDefault() {} });
+    const stickDir = g => {
+      const b = i => !!(g.buttons[i] && g.buttons[i].pressed);
+      let dx = (b(GP.RIGHT) ? 1 : 0) - (b(GP.LEFT) ? 1 : 0), dy = (b(GP.DOWN) ? 1 : 0) - (b(GP.UP) ? 1 : 0);
+      if (!dx && !dy) {
+        const x = g.axes[0] || 0, y = g.axes[1] || 0;
+        if (Math.hypot(x, y) < 0.5) return null;
+        const a = Math.round(Math.atan2(y, x) / (Math.PI / 4));   // 8방향
+        dx = Math.round(Math.cos(a * Math.PI / 4)); dy = Math.round(Math.sin(a * Math.PI / 4));
+      }
+      return dirIndex(dx, dy);
+    };
+    const longSkill = () => {
+      const p = P(); if (!p) return;
+      for (const n of vpSet().order) { const m = p.moves[n - 1]; if (m && m.pp > 0) { act({ t: 'skill', slot: n - 1 }); return; } }
+      log('PP가 남은 기술이 없다!', now());
+    };
+    const press = (name, k) => {   // 버튼을 막 눌렀을 때 (할당된 행동)
+      if (k === 'attack') { aAt = performance.now(); aLong = false; return; }
+      if (k === 'explore') { if (D.auto) stopAuto(); else if (!busy()) startAuto('explore'); return; }
+      if (D.auto) stopAuto();
+      if (k === 'vpmenu') vpMenu(true); else runAction(k);
+    };
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const g = pad(); if (!g) return;
+      const now0 = performance.now(), down = i => !!(g.buttons[i] && g.buttons[i].pressed), hit = i => down(i) && !prev[i];
+      const dir = stickDir(g), any = g.buttons.some(b => b.pressed) || dir != null;
+      if (any && Game.poke) Game.poke();   // 자리 비움 깨우기 등
+      const skillMode = !UI.isOpen() && !!D && !bigMap && down(GP.RB);
+      if (document.body.classList.contains('gp-skill') !== skillMode) document.body.classList.toggle('gp-skill', skillMode);   // 기술 칸에 A·B·X·Y 표시
+      if (UI.isOpen()) {
+        // 창: 위아래로 고르기 (누르고 있으면 반복), A 확인, B 닫기
+        const v = dir === 4 ? 'ArrowUp' : dir === 0 ? 'ArrowDown' : null;
+        if (v && (prevDir !== dir || now0 > uiRepeat)) { uiKey(v); uiRepeat = now0 + (prevDir !== dir ? 380 : 140); }
+        if (hit(GP.A)) uiKey('Enter'); else if (hit(GP.B)) uiKey('Escape');
+        aAt = 0;
+      } else if (D && !D.dead) {
+        if (bigMap) { if (hit(GP.B) || hit(GP.BACK) || hit(GP.A)) toggleMap(false); }
+        else {
+          const btns = vpSet().btns;
+          if (skillMode) {
+            aAt = 0;
+            GP_SKILL.forEach((i, slot) => { if (hit(i) && P().moves[slot]) { if (D.auto) stopAuto(); if (!busy()) act({ t: 'skill', slot }); } });
+          } else for (const i of [GP.A, GP.B, GP.X, GP.Y]) if (hit(i)) press(GP_NAME[i], btns[GP_NAME[i]]);
+          // 공격을 둔 버튼: 짧게 떼면 공격, 길게 누르면 기술
+          const atkBtn = [GP.A, GP.B, GP.X, GP.Y].find(i => btns[GP_NAME[i]] === 'attack');
+          if (aAt && atkBtn != null) {
+            if (down(atkBtn) && !aLong && now0 - aAt > 420) { aLong = true; if (!busy()) { stopAuto(); longSkill(); } }
+            if (!down(atkBtn)) { if (!aLong && !busy()) { stopAuto(); act({ t: 'attack' }); } aAt = 0; }
+          }
+          if (hit(GP.RT)) runAction('quick');
+          if (hit(GP.BACK)) runAction('map');
+          if (hit(GP.START)) runAction('menu');
+          if (dir != null) {
+            if (D.auto) stopAuto();
+            if (down(GP.LB)) { if (dir !== faceDir && !busy()) { faceDir = dir; act({ t: 'face', dir }); } }
+            else if (!busy()) act({ t: 'move', dir });
+          }
+          if (dir == null || !down(GP.LB)) faceDir = null;
+        }
+      }
+      prev = g.buttons.map(b => b.pressed); prevDir = dir;
+    };
+    const start = () => { if (!raf && pad()) tick(); };
+    window.addEventListener('gamepadconnected', () => {
+      start();
+      const st = Game.save && Game.save.settings;
+      if (st && !st.gpGuided && !UI.isOpen()) { st.gpGuided = true; Game.setSetting('gpGuided', true); gamepadGuide(); }   // 처음 한 번은 안내 창
+      else UI.toast('🎮 컨트롤러 연결: RB를 누른 채 A·B·X·Y로 기술 1~4 (행동 메뉴의 🎮 컨트롤러에서 전체 안내)');
+    });
+    window.addEventListener('gamepaddisconnected', () => { if (!pad()) { cancelAnimationFrame(raf); raf = 0; } });
+    start();
+  }
+
   // 조작 패드 설정 창
   function padSettings() {
     stopAuto();
     const s = vpSet(), mode = Game.save.settings.padMode || 'stick';
     const sel = i => `<select data-ord="${i}">${[1, 2, 3, 4].map(n => `<option value="${n}" ${s.order[i] === n ? 'selected' : ''}>${n}번</option>`).join('')}</select>`;
+    let box = null;   // 고르기 칸을 누르면 창이 먼저 닫히므로, 열 때 잡아 둔 창에서 값을 읽는다
     const savePadForm = () => {
-      const box = document.querySelector('.vp-set'); if (!box) return;
+      if (!box) return;
       const v = { ...vpSet(), js: +box.querySelector('[data-vp=js]').value, ab: +box.querySelector('[data-vp=ab]').value, vib: box.querySelector('[data-vp=vib]').checked,
-        order: [0, 1, 2, 3].map(i => +box.querySelector(`[data-ord="${i}"]`).value) };
+        order: [0, 1, 2, 3].map(i => +box.querySelector(`[data-ord="${i}"]`).value),
+        btns: Object.fromEntries(['a', 'b', 'x', 'y'].map(k => [k, box.querySelector(`[data-btn="${k}"]`).value])) };
+      // 행동 메뉴가 어디에도 없으면 가방·설정 등에 갈 수 없으니 X에 다시 둔다
+      if (!Object.values(v.btns).includes('vpmenu')) { v.btns.x = 'vpmenu'; UI.toast('행동 메뉴는 꼭 하나의 버튼에 있어야 해서 X에 두었어요.'); }
       Game.setSetting('vpad', v); Game.setSetting('padMode', box.querySelector('[data-vp=mode]').value);
     };
     UI.open({
@@ -3494,16 +3632,20 @@ const Dungeon = (() => {
         <div class="row"><span>조이스틱 크기</span><input type="range" min="60" max="150" step="5" data-vp="js" value="${s.js}"><b class="vp-js">${s.js}%</b></div>
         <div class="row"><span>ABXY 크기</span><input type="range" min="60" max="150" step="5" data-vp="ab" value="${s.ab}"><b class="vp-ab">${s.ab}%</b></div>
         <label class="row chk"><input type="checkbox" data-vp="vib" ${s.vib ? 'checked' : ''}> 누를 때 짧은 진동</label>
-        <p class="dim">A를 길게 누르면 쓸 기술 순서 (PP가 없으면 다음 순서)</p>
+        <p class="dim">버튼 할당 <span class="dim">(버튼에 두지 않은 행동은 행동 메뉴에 나옵니다)</span></p>
+        <div class="vp-btns">${['a', 'b', 'x', 'y'].map(k => `<label><b>${k.toUpperCase()}</b> <select data-btn="${k}">${Object.entries(VP_ACTS).map(([v, [, n]]) => `<option value="${v}" ${s.btns[k] === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`).join('')}</div>
+        <p class="dim">'공격'을 둔 버튼을 길게 누르면 쓸 기술 순서 (PP가 없으면 다음 순서)</p>
         <div class="vp-order">${sel(0)} → ${sel(1)} → ${sel(2)} → ${sel(3)}</div>
-        <p class="dim">A 공격 · 길게 누르면 기술 / B 자동 / X 행동 메뉴(가방·계단·대기·지도·메뉴 등) / Y 조사 · 조이스틱 옆 ↻를 누르고 조이스틱을 누르고 있는 동안은 방향만 바꿉니다.<br>위치는 세로·가로 화면마다 따로 저장되고, 아래 조작 영역 안에서만 옮길 수 있습니다.</p></div>`,
-      onOpen: box => {
-        box.addEventListener('input', e => {
+        <p class="dim">기본: A 공격 · 길게 누르면 기술 / B 자동 / X 행동 메뉴(가방·계단·대기·지도·메뉴 등) / Y 조사 · 조이스틱 옆 ↻를 누르고 조이스틱을 누르고 있는 동안은 방향만 바꿉니다.<br>위치는 세로·가로 화면마다 따로 저장되고, 아래 조작 영역 안에서만 옮길 수 있습니다.</p></div>`,
+      onOpen: b => {
+        box = b.querySelector('.vp-set') || b;
+        b.addEventListener('input', e => {
           const k = e.target.dataset.vp;
-          if (k === 'js' || k === 'ab') { box.querySelector('.vp-' + k).textContent = e.target.value + '%'; Game.save.settings.vpad = { ...vpSet(), [k]: +e.target.value }; layoutVpad(); }
+          if (k === 'js' || k === 'ab') { b.querySelector('.vp-' + k).textContent = e.target.value + '%'; Game.save.settings.vpad = { ...vpSet(), [k]: +e.target.value }; layoutVpad(); }
         });
       },
       choices: [
+        { label: '🎮 컨트롤러 조작 안내', fn: () => { savePadForm(); setTimeout(gamepadGuide, 0); } },
         { label: '패드 끌어서 배치', fn: () => { savePadForm(); setTimeout(() => initVpad.edit && initVpad.edit(), 0); } },
         { label: '기본값 복원', fn: () => { Game.save.settings.vpad = { ...VP_DEFAULT }; Game.setSetting('padMode', 'stick'); UI.toast('조작 패드를 기본값으로 되돌렸어요.'); } },
         { label: '저장·닫기', fn: savePadForm },

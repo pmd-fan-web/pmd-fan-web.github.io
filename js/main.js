@@ -823,6 +823,16 @@ const Game = (() => {
     }
     return m;
   }
+  // 임무가 있는 층에 들어왔을 때 알림 창
+  function missionAlert(list) {
+    UI.open({
+      title: '📜 이 층에 임무가 있어요!',
+      html: list.map(m => `<div class="row">${portraitImg(m.kind === 'outlaw' ? m.target : m.client, 'portrait sm', m.kind === 'sos' ? 'Pain' : 'Normal', !!m.shiny)}
+        <div class="grow">${missionText(m)}<div class="dim">보상 ${rewardText(m)}</div></div></div>`).join('')
+        + '<p class="dim">임무 확인(J)으로 언제든 다시 볼 수 있어요.</p>',
+      choices: [{ label: '알겠다', fn: () => {} }],
+    });
+  }
   function missionText(m) {
     const dg = dungeonById(m.dungeon);
     if (m.kind === 'sos') return `<b>🆘 ${m.online ? '탐험대 구조' : '친구 구조'}</b> ${esc(dg.n)} ${m.floor}F에서 쓰러진 ${m.from ? esc(m.from) + ' 님' : '친구'}의 Lv${m.lv} ${esc(jo(spName(m.client), '을'))} 구해 주세요.`;
@@ -2888,7 +2898,7 @@ const Game = (() => {
   // 상점 기술머신 분류 (다음 진열부터)
   function setTmFocus(v) { save.tmFocus = v || null; persist(); UI.toast(v ? '다음 진열부터 그 분류의 기술머신만 나와요. (🔄 새로고침하거나 다음 날)' : '기술머신 분류를 고르지 않았어요.'); }
   function setMissionFocus(id) { save.missionFocus = id || null; persist(); UI.toast(id ? `${dungeonById(id).n}의 의뢰가 더 자주 붙어요. (다음 새 의뢰부터)` : '자주 뜨는 지역을 해제했어요.'); }
-  return { logSale, setTmFocus, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
+  return { poke: () => { lastInput = Date.now(); if (idle) wakeIdle(); }, missionAlert, logSale, setTmFocus, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
 })();
 
 window.addEventListener('DOMContentLoaded', () => {
