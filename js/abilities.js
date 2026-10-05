@@ -472,9 +472,11 @@ function showAbilityInfo(id, hidden) { UI.alert('특성 정보', abilityHtml(id,
 // 적이 가질 특성 (숨겨진 특성 제외)
 // 적의 특성: 보통은 일반 특성 중 하나, HIDDEN_ABILITY_CHANCE 확률로 숨겨진 특성 (있으면)
 const HIDDEN_ABILITY_CHANCE = 0.1;
+// 포켓몬별로 다르게: 마기라스는 반대로 숨겨진 특성(긴장감)이 90% (모래날림이 층마다 모래바람을 일으켜 거슬린다는 의견, v0.89)
+const HIDDEN_ABILITY_CHANCE_SP = { 248: 0.9 };
 function randomAbility(sp) {
   const hidden = DATA.species[sp].ab.filter(a => a[1]);
-  if (hidden.length && Math.random() < HIDDEN_ABILITY_CHANCE) return pick(hidden)[0];
+  if (hidden.length && Math.random() < (HIDDEN_ABILITY_CHANCE_SP[sp] ?? HIDDEN_ABILITY_CHANCE)) return pick(hidden)[0];
   const list = DATA.species[sp].ab.filter(a => !a[1]);
   return (list.length ? pick(list) : DATA.species[sp].ab[0] || [0])[0];
 }

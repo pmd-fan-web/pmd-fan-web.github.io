@@ -239,13 +239,18 @@ const Dungeon = (() => {
     const R = D.rooms[0], cx = R.x + Math.floor(R.w / 2);
     p.x = cx; p.y = R.y + R.h - 2;
     D.stairs = { x: cx, y: R.y + 1 }; D.stairsHidden = true; D.noSpawn = true;
-    const sp = bossSpecies(dg);
+    // 이 층에서 이미 정해진 보스가 있으면 (새로고침해서 이어 한 경우) 같은 보스로: 새로고침으로 이로치·전설 보스를 다시 뽑지 못하게 (v0.89)
+    const keep = run.bossPick && run.bossPick.floor === run.floor && DATA.species[run.bossPick.sp] ? run.bossPick : null;
+    const sp = keep ? keep.sp : bossSpecies(dg);
     const blv = Math.min(MAX_LEVEL, (run.hard ? run.hardLv : D.lvl) + 3);   // 보스는 +3 (최고 레벨은 넘지 않는다)
     const b = spawnEnemy({ x: cx, y: R.y + 3 }, sp, blv);
+    if (keep) { b.shiny = !!keep.shiny && !!DATA.species[sp].sh; if (keep.ability != null && DATA.species[sp].ab.some(a => a[0] === keep.ability)) { b.ability = keep.ability; b.baseAbility = keep.ability; } }
     b.lv = blv; recalc(b);
     b.boss = true; b.hpMul = 3.5; b.statMul = 1.1; recalc(b); b.hp = b.maxhp;
     // 특별한 모습이 있는 보스는 원래 모습으로 나타났다가, 등장 알림 뒤에 눈앞에서 바뀐다
     bossForm(b, run.floor === dg.floors);
+    if (keep) { if (keep.held !== undefined) b.held = keep.held; if (keep.selForm) b.selForm = keep.selForm; }
+    run.bossPick = { floor: run.floor, sp, shiny: !!b.shiny, ability: b.baseAbility ?? b.ability, held: b.held || null, selForm: b.selForm || null };
     setForm(b, null); b.hp = b.maxhp;
     if (wantedForm(b)) { b.introForm = true; Sprites.load(wantedForm(b), b.shiny); }   // 바뀔 모습의 그림도 미리 받아 둔다
     b.dir = 0; b.target = { x: p.x, y: p.y };
@@ -2839,7 +2844,9 @@ const Dungeon = (() => {
     if (!D) return;
     const t = now();
     const wrap = canvas.parentElement;
-    const scale = wrap.clientWidth >= 1000 && wrap.clientHeight >= 620 ? 3 : 2;
+    // 게임 화면 확대 배율: 설정에서 고를 수 있다 (v0.89, 자동은 넓은 화면 3배·그 밖 2배)
+    const vs = +Game.save.settings.viewScale || 0;
+    const scale = vs || (wrap.clientWidth >= 1000 && wrap.clientHeight >= 620 ? 3 : 2);
     const W = Math.ceil(wrap.clientWidth / scale), H = Math.ceil(wrap.clientHeight / scale);
     if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; ctx.imageSmoothingEnabled = false; }
     const p = P(), pv = vpos(p, t);

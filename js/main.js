@@ -1990,6 +1990,9 @@ const Game = (() => {
     const keepOther = other && other.lv > entry.lv;   // 합칠 때 이미 있던 쪽이 레벨이 더 높으면 그쪽 기록을 쓴다
     delete save.roster[sp];
     if (isFav(sp)) save.favs = [...new Set(save.favs.map(x => x === sp ? to : x))];   // 즐겨찾기도 진화한 모습으로
+    // 진화해야 배울 수 있는 기술 (예: 누리레느의 물거품아리아): 진화 전 모습은 못 배우는 것
+    const preSet = new Set([sp, ...preEvos(sp)].flatMap(x => learnableUpTo(x, MAX_LEVEL)));
+    const evoNew = learnableUpTo(to, entry.lv).filter(m => DATA.moves[m] && !preSet.has(m));
     // 진화 후 레벨에서 새로 배우는 기술이 있으면 빈 칸에 추가
     for (const mid of learnedAt(to, entry.lv).concat(learnedAt(to, 1))) if (entry.moves.length < 4 && !entry.moves.includes(mid)) entry.moves.push(mid);
     const slot = DATA.species[sp].ab.findIndex(a => a[0] === entry.ability);
@@ -2005,7 +2008,12 @@ const Game = (() => {
     noteFirst('evolve', { from: sp, to });
     Sound.play('levelup');
     persist(); renderTown();
-    UI.alert('축하합니다!', `<div class="center">${portraitImg(to, 'portrait big', 'Joyous', entry.shiny)}</div><p>${esc(jo(spName(sp), '은'))} ${esc(jo(spName(to), '으로'))} 진화했다!</p>`);
+    // 진화로 새로 배울 수 있게 된 기술: 넣었으면 알리고, 기술 칸이 꽉 차서 못 넣었으면 기술 설정에서 넣으라고 알린다
+    const added = evoNew.filter(m => entry.moves.includes(m)), wait = evoNew.filter(m => !entry.moves.includes(m));
+    const mvList = ids => { const t = ids.map(m => DATA.moves[m].n).join(', '); return `<b>${esc(t)}</b>${jo(t, '을').slice(t.length)}`; };   // '물거품아리아를'
+    UI.alert('축하합니다!', `<div class="center">${portraitImg(to, 'portrait big', 'Joyous', entry.shiny)}</div><p>${esc(jo(spName(sp), '은'))} ${esc(jo(spName(to), '으로'))} 진화했다!</p>
+      ${added.length ? `<p>새 기술 ${mvList(added)} 배웠다!</p>` : ''}
+      ${wait.length ? `<p>진화해서 ${mvList(wait)} 배울 수 있게 됐어요. 기술 칸이 꽉 차 있어서, 캐릭터 탭의 <b>기술 설정</b>에서 바꿔 넣을 수 있어요.</p>` : ''}`);
   }
 
   // 영입한 포켓몬 즐겨찾기 (캐릭터 변경·동료 추가에서 앞에 나온다)
@@ -2023,7 +2031,10 @@ const Game = (() => {
   const soundSettings = s => `<div class="sound-set">
         <label class="chk"><input type="checkbox" data-set="sfx" ${s.sfx !== false ? 'checked' : ''}> 효과음</label> ${volInput('sfxVol', 60, '효과음 음량')}
         <label class="chk"><input type="checkbox" data-set="bgm" ${s.bgm !== false ? 'checked' : ''}> 배경음</label> ${volInput('bgmVol', 40, '배경음 음량')}</div>`;
-  const playSettings = s => `<label class="chk"><input type="checkbox" data-set="fast" ${s.fast ? 'checked' : ''}> 빠른 연출</label>
+  const VIEW_SCALES = [['', '자동'], ['1', '1배 (아주 작게)'], ['1.5', '1.5배'], ['2', '2배'], ['2.5', '2.5배'], ['3', '3배'], ['4', '4배 (크게)']];
+  const playSettings = s => `<div class="row"><span class="grow">🔍 던전 화면 크기 <span class="dim">(작을수록 넓게 보여요. 자동: 넓은 화면 3배, 그 밖 2배)</span></span>
+        <select data-setsel="viewScale">${VIEW_SCALES.map(([v, n]) => `<option value="${v}" ${String(s.viewScale || '') === v ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+      <label class="chk"><input type="checkbox" data-set="fast" ${s.fast ? 'checked' : ''}> 빠른 연출</label>
       <label class="chk"><input type="checkbox" data-set="autoDescend" ${s.autoDescend ? 'checked' : ''}> 자동 탐색·계단(G)으로 계단에 도착하면 바로 내려가기</label>
       <div class="row"><span class="grow">📱 터치 조작 방식 <span class="dim">(휴대폰·태블릿)</span></span>
         <select data-setsel="padMode"><option value="stick" ${(s.padMode || 'stick') === 'stick' ? 'selected' : ''}>조이스틱 + ABXY</option><option value="dpad" ${s.padMode === 'dpad' ? 'selected' : ''}>방향 버튼 + 아래 버튼 (예전 방식)</option></select></div>
@@ -2353,14 +2364,14 @@ const Game = (() => {
   // 던전 층수가 줄었을 때(v0.87 테마 던전 30 → 25층): 진행 중인 탐험·임무·구조 요청의 층을 마지막 층까지로 맞춘다
   function fitFloors(s) {
     const fit = o => { const dg = o && dungeonById(o.dungeon); if (dg && o.floor > dg.floors) o.floor = dg.floors; };
-    if (s.run) { const was = s.run.floor; fit(s.run); if (s.run.floor !== was) s.run.bossDone = null; }
+    if (s.run) { const was = s.run.floor; fit(s.run); if (s.run.floor !== was) { s.run.bossDone = null; s.run.bossPick = null; } }
     (s.missions && s.missions.accepted || []).forEach(fit); (s.missions && s.missions.board || []).forEach(fit);
     fit(s.sos);
     for (const [id, f] of Object.entries(s.best || {})) { const dg = dungeonById(id); if (dg && f > dg.floors) s.best[id] = dg.floors; }   // 최고 기록도 (예: 25층 던전에 '최고 28F'가 나오지 않게)
   }
   function saveRunSnapshot(r) {
     const p = r.p;
-    save.run = { dungeon: r.dungeon, floor: r.floor, bossDone: r.bossDone === r.floor ? r.floor : null, mode: r.mode, bag: r.bag, money: r.money, done: r.done, daily: r.daily || null, turns: r.turns || 0, kills: r.kills || 0, carried: r.carried || null, stats: r.stats || null,
+    save.run = { dungeon: r.dungeon, floor: r.floor, bossDone: r.bossDone === r.floor ? r.floor : null, bossPick: r.bossPick && r.bossPick.floor === r.floor ? r.bossPick : null, mode: r.mode, bag: r.bag, money: r.money, done: r.done, daily: r.daily || null, turns: r.turns || 0, kills: r.kills || 0, carried: r.carried || null, stats: r.stats || null,
       ...(r.hard ? { hard: true, hardLv: r.hardLv, rsp: p.rsp, kit: r.kit } : {}),
       p: { sp: p.sp, lv: p.lv, exp: p.exp, hp: p.hp, belly: p.belly, status: p.status, statusT: p.statusT, moves: ownMoves(p).map(m => m.id), pp: ownMoves(p).map(m => m.pp), ability: p.baseAbility ?? p.ability, held: p.held || null, tms: p.tms || [], shiny: !!p.shiny, boost: p.boost || null, form: p.selForm || null } };
     save.run.party = (r.party || []).map(a => ({ sp: a.sp, rsp: a.rsp, lv: a.lv, exp: a.exp, hp: a.hp, moves: ownMoves(a).map(m => m.id), pp: ownMoves(a).map(m => m.pp), ability: a.baseAbility ?? a.ability, fainted: !!a.fainted, status: a.status, statusT: a.statusT }));
@@ -2380,7 +2391,7 @@ const Game = (() => {
       const p = restore(makeHardMember(s.rsp, s.hardLv, { player: true }), s.p);
       p.belly = s.p.belly; p.held = s.p.held || null;
       const party = (s.party || []).filter(x => save.roster[x.rsp]).map(x => { const a = restore(Object.assign(makeHardMember(x.rsp, s.hardLv, { ally: true }), { ally: true }), x); a.fainted = !!x.fainted; return a; });
-      const run = { dungeon: s.dungeon, floor: s.floor, bossDone: s.bossDone || null, mode: 'normal', hard: true, hardLv: s.hardLv, kit: s.kit || [], p, bag: s.bag, money: s.money, done: s.done, turns: s.turns || 0, kills: s.kills || 0, party, carried: null, stats: s.stats || null };
+      const run = { dungeon: s.dungeon, floor: s.floor, bossDone: s.bossDone || null, bossPick: s.bossPick || null, mode: 'normal', hard: true, hardLv: s.hardLv, kit: s.kit || [], p, bag: s.bag, money: s.money, done: s.done, turns: s.turns || 0, kills: s.kills || 0, party, carried: null, stats: s.stats || null };
       show('dungeon-screen');
       Dungeon.enter(run);
       return;
@@ -2393,7 +2404,7 @@ const Game = (() => {
       a.hp = clamp(x.hp, 1, a.maxhp); a.fainted = !!x.fainted; a.status = x.status; a.statusT = x.statusT;
       return a;
     });
-    const run = { dungeon: s.dungeon, floor: s.floor, bossDone: s.bossDone || null, mode: s.mode, p, bag: s.bag, money: s.money, done: s.done, daily: s.daily || null, turns: s.turns || 0, kills: s.kills || 0, party, carried: s.carried || null, stats: s.stats || null };
+    const run = { dungeon: s.dungeon, floor: s.floor, bossDone: s.bossDone || null, bossPick: s.bossPick || null, mode: s.mode, p, bag: s.bag, money: s.money, done: s.done, daily: s.daily || null, turns: s.turns || 0, kills: s.kills || 0, party, carried: s.carried || null, stats: s.stats || null };
     show('dungeon-screen');
     Dungeon.enter(run);
   }
@@ -2431,12 +2442,12 @@ const Game = (() => {
   }
 
   // ───────────────────────── 친구 구조 (코드) ─────────────────────────
-  function codeBox(title, html, code, label, then) {
+  function codeBox(title, html, code, label, then, extra = []) {
     UI.open({
       title, wide: true,
       html: `${html}<div class="code-box"><input class="code-text" readonly value="${code}"><button class="btn sm" data-copy>복사</button></div>
         <p class="dim">코드는 메신저 등으로 친구에게 보내 주세요. 이 화면은 임무 탭에서 다시 볼 수 있습니다.</p>`,
-      choices: [{ label: label || '확인', fn: then || (() => {}) }], cancel: then || (() => {}),
+      choices: [{ label: label || '확인', fn: then || (() => {}), def: true }, ...extra], cancel: then || (() => {}),
       onOpen: box => {
         const inp = box.querySelector('.code-text');
         inp.onclick = () => inp.select();
@@ -2728,12 +2739,17 @@ const Game = (() => {
   function rescueDialog(res) {
     if (!res) return;
     const { m, lines, code } = res;
+    // 다른 임무처럼 탐험을 계속할지 마을로 돌아갈지 고른다 (계속하기가 기본, 이 던전에 남은 임무도 보여 준다)
+    const r = Dungeon.run, KIND = { rescue: '구조', outlaw: '수배', find: '탐색', sos: '친구 구조' };
+    const left = r ? save.missions.accepted.filter(x => x.dungeon === r.dungeon && !r.done.includes(x.id)).sort((a, b) => a.floor - b.floor) : [];
+    const leftHtml = left.length ? `<p>이 던전에 남은 임무: ${left.map(x => `<b>${x.floor}F</b> ${KIND[x.kind] || ''}`).join(' · ')}</p>` : '<p class="dim">이 던전에 남은 임무는 없습니다.</p>';
+    const back = [{ label: '마을로 돌아간다', fn: () => endRun('escape') }];
     const head = `<div class="center">${portraitImg(m.client, 'portrait big', 'Joyous', !!m.shiny)}</div>
       <p class="center"><b>${esc(spName(m.client))}</b> 구조 완료!</p><ul>${lines.map(l => `<li>${l}</li>`).join('')}</ul>`;
-    if (code) { codeBox('✅ A-OK 코드', head + '<p>이 코드를 친구에게 보내면 친구가 되살아납니다.</p>', code, '탐험을 계속한다'); return; }
+    if (code) { codeBox('✅ A-OK 코드', head + '<p>이 코드를 친구에게 보내면 친구가 되살아납니다.</p>' + leftHtml, code, '탐험을 계속한다', null, back); return; }
     // 게시판 구조: 창 하나에서 서버에 전하고, 결과(구조 보답)를 같은 창에 덧붙인다
-    UI.alert('✅ 구조 완료', head + `<p class="center rescue-claim">📡 구조 완료를 요청자에게 전하는 중…</p>
-      <p class="dim">이 뒤에 쓰러져도 구조는 그대로입니다.</p>`);
+    UI.open({ title: '✅ 구조 완료', html: head + `<p class="center rescue-claim">📡 구조 완료를 요청자에게 전하는 중…</p>
+      ${leftHtml}<p class="dim">이 뒤에 쓰러져도 구조는 그대로입니다.</p>`, choices: [{ label: '탐험을 계속한다', fn: () => {}, def: true }, ...back], cancel: () => {} });
     const sid = m.sosId, rec = save.rescued && save.rescued[sid];
     const show = h => { const el = document.querySelector('.rescue-claim'); if (el) el.innerHTML = h; };
     if (!rec || !bound || !Online.loggedIn()) { show('📡 지금은 서버에 연결되어 있지 않아요. 마을에서 다시 전할게요.'); return; }
