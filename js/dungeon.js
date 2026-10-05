@@ -1821,9 +1821,12 @@ const Dungeon = (() => {
     if (!npc.mission) return;
     D.mons = D.mons.filter(m => m !== npc);
     npc.dead = true; npc.deadAt = now() + 600; D.corpses.push(npc);
-    if (npc.friend) {
-      log(`쓰러져 있던 친구의 ${jo(spName(npc.sp), '을')} 구조했다! 마을로 돌아가면 A-OK 코드를 받을 수 있다.`, now());
-      missionDone(npc.mission, `친구의 ${spName(npc.sp)} 구조 완료! 마을로 돌아가면 A-OK 코드가 나옵니다.`);
+    if (npc.friend) {   // 친구 구조: 그 자리에서 바로 완료 (보상 확정, 게시판 구조는 서버에 바로 알림)
+      log(`쓰러져 있던 친구의 ${jo(spName(npc.sp), '을')} 구조했다!`, now());
+      if (!run.done.includes(npc.mission)) run.done.push(npc.mission);
+      setFace('Happy', 3000);
+      const res = Game.rescueNow(npc.mission);
+      D.prompts.push(() => { stopAuto(); Game.rescueDialog(res); });
       return;
     }
     log(`${jo(spName(npc.sp), '을')} 구조했다! 의뢰인이 탈출 배지로 마을에 돌아갔다.`, now());
@@ -2083,9 +2086,13 @@ const Dungeon = (() => {
     setFace('Happy', 3000);
     D.prompts.push(() => {
       stopAuto();
+      // 연타하다 실수로 나가지 않게: '계속한다'를 위에, 처음부터 골라 둔다. 이 던전에 남은 임무도 보여 준다
+      const left = Game.save.missions.accepted.filter(m => m.dungeon === run.dungeon && !run.done.includes(m.id)).sort((a, b) => a.floor - b.floor);
+      const KIND = { rescue: '구조', outlaw: '수배', find: '탐색', sos: '친구 구조' };
       UI.open({
-        title: '임무 완료', html: `<p>${esc(msg)}</p><p>던전에서 나가 보상을 받으시겠습니까?</p>`,
-        choices: [{ label: '마을로 돌아간다', fn: () => Game.endRun('escape') }, { label: '탐험을 계속한다', fn: () => {} }],
+        title: '임무 완료', html: `<p>${esc(msg)}</p>${left.length ? `<p>이 던전에 남은 임무: ${left.map(m => `<b>${m.floor}F</b> ${KIND[m.kind] || ''}`).join(' · ')}</p>` : '<p class="dim">이 던전에 남은 임무는 없습니다.</p>'}
+          <p class="dim">보상은 계단으로 나가거나 탈출해도 받을 수 있어요.</p>`,
+        choices: [{ label: '탐험을 계속한다', fn: () => {}, def: true }, { label: '마을로 돌아가 보상 받기', fn: () => Game.endRun('escape') }],
         cancel: () => {},
       });
     });

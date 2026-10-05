@@ -522,6 +522,29 @@ const Game = (() => {
   }
 
   // 구조 게시판 확인: 내 요청이 구조됐는지, 내가 구조한 친구가 감사 편지를 보냈는지 (자주 읽지 않게 1분 30초 간격)
+  // 게시판 구조 완료를 서버에 전하고 구조 보답을 준다. { ok, html } / { lost } / { denied, msg } / { error } (error면 다음에 다시)
+  const claimingNow = new Set();
+  async function claimRescueOne(id, r) {
+    const doc = r.docId || id;
+    claimingNow.add(doc);
+    try {
+      let ok;
+      try { ok = await Online.claimRescue(doc, r.me, !!save.settings.noGift); }
+      catch (e) {
+        if (!/permission|name-taken/.test((e && e.code) || '')) return { error: true };
+        claimFailed.add(doc);
+        return { denied: true, msg: e.msg || '서버가 구조 완료를 받아 주지 않았어요.' };
+      }
+      if (!ok) { r.thanked = true; r.lost = true; persist(); return { lost: true }; }
+      // 구조 보답: 요청자가 게임을 그만둬도 받을 수 있게 바로 준다 (감사 편지는 따로)
+      r.claimed = true;
+      const rdg = dungeonById(r.dungeon), rlv = rdg?.lv?.[1] || r.me?.lv || 20;
+      const item = rollMega('rescue', rlv, rdg) || weighted(rewardPool(rlv, rdg)), money = 50 + (r.floor || 5) * 15;
+      storeAdd(item); save.money += money; persist();
+      return { ok: true, html: `구조 보답: ${ITEMS[item].icon} <b>${esc(ITEMS[item].n)}</b> (창고로) · ₽${money}` };
+    } catch (e) { console.warn(e); return { error: true }; }
+    finally { claimingNow.delete(doc); }
+  }
   let lastCheck = 0, checking = false;
   let sosRelinked = false;
   const claimFailed = new Set();   // 구조 완료를 서버가 거절한 요청 (이번 접속 동안은 다시 보내지 않는다)
@@ -564,27 +587,14 @@ const Game = (() => {
         if (!r.online || r.thanked) continue;
         const doc = r.docId || id;
         if (!r.claimed) {
-          if (claimFailed.has(doc)) continue;   // 이번 접속에서 서버가 거절함: 새로고침하거나 닉네임을 바꾼 뒤 다시
-          let ok;
-          try { ok = await Online.claimRescue(doc, r.me, !!save.settings.noGift); }
-          catch (e) {
-            if (!/permission|name-taken/.test((e && e.code) || '')) throw e;
-            claimFailed.add(doc);
-            UI.alert('구조 완료를 전하지 못했어요', `<p>${esc(e.msg || '서버가 구조 완료를 받아 주지 않았어요.')}</p><p class="dim">닉네임 문제라면 계정 창에서 닉네임을 바꾼 뒤 새로고침하면 다시 전해요.</p>`);
-            continue;
-          }
-          if (ok) {
-            // 구조 보답: 요청자가 게임을 그만둬도 받을 수 있게 바로 준다 (감사 편지는 따로)
-            r.claimed = true;
-            const rdg = dungeonById(r.dungeon), rlv = rdg?.lv?.[1] || r.me?.lv || 20;
-            const item = rollMega('rescue', rlv, rdg) || weighted(rewardPool(rlv, rdg)), money = 50 + (r.floor || 5) * 15;
-            storeAdd(item); save.money += money;
-            UI.alert('✅ 구조 완료', `<div class="center">${portraitImg(r.sp, 'portrait big', 'Joyous', r.shiny)}</div>
+          if (claimFailed.has(doc) || claimingNow.has(doc)) continue;   // 이번 접속에서 서버가 거절함 / 던전에서 지금 전하는 중
+          const c = await claimRescueOne(id, r);
+          if (c.ok) UI.alert('✅ 구조 완료', `<div class="center">${portraitImg(r.sp, 'portrait big', 'Joyous', r.shiny)}</div>
               <p class="center">${esc(spName(r.sp))}의 구조 완료를 요청자에게 전했어요!</p>
-              <p class="center">구조 보답: ${ITEMS[item].icon} <b>${esc(ITEMS[item].n)}</b> (창고로) · ₽${money}</p>
-              <p class="center dim">요청자가 감사 편지를 보내면 선물이 더 올 수도 있어요.</p>`);
-          } else { r.thanked = true; r.lost = true; UI.toast(`${spName(r.sp)}: 다른 탐험대가 먼저 구조했거나 요청이 취소됐어요.`); }
-          persist(); continue;
+              <p class="center">${c.html}</p><p class="center dim">요청자가 감사 편지를 보내면 선물이 더 올 수도 있어요.</p>`);
+          else if (c.lost) UI.toast(`${spName(r.sp)}: 다른 탐험대가 먼저 구조했거나 요청이 취소됐어요.`);
+          else if (c.denied) UI.alert('구조 완료를 전하지 못했어요', `<p>${esc(c.msg)}</p><p class="dim">닉네임 문제라면 계정 창에서 닉네임을 바꾼 뒤 새로고침하면 다시 전해요.</p>`);
+          continue;
         }
         const d = await Online.getSOS(doc);
         if (!d) { r.thanked = true; persist(); continue; }
@@ -654,8 +664,8 @@ const Game = (() => {
   // ───────────────────────── 시작 화면 ─────────────────────────
   function boot() {
     Dungeon.init();
-    if (Tiles.CUSTOM) Tiles.probe();
     save = load();
+    if (Tiles.CUSTOM && save && save.settings.useTileset === true) Tiles.probe();   // 타일셋을 켠 경우만 미리 확인 (끄면 tiles/ 요청도 하지 않는다)
     if (save && !newerSave) persist();
     setTimeout(checkUpdate, 3000); setInterval(checkUpdate, 10 * 60 * 1000);
     // 플레이 시간 (v0.69부터): 창이 보이는 동안만 센다. 메모리에서 늘리고 다른 저장 때·창을 닫을 때 함께 저장된다
@@ -1156,10 +1166,10 @@ const Game = (() => {
     return `${upgradeBox()}<div class="btns store-dlgs"><button class="btn" data-act="dlg-tms">💿 기술머신 보관함 (${tmN}개)</button> <button class="btn" data-act="dlg-autosell">🔁 자동 판매 (${asN}개)</button></div>
       <div class="split"><div><h3>창고 (${storageUsed()}/${save.storageMax})</h3>${storageUsed() > save.storageMax ? '<p class="warn">창고가 넘쳤습니다. 정리하기 전까지는 맡길 수 없습니다.</p>' : ''}
       ${all.length > 1 ? `<div class="row sort-row">↕ ${sorts} ${filter}</div>` : ''}
-      ${ids.length ? ids.map(id => `<div class="row">${itemLabel(id)} ×${save.storage[id]}<span class="grow"></span>
+      <div class="store-list">${ids.length ? ids.map(id => `<div class="row">${itemLabel(id)} ×${save.storage[id]}<span class="grow"></span>
         <button class="btn sm ghost" data-dexitem="${id}" title="아이템 정보">ℹ</button>${id === 'candy' ? ' <button class="btn sm" data-act="use-candy">사용</button>' : ''}
         <button class="btn sm" data-act="withdraw" data-arg="${id}" ${bagSlots() >= bagMax() && !ITEMS[id].stack ? 'disabled' : ''}>꺼내기</button>
-        ${id !== 'quest' ? `<button class="btn sm ghost" data-act="sell-store" data-arg="${id}" title="${ITEMS[id].stack ? '5개씩' : '하나'} 판다 (상점 탭에서 되살 수 있음)">₽${sellValue({ id, n: ITEMS[id].stack ? Math.min(5, save.storage[id]) : 1 })} 팔기</button>` : ''}</div>`).join('') : `<p class="dim">${all.length ? '이 종류의 아이템이 없습니다.' : '창고가 비어 있습니다.'}</p>`}
+        ${id !== 'quest' ? `<button class="btn sm ghost" data-act="sell-store" data-arg="${id}" title="${ITEMS[id].stack ? '5개씩' : '하나'} 판다 (상점 탭에서 되살 수 있음)">₽${sellValue({ id, n: ITEMS[id].stack ? Math.min(5, save.storage[id]) : 1 })} 팔기</button>` : ''}</div>`).join('') : `<p class="dim">${all.length ? '이 종류의 아이템이 없습니다.' : '창고가 비어 있습니다.'}</p>`}</div>
       </div><div>${presetBox()}<h3>가방 (${bagSlots()}/${bagMax()})</h3>
       ${save.bag.length ? `<div class="row sort-row"><button class="btn sm" data-act="deposit-all">모두 맡기기</button>${save.bag.length > 1 ? ' <button class="btn sm ghost" data-act="sort-bag">↕ 가방 정리</button>' : ''}</div>` : ''}
       ${save.bag.map((b, i) => `<div class="row">${itemLabel(b.id)}${b.n > 1 ? ' ×' + b.n : ''}<span class="grow"></span>
@@ -1489,13 +1499,13 @@ const Game = (() => {
       <p class="dim">기본은 게임이 직접 그린 타일입니다. 직접 구한 <b>DTEF 형식</b> 타일셋 PNG(가로:세로 18:8, 예: 432×192)를 불러오면 그 던전의 벽·바닥이 바뀝니다.
         변형 타일(<code>tileset_1.png</code>, <code>tileset_2.png</code>)도 함께 선택하면 섞어서 그립니다.
         불러온 파일은 이 브라우저에만 저장되고, 게임 파일에는 포함되지 않습니다. 게임 폴더의 <code>tiles/던전ID.png</code>(변형은 <code>던전ID_1.png</code>, <code>던전ID_2.png</code> / 공통은 <code>default.png</code>)에 넣어도 됩니다.</p>
-      <label class="chk"><input type="checkbox" data-set="useTileset" ${s.useTileset !== false ? 'checked' : ''}> 불러온 타일셋 사용 (끄면 기본 타일)</label>
-      <div class="tileset-list">${[{ id: '*', n: '모든 던전 공통' }, ...DUNGEONS].map(d => {
+      <label class="chk"><input type="checkbox" data-set="useTileset" ${s.useTileset === true ? 'checked' : ''}> 불러온 타일셋 사용 (끄면 기본 타일)</label>
+      ${s.useTileset !== true ? '' : `<div class="tileset-list">${[{ id: '*', n: '모든 던전 공통' }, ...DUNGEONS].map(d => {
         const st = d.id === '*' ? (Tiles.uploaded['*'] ? '불러옴' : '') : Tiles.status(d.id);
         return `<div class="row"><span class="grow">${esc(d.n)} <span class="dim">${d.id === '*' ? '' : d.id}</span> ${st ? `<span class="tag">${st}</span>` : ''}</span>
           <label class="btn sm ghost">PNG 불러오기<input type="file" accept="image/png" multiple data-tileset="${d.id}" hidden></label>
           ${Tiles.uploaded[d.id] ? `<button class="btn sm ghost danger" data-act="tileset-del" data-arg="${d.id}">삭제</button>` : ''}</div>`;
-      }).join('')}</div>`;
+      }).join('')}</div>`}`;
   }
 
   // 배경음악 파일 설정: music/ 폴더에 넣거나 여기서 불러온다 (불러온 파일은 이 브라우저에만 저장)
@@ -2661,6 +2671,45 @@ const Game = (() => {
         : item ? `<p class="center">선물로 ${ITEMS[item].icon} <b>${esc(jo(ITEMS[item].n, '을'))}</b> 받았다! (창고로)</p>` : ''}`);
   }
 
+  // ── 친구 구조는 구조한 그 자리에서 바로 완료 (v0.85): 보상·횟수를 확정하고, 게시판 구조는 서버에 바로 알린다 (뒤에 쓰러져도 그대로) ──
+  function rescueNow(mid) {
+    const r = Dungeon.run, m = save.missions.accepted.find(x => x.id === mid);
+    if (!r || !m || m.kind !== 'sos') return null;
+    const p = r.p, lines = [];
+    let code = null;
+    save.rescued = save.rescued || {};
+    if (m.online) save.rescued[m.sosId] = { sp: m.client, shiny: m.shiny, thanked: false, online: true, claimed: false, docId: m.docId, dungeon: m.dungeon, floor: m.floor, me: { sp: p.sp, lv: p.lv, shiny: !!p.shiny } };
+    else {
+      code = Codes.encode('aok', { id: m.sosId, sp: p.sp, lv: p.lv, sh: p.shiny ? 1 : 0 });
+      save.rescued[m.sosId] = { sp: m.client, shiny: m.shiny, thanked: false };
+      save.aokSent = [...(save.aokSent || []), { id: m.sosId, sp: m.client, code }].slice(-10);
+    }
+    Progress.add('rescues'); noteFirst('rescue', { dungeon: m.dungeon, floor: m.floor }); milestoneGift('rescues', lines);
+    Progress.add('missions');
+    save.money += m.reward;
+    if (m.item) storeAdd(m.item);
+    lines.push(`임무 완료 보상: ${rewardText(m)}${m.item ? ' (창고로)' : ''}`);
+    save.missions.accepted = save.missions.accepted.filter(x => x.id !== mid);
+    persist();
+    return { m, lines, code };
+  }
+  function rescueDialog(res) {
+    if (!res) return;
+    const { m, lines, code } = res;
+    const head = `<div class="center">${portraitImg(m.client, 'portrait big', 'Joyous', !!m.shiny)}</div>
+      <p class="center"><b>${esc(spName(m.client))}</b> 구조 완료!</p><ul>${lines.map(l => `<li>${l}</li>`).join('')}</ul>`;
+    if (code) { codeBox('✅ A-OK 코드', head + '<p>이 코드를 친구에게 보내면 친구가 되살아납니다.</p>', code, '탐험을 계속한다'); return; }
+    // 게시판 구조: 창 하나에서 서버에 전하고, 결과(구조 보답)를 같은 창에 덧붙인다
+    UI.alert('✅ 구조 완료', head + `<p class="center rescue-claim">📡 구조 완료를 요청자에게 전하는 중…</p>
+      <p class="dim">이 뒤에 쓰러져도 구조는 그대로입니다.</p>`);
+    const sid = m.sosId, rec = save.rescued && save.rescued[sid];
+    const show = h => { const el = document.querySelector('.rescue-claim'); if (el) el.innerHTML = h; };
+    if (!rec || !bound || !Online.loggedIn()) { show('📡 지금은 서버에 연결되어 있지 않아요. 마을에서 다시 전할게요.'); return; }
+    claimRescueOne(sid, rec).then(c => show(c.ok ? `요청자에게 전했어요! ${c.html}`
+      : c.lost ? '다른 탐험대가 먼저 구조했거나 요청이 취소됐어요.'
+      : c.denied ? `전하지 못했어요: ${esc(c.msg)}` : '📡 지금은 전하지 못했어요. 마을에서 다시 전할게요.'));
+  }
+
   function finishRun(r, outcome) {
     const dg = dungeonById(r.dungeon);
     const firstClear = !(save.cleared && save.cleared[dg.id]);   // 엔딩: 이번이 처음 완주인지 (아래에서 클리어 기록을 남기기 전에)
@@ -2898,7 +2947,7 @@ const Game = (() => {
   // 상점 기술머신 분류 (다음 진열부터)
   function setTmFocus(v) { save.tmFocus = v || null; persist(); UI.toast(v ? '다음 진열부터 그 분류의 기술머신만 나와요. (🔄 새로고침하거나 다음 날)' : '기술머신 분류를 고르지 않았어요.'); }
   function setMissionFocus(id) { save.missionFocus = id || null; persist(); UI.toast(id ? `${dungeonById(id).n}의 의뢰가 더 자주 붙어요. (다음 새 의뢰부터)` : '자주 뜨는 지역을 해제했어요.'); }
-  return { poke: () => { lastInput = Date.now(); if (idle) wakeIdle(); }, missionAlert, logSale, setTmFocus, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
+  return { rescueNow, rescueDialog, poke: () => { lastInput = Date.now(); if (idle) wakeIdle(); }, missionAlert, logSale, setTmFocus, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
 })();
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -2923,7 +2972,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('update-note').onclick = () => Game.askUpdate();
   document.getElementById('town-tabs').onclick = e => { const b = e.target.closest('button'); if (b) Game.setTab(b.dataset.tab); };
   document.getElementById('town-screen').addEventListener('change', async e => {
-    if (e.target.dataset.set) Game.setSetting(e.target.dataset.set, e.target.checked);
+    if (e.target.dataset.set) { Game.setSetting(e.target.dataset.set, e.target.checked); if (e.target.dataset.set === 'useTileset') Game.renderTown(); }   // 타일셋: 켜면 불러오기 목록이 나온다
     if (e.target.dataset.setsel) Game.setSetting(e.target.dataset.setsel, e.target.value);
     if (e.target.dataset.setnum) { Game.setSetting(e.target.dataset.setnum, +e.target.value); Sound.play('menu'); }
     if (e.target.dataset.mfocus) { Game.setMissionFocus(e.target.value); }

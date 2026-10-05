@@ -71,7 +71,7 @@ const Tiles = (() => {
     if (e.state === 'loading' && cb) e.waiters.push(cb);
     return e;
   }
-  const enabled = () => CUSTOM_TILESETS && !(typeof Game !== 'undefined' && Game.save && Game.save.settings && Game.save.settings.useTileset === false);
+  const enabled = () => CUSTOM_TILESETS && (typeof Game !== 'undefined' && Game.save && Game.save.settings && Game.save.settings.useTileset === true);   // 기본은 쓰지 않음 (v0.85, 설정에서 켠 경우만)
   // 저장 형식: 예전에는 문자열 하나, 지금은 [기본, 변형1, 변형2]
   const setOf = v => (typeof v === 'string' ? [v] : v);
   function candidates(dgId) {
