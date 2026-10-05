@@ -302,6 +302,7 @@ const Dungeon = (() => {
   }
   function bossDefeated(b, at) {
     D.stairsHidden = false;
+    run.bossDone = run.floor; Game.saveRunSnapshot(run);   // 쓰러뜨린 순간 저장: 새로고침해도 보스가 다시 나오지 않는다
     Progress.add('bosses'); checkLater();
     setTimeout(() => { if (D) Sound.dungeon(D.dg); }, Math.max(0, at - now()) + 800);
     D.explored[idx(D.stairs.x, D.stairs.y)] = 1;
@@ -358,7 +359,7 @@ const Dungeon = (() => {
     run.p.partners = (run.party || []).length;   // 혼자 탐험 보정 (afterPlayer와 같게)
     untransform(run.p); (run.party || []).forEach(untransform);   // 괴짜: 지난 층의 변신을 푼다 (이 층에서 처음 만나는 적으로 다시)
     const dg = dungeonById(run.dungeon);
-    const bossFloor = isBossFloor(dg, run.floor);
+    const bossFloor = isBossFloor(dg, run.floor) && run.bossDone !== run.floor;   // 이미 쓰러뜨린 보스 층을 이어서 하면 보스 없이 (새로고침으로 보스를 다시 잡지 못하게)
     if (bossFloor) Sound.boss(); else Sound.dungeon(dg);
     Progress.seedFloor(run);   // 오늘의 도전: 날짜+층으로 맵 고정
     const m = bossFloor ? genBossMap() : genMap();
@@ -3264,6 +3265,34 @@ const Dungeon = (() => {
     });
   }
 
+  // 던전 안에서 리더의 기술 순서 바꾸기 (v0.87): 위아래로 옮긴다. PP는 그대로, 마을의 캐릭터 기록과 이어하기 기록에도 바로 반영
+  function moveOrder() {
+    if (!D) return;
+    stopAuto();
+    const p = P();
+    if (p.tf) { UI.alert('기술 순서', '<p>변신한 동안에는 기술 순서를 바꿀 수 없어요.</p>'); return; }
+    const list = () => p.moves.map((m, i) => { const d = DATA.moves[m.id]; return `<div class="row mo-row"><b class="mo-k">${i + 1}</b>
+      <span class="grow"><span class="type" style="background:${TYPE_COLORS[d.t - 1]}">${typeName(d.t)}</span> ${esc(d.n)} <span class="dim">${m.pp}/${m.max}</span></span>
+      <button class="btn sm ghost" data-mo="${i}" data-d="-1" ${i ? '' : 'disabled'}>▲</button><button class="btn sm ghost" data-mo="${i}" data-d="1" ${i < p.moves.length - 1 ? '' : 'disabled'}>▼</button></div>`; }).join('');
+    const keep = () => {
+      moveCache = '';
+      const ids = p.moves.map(m => m.id), sv = Game.save;
+      if (run.mode === 'normal' && !run.hard && sv.roster[p.sp]) sv.roster[p.sp].moves = ids;
+      if (sv.run && sv.run.p) { const old = sv.run.p; const pp = ids.map(id => (p.moves.find(m => m.id === id) || {}).pp); sv.run.p = { ...old, moves: ids, pp }; }
+      Game.persist();
+    };
+    UI.open({
+      title: '🔀 기술 순서 바꾸기', html: `<p class="dim">▲▼로 순서를 바꿔요. 숫자키·기술 칸의 번호가 이 순서를 따릅니다.</p><div class="mo-list">${list()}</div>`,
+      onOpen: box => box.addEventListener('click', e => {
+        const b = e.target.closest('[data-mo]'); if (!b || b.disabled) return;
+        const i = +b.dataset.mo, j = i + +b.dataset.d;
+        [p.moves[i], p.moves[j]] = [p.moves[j], p.moves[i]];
+        box.querySelector('.mo-list').innerHTML = list(); keep();
+      }),
+      choices: [{ label: '닫기', fn: () => {} }],
+    });
+  }
+
   function showHelp() {
     UI.alert('조작법', `<table class="help">
       <tr><td>이동</td><td>방향키(두 개 동시에 누르면 대각선) / 숫자패드 / WASD + QEZC / 마우스 클릭</td></tr>
@@ -3355,11 +3384,11 @@ const Dungeon = (() => {
     if (busy() && k !== 'menu') return;
     ({ attack: () => act({ t: 'attack' }), explore: () => startAuto('explore'), fight: () => startAuto('fight'), tactic: partyMenu, rest: () => startAuto('rest'),
       wait: () => act({ t: 'wait' }), stairs: tryStairs, bag: openBag, menu: () => Game.dungeonMenu(), help: showHelp,
-      mission: () => Game.showMissions(), map: () => toggleMap(), look: toggleLook, quick: quickUse, padset: padSettings, gpguide: gamepadGuide })[k]?.();
+      mission: () => Game.showMissions(), map: () => toggleMap(), look: toggleLook, quick: quickUse, padset: padSettings, gpguide: gamepadGuide, moveorder: moveOrder })[k]?.();
   }
   // 조이스틱 모드의 X: 아래 버튼들을 모은 행동 메뉴 (조이스틱 모드에서는 아래 버튼 줄을 숨긴다)
   const VP_MENU = [['explore', '🧭 자동 탐색'], ['look', '🔍 조사'], ['bag', '🎒 가방'], ['quick', '⭐ 빠른사용'], ['stairs', '🪜 계단'], ['wait', '⏳ 대기'], ['rest', '💤 휴식'], ['map', '🗺 지도'],
-    ['mission', '📜 임무'], ['tactic', '🤝 동료'], ['padset', '⚙ 조작'], ['gpguide', '🎮 컨트롤러'], ['menu', '☰ 메뉴']];
+    ['mission', '📜 임무'], ['tactic', '🤝 동료'], ['moveorder', '🔀 기술 순서'], ['padset', '⚙ 조작'], ['gpguide', '🎮 컨트롤러'], ['menu', '☰ 메뉴']];
   function vpMenu(viaPad) {
     stopAuto();
     const onBtn = Object.values(vpSet().btns);   // ABXY에 둔 행동은 빼고 보여 준다 (조작·메뉴는 늘)
@@ -3707,5 +3736,5 @@ const Dungeon = (() => {
     clearInterval(logicTimer); logicTimer = 0;
     pendingKey = null;
   }
-  return { layoutVpad, padSettings, showLog, showStatus, partyMenu, floorCandidates, updateKeyHints, init, enter, leave, get run() { return run; }, get floor() { return D; }, stopAuto, showHelp, addToBag, _log: LOG };
+  return { moveOrder, layoutVpad, padSettings, showLog, showStatus, partyMenu, floorCandidates, updateKeyHints, init, enter, leave, get run() { return run; }, get floor() { return D; }, stopAuto, showHelp, addToBag, _log: LOG };
 })();

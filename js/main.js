@@ -673,6 +673,7 @@ const Game = (() => {
   function boot() {
     Dungeon.init();
     save = load();
+    if (save) fitFloors(save);
     if (Tiles.CUSTOM && save && save.settings.useTileset === true) Tiles.probe();   // 타일셋을 켠 경우만 미리 확인 (끄면 tiles/ 요청도 하지 않는다)
     if (save && !newerSave) persist();
     setTimeout(checkUpdate, 3000); setInterval(checkUpdate, 10 * 60 * 1000);
@@ -2349,9 +2350,16 @@ const Game = (() => {
     Dungeon.enter(run);
   }
 
+  // 던전 층수가 줄었을 때(v0.87 테마 던전 30 → 25층): 진행 중인 탐험·임무·구조 요청의 층을 마지막 층까지로 맞춘다
+  function fitFloors(s) {
+    const fit = o => { const dg = o && dungeonById(o.dungeon); if (dg && o.floor > dg.floors) o.floor = dg.floors; };
+    if (s.run) { const was = s.run.floor; fit(s.run); if (s.run.floor !== was) s.run.bossDone = null; }
+    (s.missions && s.missions.accepted || []).forEach(fit); (s.missions && s.missions.board || []).forEach(fit);
+    fit(s.sos);
+  }
   function saveRunSnapshot(r) {
     const p = r.p;
-    save.run = { dungeon: r.dungeon, floor: r.floor, mode: r.mode, bag: r.bag, money: r.money, done: r.done, daily: r.daily || null, turns: r.turns || 0, kills: r.kills || 0, carried: r.carried || null, stats: r.stats || null,
+    save.run = { dungeon: r.dungeon, floor: r.floor, bossDone: r.bossDone === r.floor ? r.floor : null, mode: r.mode, bag: r.bag, money: r.money, done: r.done, daily: r.daily || null, turns: r.turns || 0, kills: r.kills || 0, carried: r.carried || null, stats: r.stats || null,
       ...(r.hard ? { hard: true, hardLv: r.hardLv, rsp: p.rsp, kit: r.kit } : {}),
       p: { sp: p.sp, lv: p.lv, exp: p.exp, hp: p.hp, belly: p.belly, status: p.status, statusT: p.statusT, moves: ownMoves(p).map(m => m.id), pp: ownMoves(p).map(m => m.pp), ability: p.baseAbility ?? p.ability, held: p.held || null, tms: p.tms || [], shiny: !!p.shiny, boost: p.boost || null, form: p.selForm || null } };
     save.run.party = (r.party || []).map(a => ({ sp: a.sp, rsp: a.rsp, lv: a.lv, exp: a.exp, hp: a.hp, moves: ownMoves(a).map(m => m.id), pp: ownMoves(a).map(m => m.pp), ability: a.baseAbility ?? a.ability, fainted: !!a.fainted, status: a.status, statusT: a.statusT }));
@@ -2371,7 +2379,7 @@ const Game = (() => {
       const p = restore(makeHardMember(s.rsp, s.hardLv, { player: true }), s.p);
       p.belly = s.p.belly; p.held = s.p.held || null;
       const party = (s.party || []).filter(x => save.roster[x.rsp]).map(x => { const a = restore(Object.assign(makeHardMember(x.rsp, s.hardLv, { ally: true }), { ally: true }), x); a.fainted = !!x.fainted; return a; });
-      const run = { dungeon: s.dungeon, floor: s.floor, mode: 'normal', hard: true, hardLv: s.hardLv, kit: s.kit || [], p, bag: s.bag, money: s.money, done: s.done, turns: s.turns || 0, kills: s.kills || 0, party, carried: null, stats: s.stats || null };
+      const run = { dungeon: s.dungeon, floor: s.floor, bossDone: s.bossDone || null, mode: 'normal', hard: true, hardLv: s.hardLv, kit: s.kit || [], p, bag: s.bag, money: s.money, done: s.done, turns: s.turns || 0, kills: s.kills || 0, party, carried: null, stats: s.stats || null };
       show('dungeon-screen');
       Dungeon.enter(run);
       return;
@@ -2384,7 +2392,7 @@ const Game = (() => {
       a.hp = clamp(x.hp, 1, a.maxhp); a.fainted = !!x.fainted; a.status = x.status; a.statusT = x.statusT;
       return a;
     });
-    const run = { dungeon: s.dungeon, floor: s.floor, mode: s.mode, p, bag: s.bag, money: s.money, done: s.done, daily: s.daily || null, turns: s.turns || 0, kills: s.kills || 0, party, carried: s.carried || null, stats: s.stats || null };
+    const run = { dungeon: s.dungeon, floor: s.floor, bossDone: s.bossDone || null, mode: s.mode, p, bag: s.bag, money: s.money, done: s.done, daily: s.daily || null, turns: s.turns || 0, kills: s.kills || 0, party, carried: s.carried || null, stats: s.stats || null };
     show('dungeon-screen');
     Dungeon.enter(run);
   }
@@ -2522,7 +2530,8 @@ const Game = (() => {
   // 친구의 SOS → 구조 임무
   async function acceptSOS(d, from, docId) {
     const dg = DUNGEONS[d.dg];
-    if (!dg || dg.mode !== 'normal' || d.fl < 1 || d.fl > dg.floors || !DATA.species[d.sp]) { UI.alert('코드 오류', '<p>이 게임에서 쓸 수 없는 SOS 코드입니다.</p>'); return; }
+    // v0.87에 30층 → 25층으로 줄인 던전의 예전 코드도 받는다 (마지막 층으로)
+    if (!dg || dg.mode !== 'normal' || d.fl < 1 || d.fl > Math.max(dg.floors, 30) || !DATA.species[d.sp]) { UI.alert('코드 오류', '<p>이 게임에서 쓸 수 없는 SOS 코드입니다.</p>'); return; }
     const selfMsg = () => UI.alert('구조 불가', '<p>자기 자신의 구조 요청은 받을 수 없어요. 친구에게 보내 주세요.</p>');
     if ((save.sos && save.sos.id === d.id) || (save.mySOS || []).includes(d.id)) { selfMsg(); return; }
     // 로그인했으면 서버에서도 확인: 같은 계정이 다른 기기·세이브에서 올린 요청
@@ -2552,7 +2561,7 @@ const Game = (() => {
       try { got = await Online.takeSOS(docId); } catch (e) { UI.alert('구조 불가', `<p>${esc(Online.why(e))}</p>`); return; }
       if (!got) { UI.alert('구조 불가', '<p>방금 다른 탐험대가 구조하러 갔거나, 이미 구조된 요청이에요.</p>'); return; }
     }
-    save.missions.accepted.push({ id: 'sos' + d.id, kind: 'sos', sosId: d.id, dungeon: dg.id, floor: d.fl, client: d.sp, lv: d.lv, shiny: !!d.sh, reward, ...(from ? { online: true, from, docId, heldAt: Date.now() } : {}) });
+    save.missions.accepted.push({ id: 'sos' + d.id, kind: 'sos', sosId: d.id, dungeon: dg.id, floor: Math.min(d.fl, dg.floors), client: d.sp, lv: d.lv, shiny: !!d.sh, reward, ...(from ? { online: true, from, docId, heldAt: Date.now() } : {}) });
     const ci = document.getElementById('code-input'); if (ci) ci.value = '';
     persist(); renderTown(); UI.toast('구조 임무를 받았습니다!');
   }
@@ -2937,6 +2946,7 @@ const Game = (() => {
         { label: '📜 임무 확인 (J)', fn: () => setTimeout(showMissions, 0) },
         { label: '💬 메시지 기록 (U)', fn: () => setTimeout(Dungeon.showLog, 0) },
         { label: '📊 내 상태 (P)', fn: () => setTimeout(Dungeon.showStatus, 0) },
+        { label: '🔀 기술 순서 바꾸기', fn: () => setTimeout(Dungeon.moveOrder, 0) },
         ...((Dungeon.run?.party || []).length ? [{ label: '🤝 동료 (V) — 상태·작전', fn: () => setTimeout(Dungeon.partyMenu, 0) }] : []),
         { label: '🗺 던전 정보', fn: () => setTimeout(() => dungeonMenu('info'), 0) },
         { label: '⚙ 설정 (음량·키 설정 등)', fn: () => setTimeout(() => dungeonMenu('set'), 0) },
@@ -2969,7 +2979,7 @@ const Game = (() => {
   // 상점 기술머신 분류 (다음 진열부터)
   function setTmFocus(v) { save.tmFocus = v || null; persist(); UI.toast(v ? '다음 진열부터 그 분류의 기술머신만 나와요. (🔄 새로고침하거나 다음 날)' : '기술머신 분류를 고르지 않았어요.'); }
   function setMissionFocus(id) { save.missionFocus = id || null; persist(); UI.toast(id ? `${dungeonById(id).n}의 의뢰가 더 자주 붙어요. (다음 새 의뢰부터)` : '자주 뜨는 지역을 해제했어요.'); }
-  return { rescueNow, rescueDialog, poke: () => { lastInput = Date.now(); if (idle) wakeIdle(); }, missionAlert, logSale, setTmFocus, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
+  return { persist, rescueNow, rescueDialog, poke: () => { lastInput = Date.now(); if (idle) wakeIdle(); }, missionAlert, logSale, setTmFocus, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
 })();
 
 window.addEventListener('DOMContentLoaded', () => {

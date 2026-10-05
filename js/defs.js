@@ -3,7 +3,7 @@
 
 // 게임 버전: 업데이트할 때 올리고, index.html의 ?v= 숫자도 같이 올린다
 // (친구와 구조 코드·오늘의 도전을 주고받으려면 버전이 같아야 한다)
-const GAME_VERSION = '0.86';
+const GAME_VERSION = '0.87';
 // 버전 비교: '0.25' > '0.9' 처럼 숫자로 비교한다
 function cmpVer(a, b) {
   const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
@@ -12,6 +12,7 @@ function cmpVer(a, b) {
 }
 const GAME_DATE = '2026-10-01';
 const VERSION_NOTES = [
+  ["0.87", ["던전 안에서도 리더의 기술 순서를 바꿀 수 있습니다 (메뉴 또는 조이스틱 X 행동 메뉴의 '🔀 기술 순서'). PP는 그대로이고 마을의 기술 설정에도 반영됩니다", "테마 던전 중 30층이던 던전 16곳을 25층으로 줄였습니다 (중간 보스 층은 그대로). 진행 중인 탐험·임무·구조 요청이 26층 이상이면 마지막 층으로 맞춰집니다", "보스를 쓰러뜨린 뒤 새로고침하면 보스가 다시 나와 영입·보상을 다시 노릴 수 있던 문제를 고쳤습니다. 이제 보스를 쓰러뜨린 순간 저장되어, 이어서 탐험하면 그 층은 보스 없이 계단이 있는 층이 됩니다"]],
   ["0.86", ["휴대폰 홈 화면에 추가(웹앱)할 때 쓸 아이콘과 이름을 넣었습니다. (홈 화면 앱은 브라우저와 저장 공간이 따로라서, 세이브는 로그인하거나 내보내기·불러오기로 옮겨 오세요) 아이폰 사파리 등에서 버튼을 길게 누르면 글자가 선택되거나 끌리던 문제를 막았습니다", "캐릭터 변경·동료 추가 창과 동료 카드에서 그 포켓몬이 지닌 물건이 아이콘으로 보이고, 고르면 지닌 물건 이름과 설명이 나옵니다", "휴대폰 창고: 아이템을 팔거나 꺼낼 때 창고 목록이 맨 위로 올라가던 문제를 고쳤습니다", "버드렉스: 캐릭터 탭에서 백마 탄 모습(에스퍼·얼음, 혼연일체)과 흑마 탄 모습(에스퍼·고스트, 혼연일체)을 고를 수 있습니다. 블리자포스·레이스포스를 각각 동료로 영입해야 고를 수 있고, 전용기 블리자드랜스·아스트랄비트(주변 범위, 위력 120)를 쓸 수 있습니다. 던전 그림은 아직 없어서 기본 모습으로 보입니다", "로그라이크 던전: 중간 보스를 쓰러뜨리면 큰사과와 맥스엘릭서를 하나씩 꼭 얻습니다. 기술머신은 들어간 포켓몬이 배울 수 있는 것만 나옵니다", "하늘의 탑 보스 레쿠쟈가 메가진화하지 않고 원래 모습으로 나옵니다", "태블릿·PC 던전 화면: 긴 메시지가 한 줄을 넘으면 잘리던 문제를 고쳤습니다. 이제 줄을 바꿔 끝까지 보여 줍니다 (조이스틱 모드에서는 메시지 창도 더 넓게 씁니다)"]],
   ["0.85", ["임무 완료 창: '탐험을 계속한다'를 위에 두고 처음부터 골라 두어, 연타하다 실수로 마을로 돌아가지 않게 했습니다. 이 던전에 남은 임무도 함께 보여 줍니다", "친구 구조(게시판·코드)는 구조한 그 자리에서 바로 완료됩니다. 보상이 바로 들어오고, 게시판 구조는 요청자에게 바로 알려지며, A-OK 코드도 바로 나옵니다. 그 뒤에 쓰러져도 구조와 보상은 그대로입니다", "정보의 던전 타일셋: 기본값을 '사용하지 않음'으로 바꾸고, 켰을 때만 던전별 불러오기 목록이 나옵니다", "휴대폰 창고 화면: 창고 목록을 화면 절반 높이 안에서 스크롤하게 바꿔, 바로 아래의 꺼내기 프리셋과 가방까지 금방 닿습니다"]],
   ["0.84", ["PC 화면에서 조이스틱 모드를 켜면 아래 띠의 기술 오른쪽(버튼 줄 자리)에 조이스틱과 ABXY가 나옵니다", "게임 컨트롤러(게임패드)를 지원합니다. 왼쪽 스틱·십자키로 이동(대각선 가능), A·B·X·Y는 조작 패드 설정의 버튼 할당대로(기본 A 공격·길게 누르면 기술 / B 자동 / X 행동 메뉴 / Y 조사), LB를 누른 채 이동하면 방향만 바꾸기, RB를 누른 채 A·B·X·Y로 기술 1·2·3·4(누르고 있는 동안 기술 칸에 버튼이 표시됩니다), RT 빠른사용, Back 지도, Start 메뉴입니다. 창이 열려 있으면 십자키 위아래로 고르고 A로 확인, B로 닫습니다. 컨트롤러를 처음 연결하면 조작 안내 창이 나오고, 행동 메뉴의 '🎮 컨트롤러'·조작 패드 설정·조작법에서 다시 볼 수 있습니다", "조이스틱 모드: ⚙ 조작 설정에서 A·B·X·Y 버튼에 둘 행동(공격·자동·행동 메뉴·조사·계단·빠른사용·가방·대기 등)을 바꿀 수 있습니다. 버튼에 두지 않은 행동은 행동 메뉴(X)에 나옵니다. 조작 패드 설정 창에서 '저장·닫기'를 눌러도 진동·기술 순서·패드 방식이 저장되지 않던 문제도 고쳤습니다", "임무 대상이 있는 층에 들어가면 메시지와 함께 알림 창이 떠서 그 층의 임무를 보여 줍니다 (자동 탐색 중이면 멈춥니다)", "상태 창에 리플렉터·빛의장막(🛡·✨)과 도발·하품·씨뿌리기가 남은 턴과 함께 보입니다. 동료에게 걸린 효과는 동료 이름 옆에 아이콘으로 보이고, 상태 창을 누르면 자세히 나옵니다"]],
@@ -399,21 +400,21 @@ const PARADOX_PAST = [984, 985, 986, 987, 988, 989, 1005, 1009, 1020, 1021];
 const PARADOX_FUTURE = [990, 991, 992, 993, 994, 995, 1006, 1010, 1022, 1023];
 const PARADOX_RATE = 0.2;   // 일반 던전에서 패러독스 포켓몬이 뽑혔을 때 실제로 나올 확률 (테마 던전은 그대로)
 DUNGEONS.push(
-  { id: 'burned',   n: '불탄 탑',       floors: 30, lv: [30, 52], types: [10, 13, 11, 8, 1], mode: 'normal', req: 'storm', theme: '전설의 세 마리 개',
+  { id: 'burned',   n: '불탄 탑',       floors: 25, lv: [30, 52], types: [10, 13, 11, 8, 1], mode: 'normal', req: 'storm', theme: '전설의 세 마리 개',
     bosses: [250], mid: { floors: [20], pool: [243, 244, 245] }, wx: [['sun', 0.2], ['rain', 0.2]], pal: ['#3a2418', '#6e4028', '#c79a70', '#b0845c'] },
-  { id: 'whirl',    n: '소용돌이 섬',   floors: 30, lv: [38, 52], types: [11, 3, 15, 13, 10], mode: 'normal', req: 'storm', theme: '전설의 새',
+  { id: 'whirl',    n: '소용돌이 섬',   floors: 25, lv: [38, 52], types: [11, 3, 15, 13, 10], mode: 'normal', req: 'storm', theme: '전설의 새',
     bosses: [249], mid: { floors: [20], pool: [144, 145, 146] }, wx: [['rain', 0.4], ['snow', 0.1]], pal: ['#1c3040', '#355a78', '#9cc2da', '#86aec8'] },
-  { id: 'seafloor', n: '해저 동굴',     floors: 30, lv: [42, 74], types: [11, 5, 16, 6], mode: 'normal', req: 'sky', theme: '대지와 바다',
+  { id: 'seafloor', n: '해저 동굴',     floors: 25, lv: [42, 74], types: [11, 5, 16, 6], mode: 'normal', req: 'sky', theme: '대지와 바다',
     bosses: [382, 383], mid: { floors: [20], pool: [380, 381] }, wx: [['rain', 0.35], ['sun', 0.35]], pal: ['#132436', '#27496b', '#7d9fbf', '#6a8cad'] },
-  { id: 'ruins',    n: '고대 유적',     floors: 30, lv: [40, 64], lvMin: 56, types: [6, 15, 9, 13, 16], mode: 'normal', req: 'mine', theme: '레지 시리즈',
+  { id: 'ruins',    n: '고대 유적',     floors: 25, lv: [40, 64], lvMin: 56, types: [6, 15, 9, 13, 16], mode: 'normal', req: 'mine', theme: '레지 시리즈',
     bosses: [486], mid: { floors: [20], pool: [377, 378, 379, 894, 895] }, wx: [['sand', 0.3], ['snow', 0.15]], pal: ['#3a3326', '#6b5d42', '#c2b08a', '#ad9b76'] },
-  { id: 'shrine',   n: '재앙의 사당',   floors: 30, lv: [48, 64], types: [17, 12, 10, 15, 5, 4], mode: 'normal', req: 'mine', theme: '재앙의 보물과 충신',
+  { id: 'shrine',   n: '재앙의 사당',   floors: 25, lv: [48, 64], types: [17, 12, 10, 15, 5, 4], mode: 'normal', req: 'mine', theme: '재앙의 보물과 충신',
     bosses: [1001, 1002, 1003, 1004], mid: { floors: [20], pool: [1014, 1015, 1016, 1017, 1025] }, wx: [['fog', 0.3], ['sand', 0.15]], pal: ['#2a1f2a', '#553a4a', '#a88898', '#937485'] },
-  { id: 'altar',    n: '해와 달의 제단', floors: 30, lv: [52, 68], types: [18, 14, 13, 12, 11, 9], mode: 'normal', req: 'canyon', theme: '수호신 카푸',
+  { id: 'altar',    n: '해와 달의 제단', floors: 25, lv: [52, 68], types: [18, 14, 13, 12, 11, 9], mode: 'normal', req: 'canyon', theme: '수호신 카푸',
     bosses: [791, 792], mid: { floors: [20], pool: [785, 786, 787, 788] }, wx: [['sun', 0.3], ['fog', 0.2]], pal: ['#2c2a44', '#56508a', '#d8c98e', '#c4b47a'] },
-  { id: 'coronet',  n: '천관산',        floors: 30, lv: [55, 72], types: [6, 9, 11, 8, 16, 14], mode: 'normal', req: 'canyon', theme: '창조의 신',
+  { id: 'coronet',  n: '천관산',        floors: 25, lv: [55, 72], types: [6, 9, 11, 8, 16, 14], mode: 'normal', req: 'canyon', theme: '창조의 신',
     bosses: [483, 484, 487], mid: { floors: [20], pool: [480, 481, 482] }, wx: [['snow', 0.3], ['fog', 0.2]], pal: ['#2a2d3a', '#4f5670', '#b2b8cc', '#9ca3ba'] },
-  { id: 'spiral',   n: '용의 나선탑',   floors: 30, lv: [58, 74], types: [16, 10, 13, 15, 2], mode: 'normal', req: 'sky', theme: '이상과 진실',
+  { id: 'spiral',   n: '용의 나선탑',   floors: 25, lv: [58, 74], types: [16, 10, 13, 15, 2], mode: 'normal', req: 'sky', theme: '이상과 진실',
     bosses: [643, 644, 646], mid: { floors: [20], pool: [638, 639, 640, 647] }, wx: [['sun', 0.2], ['rain', 0.2], ['snow', 0.2]], pal: ['#262a33', '#4a5262', '#a8b0bf', '#929aab'] },
   { id: 'areazero', n: '에리어 제로',   floors: 30, lv: [65, 95], types: null, mode: 'normal', req: 'ultra',
     bosses: [1007, 1008], mid: { floors: [20], pool: [...PARADOX_PAST, ...PARADOX_FUTURE] }, extra: [...PARADOX_PAST, ...PARADOX_FUTURE],
@@ -421,11 +422,11 @@ DUNGEONS.push(
 );
 // ── 2부 테마 던전: 어디에도 나오지 않던 전설·환상 포켓몬 (목록 끝에 추가: SOS 코드가 목록 번호를 쓴다) ──
 DUNGEONS.push(
-  { id: 'skyplain', n: '풍요의 하늘길', floors: 30, lv: [54, 70], types: [3, 13, 5, 18], mode: 'normal', req: 'canyon', theme: '풍요의 신',
+  { id: 'skyplain', n: '풍요의 하늘길', floors: 25, lv: [54, 70], types: [3, 13, 5, 18], mode: 'normal', req: 'canyon', theme: '풍요의 신',
     bosses: [905], mid: { floors: [20], pool: [641, 642, 645] }, extra: [641, 642, 645], wx: [['rain', 0.3], ['sand', 0.15], ['sun', 0.15]], pal: ['#24364a', '#4b6f95', '#d8e6c0', '#c2d4a8'] },
-  { id: 'twofist', n: '쌍권의 탑',     floors: 30, lv: [45, 60], types: [2, 17, 11, 8], mode: 'normal', req: 'mine', theme: '무도의 길',
+  { id: 'twofist', n: '쌍권의 탑',     floors: 25, lv: [45, 60], types: [2, 17, 11, 8], mode: 'normal', req: 'mine', theme: '무도의 길',
     bosses: [892], mid: { floors: [20], pool: [891, 802, 494] }, extra: [891], wx: [['rain', 0.2], ['fog', 0.15]], pal: ['#2e2622', '#5e4a3e', '#d6b98c', '#c2a477'] },
-  { id: 'crown',    n: '왕관의 설원',   floors: 30, lv: [58, 74], types: [15, 14, 8, 3, 17], mode: 'normal', req: 'sky', theme: '풍요의 왕',
+  { id: 'crown',    n: '왕관의 설원',   floors: 25, lv: [58, 74], types: [15, 14, 8, 3, 17], mode: 'normal', req: 'sky', theme: '풍요의 왕',
     bosses: [898], mid: { floors: [20], pool: [896, 897, 1134, 1135, 1136] }, extra: [896, 897, 1134, 1135, 1136], wx: [['snow', 0.6], ['fog', 0.15]], pal: ['#26303f', '#56688a', '#e6eef7', '#cfdbea'] },
   { id: 'ultra',    n: '울트라 차원의 틈', floors: 30, lv: [60, 90], types: [14, 9, 1, 17, 8], mode: 'normal', req: 'meteor',
     bosses: [800], mid: { floors: [20], pool: [773, 791, 792] }, extra: [789, 790, 772, 773, 803], wx: [['fog', 0.3]], pal: ['#1b1530', '#3d2f6b', '#f2d77a', '#e0c35e'] },
@@ -436,13 +437,13 @@ DUNGEONS.push(
     bosses: [385], mid: { floors: [13], pool: [386] }, wx: [['fog', 0.2], ['sun', 0.1]], pal: ['#1d1a2e', '#3f3a66', '#c9b9f0', '#b3a2e0'] },
   { id: 'zerodeep', n: '에리어 제로 최심부', floors: 30, lv: [90, 100], types: null, mode: 'normal', req: 'areazero', smartAI: true,
     bosses: [1024], mid: { floors: [20], pool: [1005, 1006, 1009, 1010] }, wx: [['fog', 0.2]], pal: ['#10201f', '#25453f', '#9fe0d0', '#86cbbb'] },
-  { id: 'watercity', n: '물의 도시',    floors: 30, lv: [40, 52], types: [11, 16, 14, 3], mode: 'normal', req: 'storm', theme: '물의 도시의 수호신',
+  { id: 'watercity', n: '물의 도시',    floors: 25, lv: [40, 52], types: [11, 16, 14, 3], mode: 'normal', req: 'storm', theme: '물의 도시의 수호신',
     bosses: [381], mid: { floors: [20], pool: [380, 648] }, extra: [380, 381], wx: [['rain', 0.35]], pal: ['#1a3346', '#2f6087', '#cfe3ef', '#b6d0e0'] },
-  { id: 'genelab',  n: '유전자 연구소', floors: 30, lv: [55, 70], types: [14, 1, 13, 9, 6], mode: 'normal', req: 'canyon', theme: '만들어진 포켓몬',
+  { id: 'genelab',  n: '유전자 연구소', floors: 25, lv: [55, 70], types: [14, 1, 13, 9, 6], mode: 'normal', req: 'canyon', theme: '만들어진 포켓몬',
     bosses: [150], mid: { floors: [20], pool: [151] }, wx: [['fog', 0.1]], pal: ['#202a33', '#47596b', '#c7d3dd', '#b2bfcb'] },
-  { id: 'kalos',    n: '생명과 파괴의 숲', floors: 30, lv: [60, 74], types: [18, 17, 16, 5, 12], mode: 'normal', req: 'sky', theme: '칼로스의 질서',
+  { id: 'kalos',    n: '생명과 파괴의 숲', floors: 25, lv: [60, 74], types: [18, 17, 16, 5, 12], mode: 'normal', req: 'sky', theme: '칼로스의 질서',
     bosses: [718], mid: { floors: [20], pool: [716, 717] }, wx: [['fog', 0.2], ['rain', 0.15]], pal: ['#1f2a20', '#3f5c3e', '#cfe0b8', '#b8cca0'] },
-  { id: 'hero',     n: '영웅의 숲',     floors: 30, lv: [72, 88], types: [18, 2, 9, 16, 17], mode: 'normal', req: 'summit', theme: '가라르의 영웅',
+  { id: 'hero',     n: '영웅의 숲',     floors: 25, lv: [72, 88], types: [18, 2, 9, 16, 17], mode: 'normal', req: 'summit', theme: '가라르의 영웅',
     bosses: [890], mid: { floors: [20], pool: [888, 889] }, wx: [['fog', 0.3]], pal: ['#1c2230', '#3b4766', '#d6c8a0', '#c2b48a'] },
   { id: 'flower',   n: '꽃의 낙원',     floors: 15, lv: [15, 28], types: [12, 18, 7], mode: 'normal', req: 'plains', theme: '숨은 던전', hidden: true,
     bosses: [492], mid: { floors: [10], pool: [251] }, wx: [['sun', 0.3]], pal: ['#2a3d24', '#5c8a45', '#f2dce8', '#e6c4d6'] },
@@ -459,7 +460,7 @@ DUNGEONS.push(
 );
 // ── 메가 진화의 탑: 일반 적이 모두 메가진화한 모습 (megaAll), 메가스톤이 megaMul배 잘 나온다 (목록 끝에 추가) ──
 DUNGEONS.push(
-  { id: 'mega', n: '메가 진화의 탑', floors: 30, lv: [80, 90], lvMin: 80, types: null, mode: 'normal', req: 'meteor', theme: '메가진화',
+  { id: 'mega', n: '메가 진화의 탑', floors: 25, lv: [80, 90], lvMin: 80, types: null, mode: 'normal', req: 'meteor', theme: '메가진화',
     megaAll: true, megaMul: 3, bosses: [384], mid: { floors: [20], pool: [150, 380, 381, 491, 719, 807] },
     wx: [['sun', 0.1], ['rain', 0.1], ['sand', 0.1], ['snow', 0.1]], pal: ['#24183a', '#4d3478', '#f0c8f0', '#dcb0dc'] },
 );
