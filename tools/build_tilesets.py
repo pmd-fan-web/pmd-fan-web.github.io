@@ -1,4 +1,4 @@
-# 원작(레드 구조대) 던전 타일 시트를 게임이 쓰는 DTEF 형식(18×8칸, 24px)으로 바꾼다.
+# 원작(레드 구조대·하늘의 탐험대) 던전 타일 시트를 게임이 쓰는 DTEF 형식(18×8칸, 24px)으로 바꾼다.
 # 시트(The Spriters Resource, SilverDeoxys563 정리본)는 칸마다 왼쪽 'Legend' 열에 이웃 모양(3×3, 검은 칸 = 같은 지형)이 있고,
 # 같은 줄·같은 칸의 Walls / Ground / Water 열이 그 모양의 타일이다. 열 이름은 머리글 그림을 알려진 이름과 맞춰 고른다.
 #
@@ -41,8 +41,9 @@ def header_key(im, x0, y0):
     return hashlib.md5(bw).hexdigest()[:8]
 
 def is_empty(tile):
-    px = list(tile.getdata()); bad = sum(1 for p in px if p[:3] == TEAL or p[3] < 10)
-    return bad > len(px) * 0.85
+    # 빈 칸(청록 바탕·투명)이거나, 청록 바탕에 메모 글씨가 적힌 칸 (예: Howling Forest의 'wtf <-'). 진짜 타일에는 청록 바탕색이 거의 없다
+    px = list(tile.getdata()); teal = sum(1 for p in px if p[:3] == TEAL); clear = sum(1 for p in px if p[3] < 10)
+    return teal + clear > len(px) * 0.85 or teal > len(px) * 0.25
 
 def clean(tile):   # 마젠타(투명 표시)는 투명으로
     t = tile.copy(); d = t.load()

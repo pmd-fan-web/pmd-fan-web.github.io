@@ -2,7 +2,7 @@
 'use strict';
 
 const Sound = (() => {
-  let ac = null, master, sfxBus, bgmBus, musicGain;
+  let ac = null, master, sfxBus, bgmBus, musicGain, duck;
   let unlocked = false, want = null, theme = null, timer = 0, step = 0, nextT = 0;
   const lastPlay = {};
   const set = () => (typeof Game !== 'undefined' && Game.save && Game.save.settings) || {};
@@ -13,8 +13,9 @@ const Sound = (() => {
       try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
       master = ac.createGain(); master.connect(ac.destination);
       sfxBus = ac.createGain(); sfxBus.connect(master);
-      bgmBus = ac.createGain(); bgmBus.connect(master);
-      musicGain = ac.createGain(); musicGain.connect(master);
+      duck = ac.createGain(); duck.connect(master);   // 짧은 곡(팡파르)이 나오는 동안 배경음을 줄인다
+      bgmBus = ac.createGain(); bgmBus.connect(duck);
+      musicGain = ac.createGain(); musicGain.connect(duck);
       refresh();
     }
     if (ac.state === 'suspended' && !document.hidden) ac.resume();
@@ -387,6 +388,37 @@ const Sound = (() => {
   // 오늘의 도전: 날짜로 정해지는 던전 하나의 곡 (날짜 순서대로 돌며 파일이 있는 첫 곡)
   const dailyFiles = seed => { const ids = DUNGEONS.filter(d => !d.daily).map(d => d.id), k = seed % ids.length; return [...ids.slice(k), ...ids.slice(0, k), 'dungeon']; };
   const dungeon = dg => bgm('dg:' + dg.id + (dg.daily ? dg.seed : ''), { mode: MOODS[dg.id] || 'major', files: dg.daily ? dailyFiles(dg.seed >>> 0) : [dg.id, ...((window.MUSIC_ALIAS || {})[dg.id] ? [window.MUSIC_ALIAS[dg.id]] : []), 'dungeon'] });
+  // 특별한 순간의 곡 (수배범·도둑질·몬스터하우스·이야기): 파일이 있을 때만 틀고, 없으면 fallback (합성 배경음으로 바꾸지 않는다)
+  async function special(key, fallback) {
+    const url = await findFile(key);
+    if (url) bgm('sp:' + key, { files: [key] }); else if (fallback) fallback();
+  }
+  // 이야기 장면 동안만 잠깐 다른 곡: 끝나면 원래 곡으로 (그 사이에 다른 곡으로 바뀌었으면 그대로 둔다)
+  async function scene(key) {
+    const prev = want, url = key && await findFile(key);
+    if (!url || (want && want.key === 'sp:' + key)) return () => {};
+    bgm('sp:' + key, { files: [key] });
+    return () => { if (want && want.key === 'sp:' + key && prev) { want = null; bgm(prev.key, prev.o); } };
+  }
+  // 팡파르: 짧은 곡을 한 번 (승급·보상 등). 그동안 배경음을 줄였다가 끝나면 다시. 파일이 없거나 배경음을 껐으면 합성 효과음(sfx)
+  const fanCache = new Map();
+  let fan = null;
+  async function fanfare(key, sfx) {
+    const url = await findFile(key);
+    if (!url || !unlocked || !ctx() || !canFetch(url) || set().bgm === false) { if (sfx) play(sfx); return; }
+    try {
+      if (!fanCache.has(url)) fanCache.set(url, await new Promise(async (res, rej) => ac.decodeAudioData(await (await fetch(url)).arrayBuffer(), res, rej)));
+      const buf = fanCache.get(url);
+      if (fan) { try { fan.src.stop(); } catch (e) { /* 이미 끝남 */ } }
+      const src = ac.createBufferSource(), g = ac.createGain();
+      g.gain.value = (set().bgmVol ?? 40) / 100 * 0.8 * trackVol(key);
+      src.buffer = buf; src.connect(g); g.connect(master);
+      const t = ac.currentTime, my = fan = { src };
+      duck.gain.cancelScheduledValues(t); duck.gain.setValueAtTime(duck.gain.value, t); duck.gain.linearRampToValueAtTime(0, t + 0.15);
+      src.onended = () => { if (fan !== my) return; fan = null; const t2 = ac.currentTime; duck.gain.cancelScheduledValues(t2); duck.gain.setValueAtTime(duck.gain.value, t2); duck.gain.linearRampToValueAtTime(1, t2 + 0.8); };
+      src.start(t + 0.1);
+    } catch (e) { if (sfx) play(sfx); }
+  }
   const boss = () => bgm('boss', { mode: 'minor', bpm: 150, root: 45, prog: [0, 5, 6, 4], wave: 'sawtooth', sparse: 0.3, files: ['boss'] });
 
   // 브라우저는 사용자가 한 번 누르기 전에는 소리를 막는다
@@ -400,5 +432,5 @@ const Sound = (() => {
   }
   ['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, unlock, { capture: true }));
 
-  return { play, bgm, title, town, dungeon, boss, refresh, importMusic, removeMusic, loopInfo, previewLoop, endPreview, setLoop, get uploaded() { return uploadedKeys; }, get playingFile() { return fileUrl; }, get player() { return player; } };
+  return { play, bgm, title, town, dungeon, boss, special, scene, fanfare, refresh, importMusic, removeMusic, loopInfo, previewLoop, endPreview, setLoop, get uploaded() { return uploadedKeys; }, get playingFile() { return fileUrl; }, get player() { return player; } };
 })();

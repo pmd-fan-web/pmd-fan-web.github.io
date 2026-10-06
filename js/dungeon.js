@@ -285,6 +285,12 @@ const Dungeon = (() => {
   function bossIntro() {
     const b = D.boss; if (!b) return;
     stopAuto();
+    // 이야기 (js/scenes.js): 아직 클리어하지 않은 던전이면 보스가 나타날 때의 대사를 먼저
+    const part = run.floor === D.dg.floors ? 'intro' : 'mid';
+    if (!run.hard && Story.hasPart(D.dg.id, part)) { Story.inDungeon(D.dg.id, part).then(() => { if (D && D.boss === b) bossIntroWindow(b); }); return; }
+    bossIntroWindow(b);
+  }
+  function bossIntroWindow(b) {
     Sound.play('boss');
     setFace('Determined', 3000);
     UI.open({
@@ -308,6 +314,8 @@ const Dungeon = (() => {
   function bossDefeated(b, at) {
     D.stairsHidden = false;
     run.bossDone = run.floor; Game.saveRunSnapshot(run);   // 쓰러뜨린 순간 저장: 새로고침해도 보스가 다시 나오지 않는다
+    // 이야기: 최종 보스를 쓰러뜨린 직후의 대사 (계단·영입 창보다 먼저)
+    if (run.floor === D.dg.floors && !run.hard && Story.hasPart(D.dg.id, 'won')) { const id = D.dg.id; D.prompts.unshift(() => { stopAuto(); Story.inDungeon(id, 'won'); }); }
     Progress.add('bosses'); checkLater();
     setTimeout(() => { if (D) Sound.dungeon(D.dg); }, Math.max(0, at - now()) + 800);
     D.explored[idx(D.stairs.x, D.stairs.y)] = 1;
@@ -640,6 +648,7 @@ const Dungeon = (() => {
       if (e.npc || e.ally || e.metPlayer || !seen(e)) continue;
       e.metPlayer = true;
       Progress.seen(e.sp);
+      if (e.outlaw) setTimeout(floorMusic, 0);   // 수배범을 발견하면 수배범 곡
       if (e.shiny) { Sound.play('shiny', at); log(`✨ 색이 다른 ${jo(spName(e.sp), '이')} 나타났다!`, at); setFace('Surprised', 2000); D.fx.push({ kind: 'ring', x: e.x, y: e.y, at, dur: 700, color: '#fff6a0' }); Game.noteShiny(e.sp); }
       for (const [st, m] of byStat) intimidate(m, e, st, at);
       const ea = abilityOf(e);
@@ -953,7 +962,7 @@ const Dungeon = (() => {
       log(`${jo(nm(tgt), '은')} ${total}의 데미지를 입었다.` + (hits > 1 ? ` (${hits}회)` : ''), at, ec);
       if (total > 0) Sound.play(tgt.player ? 'hurt' : r.crit ? 'crit' : r.eff > 1 ? 'super' : r.eff < 1 ? 'weak' : 'hit', at);
       const hpBefore = tgt.hp;
-      if (total > 0) damage(tgt, total, user, at, r.eff, r.crit);
+      if (total > 0) damage(tgt, total, user, at, r.eff, r.crit, hits > 1);
       const dealt = Math.max(0, hpBefore - Math.max(0, tgt.hp));   // 실제로 깎인 HP
       if (move.dr && dealt > 0) {
         const amt = Math.max(1, Math.floor(dealt * (move.dr > 0 ? DRAIN_PCT : -move.dr * RECOIL_MUL) / 100));
@@ -1124,15 +1133,16 @@ const Dungeon = (() => {
   // 최대 HP에 비례하는 데미지 (독·화상·모래바람·까칠한피부·울퉁불퉁멧·함정 등): 보스는 HP가 많아서 절반만
   const BOSS_PCT_MUL = 0.5;
   const pctDmg = (c, frac) => Math.max(1, Math.floor(c.maxhp * frac * (c.boss ? BOSS_PCT_MUL : 1)));
-  function damage(c, amt, src, at, eff = 1, crit = false) {
+  // multi: 연속기(2회 이상)로 한꺼번에 받은 데미지. 옹골참·기합의띠는 첫 대만 버티고 다음 대에 쓰러지므로 버티지 못한다 (원작과 같게, v0.91)
+  function damage(c, amt, src, at, eff = 1, crit = false, multi = false) {
     if (c.hp <= 0) return;
     if (src && party(src) && !party(c)) { wakeNap(c, at, true); if (src.player) c.provoked = true; }
     if (src && src !== c) { c.lastHurt = amt; c.lastHurtTurn = D.turn; }   // 앙갚음용: 공격으로 받은 데미지   // 잠든 적은 맞으면 깬다 / 리더가 공격한 적 (먼저 공격하지마 작전)
     const A = abilityOf(c);
     if (!src && A.magicGuard) return;
-    if (A.sturdy && c.hp >= c.maxhp && amt >= c.hp && c.maxhp > 1) { amt = c.hp - 1; abLog(c, `${jo(nm(c), '은')} 공격을 버텼다!`, at); }
+    if (A.sturdy && !multi && c.hp >= c.maxhp && amt >= c.hp && c.maxhp > 1) { amt = c.hp - 1; abLog(c, `${jo(nm(c), '은')} 공격을 버텼다!`, at); }
     const H = heldOf(c);
-    if (amt >= c.hp && c.hp > 1 && ((H.sash && c.hp >= c.maxhp) || (H.band && Math.random() < H.band))) {
+    if (amt >= c.hp && c.hp > 1 && ((H.sash && !multi && c.hp >= c.maxhp) || (H.band && Math.random() < H.band))) {
       amt = c.hp - 1; log(`${jo(nm(c), '은')} ${jo(ITEMS[c.held].n, '으로')} 버텼다!`, at);
     }
     const wasAboveHalf = c.hp > c.maxhp / 2;
@@ -1263,6 +1273,16 @@ const Dungeon = (() => {
     }
     if (c.boss) bossDefeated(c, at);
     if (c.outlaw) missionDone(c.mission, `수배범 ${jo(spName(c.sp), '을')} 붙잡았다!`);
+    if (c.outlaw || c.house || c.thief) setTimeout(floorMusic, Math.max(0, at - now()) + 400);   // 다 쓰러뜨리면 원래 곡으로
+  }
+  // 층의 곡: 도둑질·수배범(발견)이 있으면 수배범 곡, 몬스터하우스가 남아 있으면 그 곡, 아니면 보스·던전 곡 (music/outlaw, music/monsterhouse 파일이 있을 때)
+  function floorMusic() {
+    if (!D) return;
+    const base = () => { if (D) { if (D.boss && D.boss.hp > 0) Sound.boss(); else Sound.dungeon(D.dg); } };
+    const alive = f => D.mons.some(m => m.hp > 0 && !m.dead && f(m));
+    if (D.thief || alive(m => m.outlaw && m.metPlayer)) Sound.special('outlaw', base);
+    else if (alive(m => m.house)) Sound.special('monsterhouse', base);
+    else base();
   }
   // 동료의 경험치: 레벨이 오르면 새 기술은 빈 칸에만 (나머지는 마을의 기술 설정에서)
   function allyExp(a, amt, at) {
@@ -1408,18 +1428,17 @@ const Dungeon = (() => {
   // 동료 창: 동료의 HP·상태·지닌 물건·기술 PP·능력 변화, 작전
   function partyMenu() {
     if (!run || !(run.party || []).length) { log('함께 온 동료가 없다.', now()); return; }
+    // 동료 창: 작전과 동료 관리 (능력치·기술·능력 변화는 탐험대 상태 창에서). 여기서는 한 줄 요약만
     const row = a => {
-      const pc = a.fainted ? 0 : a.hp / a.maxhp * 100, st = stageText(a);
-      return `<div class="pm-card${a.fainted ? ' out' : ''}"><div class="row">${portraitImg(looksOf(a), 'portrait sm', a.fainted ? 'Pain' : 'Normal', a.shiny)}<div class="grow">
-        <b>${esc(nm(a))}</b> Lv${a.lv} ${typeBadges(a.types)}${a.fainted ? ' <span class="warn">쓰러짐 (이번 탐험에서 빠짐)</span>' : ''}
-        <div>HP ${a.fainted ? 0 : a.hp}/${a.maxhp} <span class="bar small"><i style="width:${pc}%;background:${pc > 50 ? '#4de36b' : pc > 20 ? '#f5d142' : '#f55'}"></i></span>${a.status ? ` <span class="warn">${STATUS_NAMES[a.status]}</span>` : ''}${D.mons.includes(a) ? ` · 나와의 거리 ${cheb(a, P())}칸` : ''}</div>
-        <div class="dim">특성 ${esc(abilityName(a.ability))}${a.held ? ` · ${ITEMS[a.held].icon} ${esc(ITEMS[a.held].n)}` : ''}${st ? ` · 능력 변화 ${esc(st)}` : ''}</div></div></div>
-        <div class="pm-moves">${a.moves.map(m => { const d = DATA.moves[m.id]; return `<span class="type" style="background:${TYPE_COLORS[d.t - 1]}">${typeName(d.t)}</span> ${esc(d.n)}${masteryStar(a.sp, m.id)} <span class="dim">PP ${m.pp}/${m.max}</span>`; }).join('<br>')}</div></div>`;
+      const pc = a.fainted ? 0 : a.hp / a.maxhp * 100;
+      return `<div class="row pm-row${a.fainted ? ' out' : ''}">${portraitImg(looksOf(a), 'portrait xs', a.fainted ? 'Pain' : 'Normal', a.shiny)}
+        <span class="grow"><b>${esc(nm(a))}</b> Lv${a.lv} ${a.fainted ? '<span class="warn">쓰러짐</span>' : `HP ${a.hp}/${a.maxhp} <span class="bar small"><i style="width:${pc}%;background:${pc > 50 ? '#4de36b' : pc > 20 ? '#f5d142' : '#f55'}"></i></span>${a.status ? ` <span class="warn">${STATUS_NAMES[a.status]}</span>` : ''}${D.mons.includes(a) ? ` <span class="dim">· ${cheb(a, P())}칸 떨어짐</span>` : ''}`}</span></div>`;
     };
-    UI.open({ title: '🤝 동료', wide: true,
-      html: `<div class="row"><span class="grow">작전: <b>${TACTIC_NAMES[tactic()]}</b> <span class="dim">${TACTIC_DESC[tactic()]}</span></span></div>
+    UI.open({ title: '🤝 동료 · 작전', wide: true,
+      html: `<div class="row"><span class="grow">지금 작전: <b>${TACTIC_NAMES[tactic()]}</b> <span class="dim">${TACTIC_DESC[tactic()]}</span></span></div>
         ${run.party.map(row).join('')}`,
-      choices: [...Object.entries(TACTIC_NAMES).map(([k, n]) => ({ label: `${k === tactic() ? '✔ ' : ''}작전: ${n}`, sub: TACTIC_DESC[k], fn: () => { run.tactic = k; log(`🤝 작전: ${n}`, now()); partyMenu(); } })),
+      choices: [{ label: '📊 탐험대 상태 보기 (능력치·기술)', fn: () => setTimeout(showStatus, 0) },
+        ...Object.entries(TACTIC_NAMES).map(([k, n]) => ({ label: `${k === tactic() ? '✔ ' : ''}작전: ${n}`, sub: TACTIC_DESC[k], fn: () => { run.tactic = k; log(`🤝 작전: ${n}`, now()); partyMenu(); } })),
         ...(liveAllies().length && run.bag.some(b => ALLY_USES.includes(ITEMS[b.id].use)) ? [{ label: '🎒 동료에게 아이템 쓰기', fn: allyBag }] : []),
         ...(downAllies().length && run.bag.some(b => b.id === 'reviver') ? [{ label: `🌰 쓰러진 동료 되살리기 (부활씨 ${run.bag.filter(b => b.id === 'reviver').length}개)`, fn: () => pickReviveFor(run.bag.findIndex(b => b.id === 'reviver'), partyMenu) }] : []),
         ...(liveAllies().length ? [{ label: '🎁 동료 지닌 물건 바꾸기', fn: () => pickAlly('누구의 지닌 물건을 바꿀까?', allyHeld) },
@@ -1913,10 +1932,11 @@ const Dungeon = (() => {
     for (let tries = 0; n > 0 && tries < 60; tries++) {
       const t = randomRoomTile({ room });
       if (!t || Math.max(Math.abs(t.x - p.x), Math.abs(t.y - p.y)) < 2) continue;
-      const e = spawnEnemy(t); e.target = { x: p.x, y: p.y }; e.skipTurn = 1; n--;   // 떨어진 턴에는 행동하지 않는다
+      const e = spawnEnemy(t); e.target = { x: p.x, y: p.y }; e.skipTurn = 1; e.house = true; n--;   // 떨어진 턴에는 행동하지 않는다
     }
     computeVis();
     log('몬스터 하우스다!!', T.base);
+    floorMusic();
     popup(p, 'MONSTER HOUSE!', '#ff5a5a', T.base + 100);
     D.fx.push({ kind: 'ring', x: p.x, y: p.y, at: T.base, dur: 600, color: '#ff5a5a' });
   }
@@ -1977,6 +1997,7 @@ const Dungeon = (() => {
     log(how === 'attack' ? '켈리몬에게 덤벼들었다!' : '물건을 훔쳤다!', now());
     log('켈리몬: "도둑이야!! 놓치지 않겠다!"', now() + 300);
     log('다음 층으로 갈 때까지 켈리몬들이 쫓아온다!', now() + 600);
+    floorMusic();
     return k;
   }
   // 상점 켈리몬을 공격한다: 그 턴에 켈리몬은 움직이지 못한다
@@ -2111,6 +2132,7 @@ const Dungeon = (() => {
     setFace('Happy', 3000);
     D.prompts.push(() => {
       stopAuto();
+      Sound.fanfare('reward', 'mission');   // 임무 완료 팡파르 (music/reward)
       // 연타하다 실수로 나가지 않게: '계속한다'를 위에, 처음부터 골라 둔다. 이 던전에 남은 임무도 보여 준다
       const left = Game.save.missions.accepted.filter(m => m.dungeon === run.dungeon && !run.done.includes(m.id)).sort((a, b) => a.floor - b.floor);
       const KIND = { rescue: '구조', outlaw: '수배', find: '탐색', sos: '친구 구조' };
@@ -3281,21 +3303,33 @@ const Dungeon = (() => {
       onOpen: box => { const h = box.querySelector('.log-history'); if (h) h.scrollTop = h.scrollHeight; },
     });
   }
+  // 상태 창: 리더와 동료 (위쪽 버튼으로 바꿔 본다)
   function showStatus() {
     if (!D) return;
-    const p = P(), st = stageText(p), need = expFor(p.lv + 1) - expFor(p.lv), have = p.exp - expFor(p.lv);
+    const team = [P(), ...allies().filter(a => a.hp > 0)];
     const row = (k, a, b) => `<tr><td>${k}</td><td><b>${a}</b></td><td class="dim">${b || ''}</td></tr>`;
-    UI.open({
-      title: '📊 내 상태', wide: true,
-      html: `<div class="row">${portraitImg(looksOf(p), 'portrait', 'Normal', p.shiny)}<div class="grow"><b>${esc(spName(looksOf(p)))}</b> Lv${p.lv} ${typeBadges(p.types)}
-          <div>HP ${p.hp}/${p.maxhp} · 배 ${Math.floor(p.belly)}/100${p.status ? ` · <span class="warn">${STATUS_NAMES[p.status]}</span>` : ''}</div>
-          <div class="dim">EXP ${p.lv >= MAX_LEVEL ? '최대' : `${have}/${need}`} · ₽ ${Game.save.money}${run.money ? ` (이번 탐험 +${run.money})` : ''} · 특성 ${esc(abilityName(p.ability))} · 지닌 물건 ${p.held ? `${ITEMS[p.held].icon}${esc(ITEMS[p.held].n)}` : '없음'}</div></div></div>
-        <table class="md-tbl">${row('공격', p.atk, p.stages[2] ? `(${p.stages[2] > 0 ? '+' : ''}${p.stages[2]}단계)` : '')}${row('방어', p.def, p.stages[3] ? `(${p.stages[3] > 0 ? '+' : ''}${p.stages[3]}단계)` : '')}
-          ${row('특수공격', p.spa, p.stages[4] ? `(${p.stages[4] > 0 ? '+' : ''}${p.stages[4]}단계)` : '')}${row('특수방어', p.spd, p.stages[5] ? `(${p.stages[5] > 0 ? '+' : ''}${p.stages[5]}단계)` : '')}
-          ${row('스피드', p.spe, p.stages[6] ? `(${p.stages[6] > 0 ? '+' : ''}${p.stages[6]}단계)` : '')}</table>
+    const stg = (p, i) => p.stages[i] ? `(${p.stages[i] > 0 ? '+' : ''}${p.stages[i]}단계)` : '';
+    const body = p => {
+      const st = stageText(p), lead = p === P();
+      const need = expFor(p.lv + 1) - expFor(p.lv), have = (p.exp || 0) - expFor(p.lv);
+      return `<div class="row">${portraitImg(looksOf(p), 'portrait', 'Normal', p.shiny)}<div class="grow"><b>${esc(spName(looksOf(p)))}</b> Lv${p.lv} ${typeBadges(p.types)}
+          <div>HP ${p.hp}/${p.maxhp}${lead ? ` · 배 ${Math.floor(p.belly)}/100` : ''}${p.status ? ` · <span class="warn">${STATUS_NAMES[p.status]}</span>` : ''}</div>
+          <div class="dim">${lead ? `EXP ${p.lv >= MAX_LEVEL ? '최대' : `${have}/${need}`} · ₽ ${Game.save.money}${run.money ? ` (이번 탐험 +${run.money})` : ''} · ` : ''}특성 ${esc(abilityName(p.ability))} · 지닌 물건 ${p.held ? `${ITEMS[p.held].icon}${esc(ITEMS[p.held].n)}` : '없음'}</div></div></div>
+        <table class="md-tbl">${row('공격', p.atk, stg(p, 2))}${row('방어', p.def, stg(p, 3))}
+          ${row('특수공격', p.spa, stg(p, 4))}${row('특수방어', p.spd, stg(p, 5))}
+          ${row('스피드', p.spe, stg(p, 6))}</table>
         ${st ? `<p>능력 변화: ${esc(st)}</p>` : ''}
         ${timedEffects(p).length ? `<p>효과: ${timedEffects(p).map(([i, n, tl]) => `${i} ${n} <b>${tl}</b>턴 남음`).join(' · ')}</p>` : ''}
-        <div class="cc-moves">${p.moves.map(m => `<div class="move-row">${moveLine(m.id, m.pp, m.max)}</div>`).join('')}</div>`,
+        <div class="cc-moves">${p.moves.map(m => `<div class="move-row">${moveLine(m.id, m.pp, m.max)}</div>`).join('')}</div>`;
+    };
+    const tabs = cur => team.length > 1 ? `<div class="btns st-tabs">${team.map((c, i) => `<button class="btn sm${c === cur ? '' : ' ghost'}" data-st="${i}">${i ? '' : '👑 '}${esc(spName(looksOf(c)))}</button>`).join(' ')}</div>` : '';
+    UI.open({
+      title: '📊 탐험대 상태', wide: true,
+      html: `<div class="st-wrap">${tabs(team[0])}${body(team[0])}</div>`,
+      onOpen: box => box.addEventListener('click', e => {
+        const b = e.target.closest('[data-st]'); if (!b) return;
+        const c = team[+b.dataset.st]; box.querySelector('.st-wrap').innerHTML = tabs(c) + body(c);
+      }),
       choices: [{ label: '닫기', fn: () => {} }],
     });
   }
@@ -3336,7 +3370,7 @@ const Dungeon = (() => {
       <tr><td>방향만 바꾸기</td><td>Shift + 방향 (방향키 / 숫자패드 / WASD) · 키 설정에서 Shift 대신 다른 키로 바꿀 수 있음</td></tr>
       <tr><td>임무 확인</td><td>J: 받은 임무와 이 층의 임무 대상</td></tr>
       <tr><td>조사</td><td>K 또는 조사 버튼 → 살펴볼 칸을 누른다 (컴퓨터는 칸을 우클릭). 적의 HP·상태·가진 아이템, 떨어진 아이템, 발견한 함정을 볼 수 있다.</td></tr>
-      <tr><td>메시지 기록 / 내 상태</td><td>U 또는 메시지 창을 누르면 지난 메시지, P 또는 위쪽 상태 표시줄을 누르면 내 능력치·능력 변화·기술.</td></tr>
+      <tr><td>메시지 기록 / 탐험대 상태</td><td>U 또는 메시지 창을 누르면 지난 메시지, P 또는 위쪽 상태 표시줄을 누르면 리더와 동료의 능력치·능력 변화·기술.</td></tr>
       <tr><td>빠른 사용</td><td>가방에서 아이템 → "빠른 사용으로 등록". 그 뒤 T 키나 ⭐ 버튼으로 바로 쓴다. 돌·가시 같은 던지는 아이템은 보이는 적 쪽으로 방향을 맞춰 던진다.</td></tr>
       <tr><td>발밑의 아이템</td><td>가방을 열면 맨 위의 "발밑"에서 조사·줍기·가방 아이템과 교환·던지기. 가방 정리 버튼으로 종류별 정렬.</td></tr>
       <tr><td>큰 지도</td><td>N 또는 미니맵 클릭. 큰 지도에서 가 본 곳을 누르면 그곳까지 이동한다. 아무 키나 누르면 닫힌다.</td></tr>
@@ -3626,10 +3660,13 @@ const Dungeon = (() => {
   function initGamepad() {
     if (!navigator.getGamepads) return;
     let raf = 0, prev = [], prevDir = null, uiRepeat = 0, aAt = 0, aLong = false, faceDir = null;
-    const pad = () => [...navigator.getGamepads()].find(g => g && g.connected);
-    // 스틱의 쉬는 위치: 처음 본 값을 기준으로 삼는다 (가만히 있어도 축이 -1 등으로 치우친 장치가 저절로 걷거나 자동 탐색을 끊지 않게)
-    const rest = {};
-    const axis = (g, i) => { const k = g.index + ':' + i, v = g.axes[i] || 0; if (!(k in rest)) rest[k] = Math.abs(v) > 0.3 ? v : 0; return v - rest[k]; };
+    // 표준 배치(standard)인 컨트롤러를 먼저 (가상 장치·다른 입력 장치가 먼저 잡히지 않게)
+    const pad = () => { const l = [...navigator.getGamepads()].filter(g => g && g.connected); return l.find(g => g.mapping === 'standard') || l[0]; };
+    // 스틱 축은 한 번이라도 가운데(0 근처)에 온 것을 본 뒤부터 쓴다 (v0.91)
+    //  - 가만히 있어도 -1 등으로 치우친 축: 가운데에 오지 않으니 쓰지 않는다 (저절로 걷지 않게)
+    //  - 스틱을 민 채로 연결된 경우: 예전에는 그 값을 쉬는 위치로 잘못 잡아 손을 떼면 반대쪽으로 계속 걸었다
+    const centered = {};
+    const axis = (g, i) => { const k = g.index + ':' + i, v = g.axes[i] || 0; if (Math.abs(v) < 0.2) centered[k] = true; return centered[k] ? v : 0; };
     const uiKey = code => UI.key({ code, target: null, preventDefault() {} });
     const stickDir = g => {
       const b = i => !!(g.buttons[i] && g.buttons[i].pressed);

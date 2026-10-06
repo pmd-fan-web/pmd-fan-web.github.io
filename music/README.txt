@@ -56,3 +56,20 @@ crystaldeep 수정 동굴 심층 (숨은 던전)
 factory   고대 공장 (숨은 던전)
 seatemple 바다의 신전 (숨은 던전)
 magma     불꽃 산 심층 (숨은 던전)
+
+특별한 순간 (파일이 없으면 지금 곡 그대로)
+outlaw        수배범을 발견했을 때 · 켈리몬 상점에서 도둑질했을 때 (다 쓰러뜨리거나 층을 옮기면 원래 곡)
+monsterhouse  몬스터하우스 (다 쓰러뜨리면 원래 곡)
+
+이야기 장면 (js/scenes.js의 bgm·departBgm·introBgm)
+guild         길드 (마을 이야기 기본)
+wigglytuff    길드장 · 승급식 · 프롤로그
+teamskull     구린내 탐험대 (1장·5장)
+jobclear      축하 (1부·2부 마지막 장)
+legend        보스가 나타날 때의 이야기 기본
+fear          불안한 장면 (10장 출발 전 등)
+
+팡파르 (한 번만, 그동안 배경음을 줄인다. 없으면 합성 효과음)
+rankup     탐험대 승급 창
+bigreward  승급 선물 창
+reward     임무 완료 · 친구 구조 완료 · 운영 선물

@@ -795,3 +795,46 @@ button img, .rcard img, .pk img, #face { -webkit-user-drag: none; user-drag: non
 #dungeon-screen #view-wrap #log { background: #0a1638d9; border: 3px solid var(--t-cream); border-radius: 14px; box-shadow: inset 0 0 0 2px #0a1638, inset 0 0 0 3px #ffffff22; }
 #dungeon-screen #face-box { border-radius: 14px; }
 
+
+/* ── 탐험대 등급 (v0.91) ── */
+.rank-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 13px; font-weight: bold; background: #ffffff18; border: 1px solid #fff4; white-space: nowrap; }
+.rank-badge.r1 { background: #8a5a2c55; border-color: #c98b4f; }
+.rank-badge.r2 { background: #9aa4b055; border-color: #d6dde6; }
+.rank-badge.r3 { background: #c9a22c55; border-color: #ffd65a; }
+.rank-badge.r4 { background: #3fb6c955; border-color: #8ef0ff; }
+.rank-badge.r5, .rank-badge.r6 { background: #c9662c55; border-color: #ffb066; }
+.rank-badge.r7, .rank-badge.r8 { background: linear-gradient(90deg, #ff6a8855, #ffd65a55, #6ad0ff55); border-color: #ffe9a0; }
+.cc-rank { margin-top: 4px; }
+.rank-row .grow > * { margin-right: 4px; }
+.rank-bar { width: 160px; margin: 4px 6px 4px 0; }
+.rank-bar i { background: linear-gradient(90deg, #ffd65a, #ffb03a); }
+.rank-row .dim { display: block; }
+.star-mission { color: #ffd65a; }
+
+/* ── 이야기 대화 장면 (js/story.js) ── */
+.modal-back.story-back { align-items: flex-end; background: #0006; }
+.modal.story-box { width: min(760px, calc(100vw - 24px)); max-width: none; margin-bottom: 18px; padding: 12px 14px 8px; }
+.story-line { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; min-height: 96px; }
+.story-pt:empty { display: none; }
+.story-portrait { width: 80px; height: 80px; border-radius: 8px; border: 2px solid var(--t-cream, #fff3d6); image-rendering: pixelated; flex-shrink: 0; }
+.story-txt { flex: 1; position: relative; min-width: 0; }
+.story-name { font-weight: bold; color: var(--accent); margin-bottom: 4px; min-height: 1em; }
+.story-say { font-size: 16px; line-height: 1.6; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; }
+.story-box.narration .story-say { font-style: italic; opacity: .9; text-align: center; }
+.story-more { position: absolute; right: 0; bottom: -2px; color: var(--accent); opacity: 0; animation: story-blink 1s infinite; }
+.story-box.typed .story-more { opacity: 1; }
+@keyframes story-blink { 50% { transform: translateY(3px); } }
+#modal-root .modal.story-box .choice-list { display: flex; flex-direction: row; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+#modal-root .modal.story-box .choice { width: auto; flex: 0 0 auto; padding: 4px 12px; font-size: 13px; }
+#modal-root .story-box .choice:first-child { display: none; }   /* '다음'은 Enter·A·탭으로 (버튼은 감춘다) */
+@media (max-width: 800px) {
+  .story-portrait { width: 64px; height: 64px; }
+  .story-say { font-size: 15px; }
+}
+
+/* 운석의 선물: 메가스톤 고르기 */
+.mg-search { width: 100%; }
+.mg-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; max-height: 50vh; overflow-y: auto; }
+.mg-item { display: flex; align-items: center; gap: 6px; text-align: left; padding: 6px 8px; }
+.mg-item > span { display: flex; flex-direction: column; min-width: 0; }
+.mg-item[hidden] { display: none; }

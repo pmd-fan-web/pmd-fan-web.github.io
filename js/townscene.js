@@ -1,4 +1,5 @@
 // 마을 풍경 (마을 화면 맨 위 띠): 시간대에 따라 하늘색이 바뀌고, 리더와 동료가 길 위를 걸어 다닌다
+// 마을 포켓몬(npc)을 넘기면 정해진 자리(home) 근처만 오가고, sleep이면 그 자리에서 잔다 (지금은 쓰지 않음: 리더와 동료만)
 // 배경은 바뀔 때만 따로 그려 두고(집·나무·언덕), 매 프레임에는 포켓몬만 다시 그린다. 마을 화면이 보일 때만 돈다
 'use strict';
 
@@ -61,16 +62,25 @@ const TownScene = (() => {
   }
 
   // 걷는 포켓몬: 길 위의 정해진 곳까지 걸어가고, 잠깐 쉬고, 다시 다른 곳으로
+  const keyOf = w => w.id + (w.shiny ? 's' : '') + (w.npc ? 'n' : '');
   function makeWalkers(list) {
-    const old = new Map(walkers.map(w => [w.id + (w.shiny ? 's' : ''), w]));
-    walkers = list.map(({ id, shiny }, i) => old.get(id + (shiny ? 's' : '')) || { id, shiny, x: 0.35 + i * 0.1, tx: 0.35 + i * 0.1, dir: 0, rest: 600 + i * 400, since: 0 });
+    const old = new Map(walkers.map(w => [keyOf(w), w]));
+    walkers = list.map((o, i) => {
+      const prev = old.get(keyOf(o));
+      if (prev) return Object.assign(prev, { home: o.home, range: o.range, sleep: o.sleep });
+      const x = o.home ?? 0.35 + i * 0.1;
+      return { id: o.id, shiny: !!o.shiny, npc: !!o.npc, home: o.home, range: o.range, sleep: !!o.sleep, x, tx: x, dir: 0, rest: 600 + i * 400, since: 0 };
+    });
   }
+  // 다음에 걸어갈 곳: 마을 포켓몬은 자기 자리 근처, 리더·동료는 길 어디든
+  const nextSpot = w => w.home == null ? 0.08 + Math.random() * 0.84 : Math.min(0.95, Math.max(0.05, w.home + (Math.random() * 2 - 1) * (w.range || 0.05)));
   function step(dt, W) {
     for (const w of walkers) {
+      if (w.sleep) { w.dir = 0; continue; }
       const dx = w.tx - w.x;
       if (Math.abs(dx) * W < 0.6) {
         w.x = w.tx; w.rest -= dt; w.dir = 0;
-        if (w.rest <= 0) { w.tx = 0.08 + Math.random() * 0.84; w.rest = 1200 + Math.random() * 2500; }
+        if (w.rest <= 0) { w.tx = nextSpot(w); w.rest = 1200 + Math.random() * 2500; }
       } else { const v = 22 / W * dt / 1000; w.x += Math.sign(dx) * Math.min(Math.abs(dx), v); w.dir = dx > 0 ? 2 : 6; }
     }
   }
@@ -88,11 +98,11 @@ const TownScene = (() => {
     ctx.drawImage(bg, 0, 0);
     // 뒤(위)에 있는 포켓몬부터: 같은 줄이라 왼쪽부터 그린다
     const gy = H - 7;
-    for (const w of walkers.slice().sort((a, b) => a.x - b.x)) Sprites.draw(ctx, w.id, w.rest > 0 && w.x === w.tx ? 'Idle' : 'Walk', w.dir, t, true, Math.round(w.x * W), gy - 4, 1, false, w.shiny);
+    for (const w of walkers.slice().sort((a, b) => a.x - b.x)) Sprites.draw(ctx, w.id, w.sleep ? 'Sleep' : w.rest > 0 && w.x === w.tx ? 'Idle' : 'Walk', w.dir, t, true, Math.round(w.x * W), gy - 4, 1, false, w.shiny);
     if (phase() === 2) { ctx.fillStyle = '#0b163333'; ctx.fillRect(0, 0, W, H); }   // 밤에는 포켓몬도 조금 어둡게
   }
 
-  // list: [{ id, shiny }] (리더, 동료)
+  // list: [{ id, shiny }] (리더, 동료) + [{ id, npc: true, home: 0~1, range, sleep }] (마을 포켓몬)
   function show(el, list) {
     if (canvas !== el) { canvas = el; ctx = el.getContext('2d'); bgKey = ''; }
     makeWalkers(list);

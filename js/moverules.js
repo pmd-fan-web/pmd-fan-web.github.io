@@ -301,8 +301,9 @@ for (const [id, fi, n, e, t, b, ab, sig, path] of CALYREX_RIDERS) {
   const base = DATA.species[898];
   if (!base || DATA.species[id]) continue;
   // 기술: 버드렉스의 기술 + 함께 탄 말(블리자포스·레이스포스)의 레벨업 기술 + 전용기 (원작 기수 모습처럼)
-  const steed = DATA.species[ab === 266 ? 896 : 897], seen = new Set(), l = [];
-  for (const x of [[1, sig], ...base.l, ...(steed ? steed.l : [])]) if (!seen.has(x[1])) { seen.add(x[1]); l.push(x); }
+  // 백마 탄 모습은 고드름침(333)도 배운다 (v0.91)
+  const steed = DATA.species[ab === 266 ? 896 : 897], seen = new Set(), l = [], extra = ab === 266 ? [[1, 333]] : [];
+  for (const x of [[1, sig], ...extra, ...base.l, ...(steed ? steed.l : [])]) if (!seen.has(x[1])) { seen.add(x[1]); l.push(x); }
   l.sort((a, c) => a[0] - c[0]);
   DATA.species[id] = { ...base, n, e, t, b, x: 340, l, v: [], ab: [[ab, 0]], em: '', sem: '', f: [898, path], fc: 'select', fi, sb: 898 };
 }
@@ -313,6 +314,8 @@ rule([849], { team: true, cure: true, text: '자신과 주변(3칸 안)의 같�
 const LEGEND_SIG = [540, 177, 221, 296, 295, 620, 353, 459, 460, 463, 467, 465, 449, 557, 558, 559, 551, 550, 548, 546, 613, 593, 592, 718,
   713, 714, 722, 711, 705, 712, 721, 742, 744, 795, 817, 819, 878, 919, 821, 823, 354, 832, 877, 904, 781, 782, 462, 717];
 for (const id of LEGEND_SIG) if (DATA.moves[id] && DATA.moves[id].c !== 1) DATA.moves[id].r = 'r';
+// 악의파동: 주변(3칸 안)의 모든 적에게 (v0.91)
+if (DATA.moves[399]) DATA.moves[399].r = 'r';
 // 벌레의야단법석: 벌레 타입에 쓸 만한 범위기가 없어서 하이퍼보이스처럼 주변 범위로 (원작은 상대 하나, v0.77)
 if (DATA.moves[405]) DATA.moves[405].r = 'r';
 // 범위 이름 (선공기는 '앞 2칸')

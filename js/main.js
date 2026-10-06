@@ -16,7 +16,7 @@ const Game = (() => {
     return {
       v: SAVE_SCHEMA, gameVersion: GAME_VERSION, money: 500, day: 1, current: sp, starter: sp,
       roster: { [sp]: newEntry(sp) },
-      bag: [{ id: 'oran', n: 1 }, { id: 'oran', n: 1 }, { id: 'apple', n: 1 }],
+      bag: [{ id: 'oran', n: 1 }, { id: 'oran', n: 1 }, { id: 'apple', n: 1 }, { id: 'gravel', n: 5 }],   // 처음 탐험용 던질 것 (v0.91)
       storage: {}, cleared: {}, best: {},
       missions: { board: [], accepted: [] }, shop: [], run: null,
       settings: { fast: false, autoDescend: false }, bagMax: BAG_BASE, storageMax: STORAGE_BASE, storageV44: true,
@@ -743,7 +743,7 @@ const Game = (() => {
       if (g.money) { save.money += g.money; parts.push(`₽${g.money}`); }
       lines.push(`<p>${esc(g.note)}</p><p>${parts.join(' · ')} <span class="dim">(창고로)</span></p>`);
     }
-    persist(); renderTown(); Sound.play('achieve');
+    persist(); renderTown(); Sound.fanfare('reward', 'achieve');   // 팡파르 곡: music/reward (없으면 합성 효과음)
     UI.alert('🎁 선물이 도착했어요', lines.join('<hr>'));
   }
   // 터치 기기에서 처음 한 번: 조작 방식을 고른다 (조이스틱이 생긴 것을 모를 수 있어서, v0.83)
@@ -767,6 +767,9 @@ const Game = (() => {
     applyPad();
     if (save) sweepAutoSell();
     if (save) setTimeout(claimGlobalGifts, 400);
+    if (save) setTimeout(() => Story.check(), 1000);   // 이야기 (js/story.js, js/scenes.js)
+    if (save) setTimeout(checkRankUp, 1300);
+    if (save) setTimeout(checkMegaGift, 1600);
     Gfx.preload(() => { if (!Dungeon.run) renderTown(); });
     if (save) setTimeout(askPadMode, 900);   // 원작 아이템 아이콘: 처음 불러오면 마을 화면을 다시 그린다
     show('town-screen');
@@ -791,7 +794,7 @@ const Game = (() => {
   function refreshDay() {
     rollShop();
     const board = [];
-    for (let i = 0; i < MISSION_BOARD; i++) { const m = genMission(); if (m) board.push(m); }
+    for (let i = 0; i < boardSize(); i++) { const m = genMission(); if (m) board.push(m); }   // 탐험대 등급에 따라 의뢰 수가 다르다
     save.missions.board = board;
   }
   // 마을 상점 진열: 하루에 한 번, 또는 돈을 내고 새로고침
@@ -817,8 +820,9 @@ const Game = (() => {
   const shopLeft = id => shopFixedFor(save).includes(id) ? Infinity : ((save.shopBought || {})[id] ? 0 : 1);
 
   // 게시판에서 고른 "자주 뜨는 지역": 새 의뢰의 30~50%쯤이 그 던전에서 (MISSION_FOCUS_RATE, v0.69에 50% → 40%)
-  // 받을 수 있는 임무 MISSION_MAX개, 게시판 의뢰 MISSION_BOARD개 (v0.69에 4 → 8, 6 → 10)
-  const MISSION_FOCUS_RATE = 0.4, MISSION_MAX = 8, MISSION_BOARD = 10;
+  // 받을 수 있는 임무 수·게시판 의뢰 수: 탐험대 등급에 따라 (js/defs.js RANK_MISSION_MAX, RANK_BOARD, v0.91)
+  const MISSION_FOCUS_RATE = 0.4;
+  const missionMax = () => RANK_MISSION_MAX[rankLv()], boardSize = () => RANK_BOARD[rankLv()];
   const focusDungeon = () => { const d = save.missionFocus && dungeonById(save.missionFocus); return d && d.mode === 'normal' && unlocked(d) ? d : null; };
   function genMission() {
     const dgs = DUNGEONS.filter(d => d.mode === 'normal' && unlocked(d));
@@ -832,9 +836,14 @@ const Game = (() => {
     const client = +pick(ids);
     const prog = (floor - 1) / Math.max(1, dg.floors - 1);
     const lvl = Math.round(dg.lv[0] + (dg.lv[1] - dg.lv[0]) * prog);
-    const reward = Math.round((80 + floor * 35) * (1 + tier * 0.8) * MISSION_MONEY_MUL / 20) * 10;
+    const rk = rankLv();
+    const reward = Math.round((80 + floor * 35) * (1 + tier * 0.8) * MISSION_MONEY_MUL * (1 + 0.05 * rk) / 20) * 10;   // 탐험대 등급마다 +5%
     const m = { id: Date.now() + '' + rand(1e6), dungeon: dg.id, floor, kind, client, reward, lv: Math.min(MAX_LEVEL, lvl + 3) };
     const item = missionRewardItem(lvl); if (item) m.item = item;   // 의뢰 레벨에 맞는 보상 (js/defs.js)
+    if (Math.random() < rankStarRate(rk)) {   // ★우대 의뢰 (골드 랭크부터): 보상 2배 + 더 좋은 물건, 포인트 2배
+      m.star = true; m.reward *= 2;
+      m.item = missionRewardItem(Math.min(MAX_LEVEL, lvl + 30)) || missionRewardItem(Math.min(MAX_LEVEL, lvl + 30)) || m.item;
+    }
     if (kind === 'outlaw') {
       // 그 층에 실제로 나오는 포켓몬 중에서 (컨셉 포켓몬 + 타입에 맞는 포켓몬)
       const fc = Dungeon.floorCandidates(dg, floor);
@@ -842,6 +851,106 @@ const Game = (() => {
       m.target = +pick(cand.length ? cand : ids);
     }
     return m;
+  }
+  // ── 운석 낙하지점 첫 클리어 선물 (v0.91): 원하는 메가스톤 하나. 이미 클리어한 탐험대도 한 번 (save.megaGift = 고른 스톤) ──
+  const MEGA_GIFT_DG = 'meteor';
+  function checkMegaGift() {
+    if (!save || Dungeon.run || !(save.cleared && save.cleared[MEGA_GIFT_DG]) || save.megaGift) return;
+    // 이야기(2부 1장: 지라치의 답례)를 본 뒤에 (이야기를 건너뛰어도 본 것으로 기록된다)
+    if (UI.isOpen() || Story.busy() || !(save.story && save.story.seen && save.story.seen.p2ch1)) { if ((checkMegaGift.tries = (checkMegaGift.tries || 0) + 1) < 40) setTimeout(checkMegaGift, 1500); return; }
+    checkMegaGift.tries = 0;
+    megaGiftDialog();
+  }
+  function megaGiftDialog() {
+    const list = MEGA_STONES.filter(id => ITEMS[id]).map(id => ({ id, n: ITEMS[id].n, to: ITEMS[id].formTo })).sort((a, b) => a.n.localeCompare(b.n, 'ko'));
+    const have = id => (save.storage[id] || 0) + save.bag.filter(b => b.id === id).reduce((a, b) => a + (b.n || 1), 0) + Object.values(save.roster).filter(c => c.held === id).length;
+    Sound.fanfare('bigreward', 'achieve');
+    const m = UI.open({
+      title: '☄️ 운석의 선물: 메가스톤 고르기', wide: true,
+      html: `<p>운석 낙하지점 첫 클리어 기념으로 <b>원하는 메가스톤 하나</b>를 드려요. <span class="dim">(한 번만 · 고르면 바꿀 수 없어요)</span></p>
+        <p><input class="mg-search" placeholder="포켓몬·스톤 이름으로 찾기" autocomplete="off"></p>
+        <div class="mg-list">${list.map(o => `<button class="btn ghost mg-item" data-mg="${o.id}" data-s="${esc((o.n + ' ' + (o.to ? spName(o.to) : '')).toLowerCase())}">${o.to ? portraitImg(o.to, 'portrait xs') : ''}<span><b>${esc(o.n)}</b><span class="dim">${o.to ? esc(spName(o.to)) : ''}${have(o.id) ? ` · 가지고 있음 ${have(o.id)}` : ''}</span></span></button>`).join('')}</div>`,
+      choices: [{ label: '나중에 고르기 (다음에 마을에 오면 다시 물어요)', fn: () => {} }],
+      onOpen: box => {
+        const q = box.querySelector('.mg-search');
+        q.addEventListener('input', () => { const v = q.value.trim().toLowerCase(); box.querySelectorAll('.mg-item').forEach(b => { b.hidden = !!v && !b.dataset.s.includes(v); }); });
+        box.querySelector('.mg-list').addEventListener('click', async e => {
+          const b = e.target.closest('[data-mg]'); if (!b) return;
+          const id = b.dataset.mg;
+          if (!(await UI.confirm('메가스톤 고르기', `<p>${Gfx.iconHtml(id)} <b>${esc(ITEMS[id].n)}</b>로 할까요?</p><p class="dim">한 번만 고를 수 있어요.</p>`, '이걸로 한다', '다시 고른다'))) return;
+          if (save.megaGift) return;
+          save.megaGift = id; storeKeep(id); persist(); UI.close(m); renderTown();
+          Sound.fanfare('reward', 'achieve');
+          UI.alert('☄️ 운석의 선물', `<p>${Gfx.iconHtml(id)} <b>${esc(jo(ITEMS[id].n, '을'))}</b> 받았어요! <span class="dim">(창고로)</span></p><p class="dim">${esc(ITEMS[id].d)}</p>`);
+        });
+      },
+    });
+  }
+  // ── 탐험대 등급 (v0.91, 등급표·혜택은 js/defs.js RANKS) ──
+  function rankState() {
+    if (!save.rank) {   // 처음 한 번: 지금까지 완료한 임무로 시작 포인트 (게시판 임무 20점, 친구 구조 60점). 승급식은 마을에서 한꺼번에
+      const resc = Progress.stat('rescues'), board = Math.max(0, Progress.stat('missions') - resc);
+      save.rank = { pts: board * 20 + resc * 60, seen: 0 };
+    }
+    return save.rank;
+  }
+  const rankLv = () => rankOf(rankState().pts);
+  // 임무 하나의 포인트: 깊은 층·어려운 던전일수록 많이. 수배 1.5배, 친구 구조 3배, ★우대 2배
+  function missionRankPts(m) {
+    const dg = dungeonById(m.dungeon), tier = dg ? dungeonTier(dg) : 0;
+    let p = (5 + (m.floor || 1) / 2) * (1 + tier * 0.3);
+    if (m.kind === 'outlaw') p *= 1.5;
+    if (m.kind === 'sos') p *= 3;
+    if (m.star) p *= 2;
+    return Math.max(1, Math.round(p));
+  }
+  function addRankPts(m, lines) { const p = missionRankPts(m); rankState().pts += p; lines.push(`🏅 탐험대 포인트 +${p}`); }
+  const rankBadge = (r = rankLv()) => `<span class="rank-badge r${r}" title="탐험대 등급">${RANKS[r][1]} ${RANKS[r][0]} 랭크</span>`;
+  function rankSection() {
+    const st = rankState(), r = rankOf(st.pts), nx = RANKS[r + 1];
+    const pct = nx ? clamp((st.pts - RANKS[r][2]) / (nx[2] - RANKS[r][2]) * 100, 0, 100) : 100;
+    return `<h3>🏅 탐험대 등급</h3><div class="row rank-row"><span class="grow">${rankBadge(r)} <b>${st.pts}</b>점
+      ${nx ? `<span class="dim">· 다음 ${nx[1]} ${nx[0]}까지 ${nx[2] - st.pts}점</span>` : '<span class="dim">· 최고 등급!</span>'}
+      <span class="bar rank-bar"><i style="width:${pct}%"></i></span>
+      <span class="dim">혜택: 게시판 의뢰 ${RANK_BOARD[r]}개 · 진행 임무 ${RANK_MISSION_MAX[r]}개 · 임무 보상 돈 +${r * 5}%${r >= RANK_STAR_FROM ? ` · ★우대 의뢰 ${Math.round(rankStarRate(r) * 100)}%쯤` : ` · ${RANKS[RANK_STAR_FROM][0]} 랭크부터 ★우대 의뢰`}</span>
+      <span class="dim">임무를 완료하면 포인트가 쌓여요. 깊은 층·어려운 던전일수록, 수배는 1.5배, 친구 구조는 3배!</span></span></div>`;
+  }
+  // 승급식: 마을에서 (창이 열려 있으면 닫힌 뒤). 선물은 장면 전에 먼저 넣고 저장한다 (중간에 새로고침해도 두 번 받지 않게)
+  async function checkRankUp() {
+    if (!save || Dungeon.run) return;
+    const st = rankState(), r = rankOf(st.pts);
+    if (r <= st.seen) return;
+    if (UI.isOpen() || Story.busy()) { setTimeout(checkRankUp, 1500); return; }
+    const from = st.seen, parts = [];
+    st.seen = r;
+    for (const g of RANKS.slice(from + 1, r + 1).map(x => x[3]).filter(Boolean)) {
+      for (const [id, n] of g.items) if (ITEMS[id]) { storeKeep(id, n); parts.push(`${ITEMS[id].icon} <b>${esc(ITEMS[id].n)}</b>${n > 1 ? ' ×' + n : ''}`); }
+      if (g.money) save.money += g.money;
+    }
+    const money = RANKS.slice(from + 1, r + 1).reduce((a, x) => a + ((x[3] && x[3].money) || 0), 0);
+    persist(); renderTown();
+    const nx = RANKS[r + 1];
+    await Story.play(rankScene(from, r), { bgm: 'wigglytuff', vars: { 탐험대: Story.teamLabel(), 랭크: RANKS[r][0], 포인트: st.pts, 다음: nx ? nx[2] - st.pts : 0 } });
+    // 승급 창 (music/rankup) → 승급 선물 창 (music/bigreward)
+    Sound.fanfare('rankup', 'achieve');
+    await UI.alert(`${RANKS[r][1]} ${RANKS[r][0]} 랭크로 승급!`, `<p class="center">${rankBadge(r)}</p>
+      <p class="center">혜택: 게시판 의뢰 ${RANK_BOARD[r]}개 · 진행 임무 ${RANK_MISSION_MAX[r]}개 · 임무 보상 돈 +${r * 5}%${r >= RANK_STAR_FROM ? ' · ★우대 의뢰' : ''}</p>`, '승급 선물 받기');
+    Sound.fanfare('bigreward', 'achieve');
+    UI.alert('🎁 승급 선물', `<p>${parts.join(' · ')}${money ? ` · ₽${money}` : ''}</p><p class="dim">물건은 창고에 넣어 두었어요.</p>`);
+  }
+  // 승급식 대사 (푸크린 길드: 길드장 푸크린, 조수 페라페)
+  function rankScene(from, r) {
+    const last = r === RANKS.length - 1;
+    return [
+      [40, 'Joyous', '친구친구~! 다들 모여 봐~!'],
+      [441, 'Normal', '에헴! 지금부터 탐험대 승급식을 시작하겠다!'],
+      r - from > 1 ? [441, 'Surprised', '그동안 {리더|이} 해낸 의뢰를 세어 봤더니… 이, 이렇게나 많았단 말인가?!']
+        : [441, 'Normal', '{탐험대|가} 의뢰를 열심히 해낸 덕분에 탐험대 포인트가 {포인트}점이 되었다!'],
+      [40, 'Happy', '그래서~ 오늘부터 {랭크} 랭크야~! 축하해 친구친구~!'],
+      last ? [441, 'Crying', '마, 마스터 랭크라니… 우리 길드의 자랑이다! 흐윽… 승급 선물은 창고에 넣어 두었다!']
+        : [441, 'Happy', '승급 선물은 창고에 넣어 두었다! 다음 랭크까지 {다음}점, 방심하지 말도록!'],
+      [40, 'Joyous', '앞으로도 잘 부탁해~! 야아앗~!!'],
+    ];
   }
   // 임무가 있는 층에 들어왔을 때 알림 창
   function missionAlert(list) {
@@ -853,7 +962,8 @@ const Game = (() => {
       choices: [{ label: '알겠다', fn: () => {} }],
     });
   }
-  function missionText(m) {
+  const missionText = m => (m.star ? '<b class="star-mission" title="탐험대 등급 혜택: 보상 2배 + 좋은 물건, 탐험대 포인트 2배">★우대</b> ' : '') + missionBody(m);
+  function missionBody(m) {
     const dg = dungeonById(m.dungeon);
     if (m.kind === 'sos') return `<b>🆘 ${m.online ? '탐험대 구조' : '친구 구조'}</b> ${esc(dg.n)} ${m.floor}F에서 쓰러진 ${m.from ? esc(m.from) + ' 님' : '친구'}의 Lv${m.lv} ${esc(jo(spName(m.client), '을'))} 구해 주세요.`;
     // 앞부분에 늘 '던전 층'이 오게 (한눈에 지역이 보이게)
@@ -869,8 +979,9 @@ const Game = (() => {
   let ccOpen = null;   // 휴대폰에서 캐릭터 카드를 펼쳐 두었는지
   // ── 탭마다 맞아 주는 포켓몬 (말풍선 한 줄, 날마다 바뀐다. 누르면 다음 말) ──
   const HOSTS = {
-    dungeon: [40, '푸크린', ['오늘은 어느 던전으로 떠나 볼까~? 친구친구!', '출발하기 전에 가방을 꼭 확인하고 가자~', '던전은 들어갈 때마다 모양이 바뀌어. 조심해서 다녀와~', '동료와 함께 가면 훨씬 든든할 거야~']],
-    mission: [441, '페라페', ['의뢰 게시판이에요! 새 의뢰가 들어와 있어요!', '임무를 받아 두면 그 층에서 대상을 만날 수 있어요!', '구조를 기다리는 탐험대도 있어요! 게시판을 확인해 주세요!']],
+    // 푸크린: 해맑은 길드장 (친구친구~) · 페라페: 깐깐한 조수 (에헴, ~하도록!) — 이야기(js/scenes.js)의 말투와 같게
+    dungeon: [40, '푸크린', ['친구친구~! 오늘은 어디로 탐험 갈 거야~?', '던전은 들어갈 때마다 모양이 바뀌어~ 그래서 매일 새롭고 재밌지~!', '출발하기 전에 가방 확인~! 사과 챙겼어~? 나는 벌써 다 먹었어~', '동료랑 같이 가면 훨씬 든든해~ 친구는 많을수록 좋은걸~!', '돌아오면 꼭 얘기해 줘~! 야아앗~!!']],
+    mission: [441, '페라페', ['에헴! 의뢰 게시판이다. 오늘도 새 의뢰가 잔뜩 붙어 있다!', '임무를 받아 두면 그 층에서 대상을 만날 수 있다. 받은 임무는 끝까지 해내도록!', '의뢰를 해내면 탐험대 포인트가 쌓인다. 랭크가 오르면 받을 수 있는 임무도 늘지!', '구조를 기다리는 탐험대도 있다! 길드의 이름을 걸고 구하러 가도록!', '수배범은 만만치 않다. 방심하지 말도록! …길드장님처럼 사과만 생각하면 곤란하다.']],
     shop: [352, '켈리몬', ['어서 오세요! 켈리몬 상점입니다~', '진열은 날이 바뀌면 새로 바뀌어요~', '필요 없는 물건은 팔아도 괜찮아요~']],
     storage: [115, '캥카', ['맡길 물건이 있나요? 소중히 보관해 둘게요.', '가방이 가득 차면 여기에 맡겨 두세요.', '자동 판매를 켜 두면 필요 없는 물건은 바로 팔아 드려요.']],
     bag: [113, '럭키', ['가방 정리는 탐험의 기본이에요!', '회복 아이템은 넉넉히 챙겨 가세요!', '빠른사용에 자주 쓰는 아이템을 등록해 두면 편해요.']],
@@ -904,7 +1015,7 @@ const Game = (() => {
     un.hidden = !updateVer; un.textContent = updateVer ? `🔔 새 버전 v${updateVer} — 눌러서 새로고침` : '';
     document.getElementById('char-card').innerHTML = `
       <div class="cc-top">${portraitImg(sp, 'portrait big', 'Normal', ch.shiny)}
-        <div><div class="cc-name">${esc(d.n)} ${medalIcons(sp)}</div><div class="dim">No.${dexNo(sp)} ${esc(d.e)}</div><div>${typeBadges(d.t)}</div>
+        <div><div class="cc-name">${esc(d.n)} ${medalIcons(sp)}</div><div class="dim">No.${dexNo(sp)} ${esc(d.e)}</div><div>${typeBadges(d.t)}</div><div class="cc-rank">${rankBadge()}</div>
         <div class="cc-lv">Lv <b>${ch.lv}</b></div></div></div>
       <details class="cc-more"${(ccOpen ?? !matchMedia('(max-width: 800px)').matches) ? ' open' : ''}><summary>능력치 · 특성 · 기술 보기</summary>
       <div class="bar-l">EXP <span class="bar"><i style="width:${ch.lv >= MAX_LEVEL ? 100 : clamp(have / need * 100, 0, 100)}%;background:#6cf"></i></span></div>
@@ -1144,15 +1255,15 @@ const Game = (() => {
 
   function tabMission() {
     const acc = save.missions.accepted;
-    return `${sosSection()}
-      <h3>진행 중인 임무 (${acc.length}/${MISSION_MAX}) <select class="mission-sort" title="임무 정렬"><option value="">받은 순서</option><option value="floor" ${save.missionSort === 'floor' ? 'selected' : ''}>던전·층수 순서</option></select></h3>
+    return `${rankSection()}${sosSection()}
+      <h3>진행 중인 임무 (${acc.length}/${missionMax()}) <select class="mission-sort" title="임무 정렬"><option value="">받은 순서</option><option value="floor" ${save.missionSort === 'floor' ? 'selected' : ''}>던전·층수 순서</option></select></h3>
       ${acc.length ? sortMissions(acc).map(m => `<div class="row">${portraitImg(m.kind === 'outlaw' ? m.target : m.client, 'portrait sm', m.kind === 'sos' ? 'Pain' : 'Normal', !!m.shiny)}<div class="grow">${missionText(m)}<div class="dim">보상 ${rewardText(m)}</div></div>
         <button class="btn sm ghost" data-act="drop-mission" data-arg="${m.id}">취소</button></div>`).join('') : '<p class="dim">받은 임무가 없습니다.</p>'}
       <h3>게시판 <span class="dim">(던전에서 돌아오면 새 의뢰가 붙습니다)</span></h3>
       <div class="row"><span class="grow">📍 자주 뜨는 지역 <span class="dim">(고른 던전의 의뢰가 새 의뢰의 30~50%쯤 나와요)</span></span>
         <select data-mfocus="1"><option value="">고르지 않음</option>${DUNGEONS.filter(d => d.mode === 'normal' && unlocked(d)).sort((a, b) => a.lv[0] - b.lv[0]).map(d => `<option value="${d.id}" ${save.missionFocus === d.id ? 'selected' : ''}>${esc(d.n)}</option>`).join('')}</select></div>
-      ${sortMissions(save.missions.board).map(m => `<div class="row">${portraitImg(m.kind === 'outlaw' ? m.target : m.client, 'portrait sm')}<div class="grow">${missionText(m)}<div class="dim">보상 ${rewardText(m)}</div></div>
-        <button class="btn sm" data-act="take-mission" data-arg="${m.id}" ${acc.length >= MISSION_MAX ? 'disabled' : ''}>수락</button></div>`).join('') || '<p class="dim">의뢰가 없습니다.</p>'}`;
+      ${save.missions.board.slice().sort((a, b) => dgOrder(a.dungeon) - dgOrder(b.dungeon) || a.floor - b.floor).map(m => `<div class="row">${portraitImg(m.kind === 'outlaw' ? m.target : m.client, 'portrait sm')}<div class="grow">${missionText(m)}<div class="dim">보상 ${rewardText(m)}</div></div>
+        <button class="btn sm" data-act="take-mission" data-arg="${m.id}" ${acc.length >= missionMax() ? 'disabled' : ''}>수락</button></div>`).join('') || '<p class="dim">의뢰가 없습니다.</p>'}`;
   }
 
   function tabShop() {
@@ -1444,6 +1555,10 @@ const Game = (() => {
       const c = save.roster[id], s = applyBoost(calcStats(id, c.lv, 31), c.boost), mv = c.moves.length ? c.moves : defaultMoves(id, c.lv);
       return `<details class="cc-mate"><summary>${portraitImg(id, 'portrait xs', 'Normal', c.shiny)} <b>${esc(spName(id))}</b> Lv${c.lv}${c.held ? ` ${ITEMS[c.held].icon}` : ''}</summary>
         <div class="dim">${typeBadges(DATA.species[id].t)} HP ${s.maxhp} · 특성 <span class="ab-link" data-ability="${entryAbility(id, c)}">${esc(abilityName(entryAbility(id, c)))}</span></div>
+        <table class="stats">
+          <tr><td>HP</td><td>${s.maxhp}</td><td>공격</td><td>${s.atk}</td></tr>
+          <tr><td>방어</td><td>${s.def}</td><td>특공</td><td>${s.spa}</td></tr>
+          <tr><td>특방</td><td>${s.spd}</td><td>스피드</td><td>${s.spe}</td></tr></table>
         <div class="cc-ability">지닌 물건 ${c.held ? `${ITEMS[c.held].icon} <b>${esc(ITEMS[c.held].n)}</b>` : '<span class="dim">없음</span>'}</div>
         <div class="cc-moves">${mv.map(m => `<div class="move-row clickable" data-move="${m}" data-sp="${id}">${moveLine(m)}${masteryStar(id, m)}</div>`).join('')}</div>
         ${evoOptions(id).filter(e => e.ok).map(e => `<div class="row">${portraitImg(e.to, 'portrait xs', 'Normal', c.shiny)} <span class="grow">✨ <b>${esc(spName(e.to))}</b>(으)로 진화할 수 있어요${e.itemId ? ` <span class="dim">(${esc(ITEMS[e.itemId].n)} 사용)</span>` : ''}</span><button class="btn sm" data-act="evolve-mate" data-arg="${id}:${e.to}">진화</button></div>`).join('')}
@@ -1619,6 +1734,7 @@ const Game = (() => {
       <div class="row"><span class="grow">미궁 탐험대 <b>v${GAME_VERSION}</b> <span class="dim">(${GAME_DATE})</span>${ENV === 'dev' ? ' <span class="tag">개발 환경</span>' : ''}${updateVer ? ` <a href="#" data-act="update">🔔 새 버전 v${esc(updateVer)}</a>` : ''}
         <div class="dim">친구와 구조 코드나 오늘의 도전 기록을 주고받을 때는 서로 같은 버전인지 확인하세요.</div></span>
         <button class="btn sm ghost" data-act="version-notes">변경 내역</button>${save.endingSeen || save.cleared?.[ENDING_DUNGEON] ? ' <button class="btn sm ghost" data-act="ending">🎬 엔딩 다시 보기</button>' : ''}${Online.enabled() ? ' <button class="btn sm ghost" data-act="ending-stats">🌍 엔딩 통계</button>' : ''}</div>
+      ${Story.replayHtml()}
       ${Online.enabled() ? `<h3>☁ 계정</h3><div class="row"><span class="grow">${Online.loggedIn() ? `<b>${esc(Online.name())}</b> 님으로 로그인 · 세이브가 클라우드에도 저장됩니다${cloudErr ? ` <span class="warn">(${esc(cloudErr)})</span>` : ''}` : '로그인하지 않았어요. 로그인하면 다른 기기에서 이어하고 구조 게시판을 쓸 수 있어요.'}</span>
         <button class="btn sm${Online.loggedIn() ? ' ghost' : ''}" data-act="account">${Online.loggedIn() ? '계정' : '로그인 / 가입'}</button></div>` : ''}
       ${Online.enabled() ? `<h3>🏆 스타팅 순위</h3><div class="row"><span class="grow">탐험대가 처음 고른 포켓몬 순위 <span class="dim">(로그인한 탐험대 기준 · 하루에 한 번 갱신)</span></span>
@@ -1659,7 +1775,7 @@ const Game = (() => {
       case 'go-hard': return prepareHard(arg);
       case 'take-mission': {
         const i = save.missions.board.findIndex(m => m.id === arg);
-        if (i >= 0 && save.missions.accepted.length < MISSION_MAX) save.missions.accepted.push(save.missions.board.splice(i, 1)[0]);
+        if (i >= 0 && save.missions.accepted.length < missionMax()) save.missions.accepted.push(save.missions.board.splice(i, 1)[0]);
         break;
       }
       case 'drop-mission': {
@@ -1808,6 +1924,8 @@ const Game = (() => {
       case 'help': Dungeon.showHelp(); return;
       case 'key-settings': keySettings(); return;
       case 'dev-admin': return devAdmin();
+      case 'story-list': return Story.openList();
+      case 'team-name': return Story.askTeamName().then(renderTown);
       case 'guide': Guide.open(arg); return;
       case 'music-loop': return musicLoopDialog(arg);
       case 'music-del': await Sound.removeMusic(arg); UI.toast('음악 파일을 삭제했습니다.'); break;
@@ -2233,6 +2351,7 @@ const Game = (() => {
         box => { const s = box.querySelector('[data-megafocus]'); if (s) s.onchange = () => { save.megaFocus = s.value || null; persist(); }; });
       if (!ok) return;
     }
+    if (dg.mode === 'normal') await Story.inDungeon(dg.id, 'depart');   // 이야기: 출발하기 직전의 대사 (아직 클리어하지 않은 던전)
     startRun(dg);
   }
 
@@ -2406,12 +2525,12 @@ const Game = (() => {
       <p class="center">오늘의 주인공 <b>${esc(spName(dg.hero))}</b> Lv${ROGUE_LEVEL}</p><ul>
       <li>${dg.floors}층짜리 로그라이크 던전입니다. 오늘은 누구나 같은 포켓몬, 같은 맵으로 도전합니다.</li>
       <li><b>하루 한 번</b>만 도전할 수 있습니다. 도중에 창을 닫으면 그 층의 처음부터 이어집니다.</li>
-      <li>가방은 오랭열매 2개와 사과 1개로 시작합니다. 내 캐릭터와 가방은 그대로 보존됩니다.</li>
+      <li>가방은 오랭열매 2개, 사과 1개, 자갈 5개로 시작합니다. 내 캐릭터와 가방은 그대로 보존됩니다.</li>
       <li>보상: 도달한 층 × ₽${Progress.DAILY_REWARD.floor} (완주하면 ₽${Progress.DAILY_REWARD.clear} 추가). 쓰러져도 받을 수 있어요.</li></ul>`, '도전한다', '그만둔다');
     if (!ok) return;
     const p = makeCreature(dg.hero, ROGUE_LEVEL, { player: true });
     p.belly = 100;
-    const run = { dungeon: 'daily', daily: dg.date, floor: 1, mode: 'rogue', p, bag: [{ id: 'oran', n: 1 }, { id: 'oran', n: 1 }, { id: 'apple', n: 1 }], money: 0, done: [], turns: 0, kills: 0 };
+    const run = { dungeon: 'daily', daily: dg.date, floor: 1, mode: 'rogue', p, bag: [{ id: 'oran', n: 1 }, { id: 'oran', n: 1 }, { id: 'apple', n: 1 }, { id: 'gravel', n: 5 }], money: 0, done: [], turns: 0, kills: 0 };
     // 시작하자마자 기록을 남겨서 다시 도전하지 못하게 한다
     save.daily = { date: dg.date, sp: dg.hero, floor: 1, clear: false, turns: 0, lv: ROGUE_LEVEL, kills: 0 };
     persist();
@@ -2618,7 +2737,7 @@ const Game = (() => {
       }
     }
     if (!unlocked(dg)) { UI.alert('구조 불가', `<p>${esc(jo(dg.n, '은'))} 아직 열리지 않은 던전이라 구조하러 갈 수 없어요.</p><p class="dim">${esc(jo(dungeonById(dg.req).n, '을'))} 클리어하면 열립니다.</p>`); return; }
-    if (save.missions.accepted.length >= MISSION_MAX) { UI.alert('구조 불가', `<p>진행 중인 임무가 ${MISSION_MAX}개입니다. 하나를 끝내거나 취소한 뒤 받아 주세요.</p>`); return; }
+    if (save.missions.accepted.length >= missionMax()) { UI.alert('구조 불가', `<p>진행 중인 임무가 ${missionMax()}개입니다. 하나를 끝내거나 취소한 뒤 받아 주세요.</p>`); return; }
     if (docId && save.missions.accepted.filter(m => m.online).length >= ONLINE_RESCUE_MAX) { UI.alert('구조 불가', `<p>게시판 구조 임무는 한 번에 ${ONLINE_RESCUE_MAX}개까지 받을 수 있어요. 먼저 받은 구조를 끝내 주세요.</p>`); return; }
     const reward = Math.round((150 + d.fl * 40) * (1 + dungeonTier(dg) * 0.5) * MISSION_MONEY_MUL / 10) * 10;
     const ok = await UI.confirm('🆘 구조 요청', `<div class="center">${portraitImg(d.sp, 'portrait big', 'Pain', !!d.sh)}</div>
@@ -2790,6 +2909,7 @@ const Game = (() => {
     save.money += m.reward;
     if (m.item) storeAdd(m.item);
     lines.push(`임무 완료 보상: ${rewardText(m)}${m.item ? ' (창고로)' : ''}`);
+    addRankPts(m, lines);
     save.missions.accepted = save.missions.accepted.filter(x => x.id !== mid);
     persist();
     return { m, lines, code };
@@ -2806,6 +2926,7 @@ const Game = (() => {
       <p class="center"><b>${esc(spName(m.client))}</b> 구조 완료!</p><ul>${lines.map(l => `<li>${l}</li>`).join('')}</ul>`;
     if (code) { codeBox('✅ A-OK 코드', head + '<p>이 코드를 친구에게 보내면 친구가 되살아납니다.</p>' + leftHtml, code, '탐험을 계속한다', null, back); return; }
     // 게시판 구조: 창 하나에서 서버에 전하고, 결과(구조 보답)를 같은 창에 덧붙인다
+    Sound.fanfare('reward', 'mission');   // 구조 완료 = 임무 완료 팡파르
     UI.open({ title: '✅ 구조 완료', html: head + `<p class="center rescue-claim">📡 구조 완료를 요청자에게 전하는 중…</p>
       ${leftHtml}<p class="dim">이 뒤에 쓰러져도 구조는 그대로입니다.</p>`, choices: [{ label: '탐험을 계속한다', fn: () => {}, def: true }, ...back], cancel: () => {} });
     const sid = m.sosId, rec = save.rescued && save.rescued[sid];
@@ -2883,6 +3004,7 @@ const Game = (() => {
           save.money += m.reward;
           if (m.item) storeAdd(m.item);
           lines.push(`임무 완료 보상: ${rewardText(m)}${m.item ? ' (창고로)' : ''}`);
+          addRankPts(m, lines);
         }
         save.missions.accepted = save.missions.accepted.filter(m => !r.done.includes(m.id));
       } else {
@@ -2935,6 +3057,8 @@ const Game = (() => {
     const face = { clear: 'Joyous', escape: 'Happy', faint: 'Crying', wind: 'Sad' }[outcome] || 'Normal';
     const res = UI.alert(title, `<div class="center">${portraitImg(p.sp, 'portrait big', face, save.roster[p.sp]?.shiny)}</div><p>${esc(dg.n)} ${reached}F${outcome === 'clear' ? ' 완주' : ''}</p><ul>${lines.map(l => `<li>${l}</li>`).join('')}</ul>${runStatsHtml(r)}`);
     if (Object.values(save.rescued || {}).some(x => x.online && !x.claimed && !x.thanked)) res.then(() => checkOnline(true));
+    // 이야기·승급식: 던전에서 돌아온 뒤 (결과·엔딩 창이 모두 닫히면 차례로)
+    setTimeout(() => Story.check(), 600); setTimeout(checkRankUp, 900); setTimeout(checkMegaGift, 1200);
     // 엔딩: 에리어 제로 최심부를 처음 완주하면 결과 창 뒤에
     if (outcome === 'clear' && dg.id === ENDING_DUNGEON && !r.hard && firstClear && !save.endingSeen) { save.endingSeen = save.day; save.endingAt = { day: save.day, sec: Math.round(save.playSec || 0) }; save.endingRec = endingRecord(); voteEnding(); persist(); res.then(() => setTimeout(() => showEnding(true), 0)); }
     // 친구 구조 완료 → A-OK 코드 보여주기
@@ -3020,7 +3144,7 @@ const Game = (() => {
         { label: '가방', fn: () => Dungeon.floor && document.querySelector('#actions [data-k=bag]').click() },
         { label: '📜 임무 확인 (J)', fn: () => setTimeout(showMissions, 0) },
         { label: '💬 메시지 기록 (U)', fn: () => setTimeout(Dungeon.showLog, 0) },
-        { label: '📊 내 상태 (P)', fn: () => setTimeout(Dungeon.showStatus, 0) },
+        { label: '📊 탐험대 상태 (P)', fn: () => setTimeout(Dungeon.showStatus, 0) },
         { label: '🔀 기술 순서 바꾸기', fn: () => setTimeout(Dungeon.moveOrder, 0) },
         ...((Dungeon.run?.party || []).length ? [{ label: '🤝 동료 (V) — 상태·작전', fn: () => setTimeout(Dungeon.partyMenu, 0) }] : []),
         { label: '🗺 던전 정보', fn: () => setTimeout(() => dungeonMenu('info'), 0) },

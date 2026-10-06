@@ -96,7 +96,7 @@ ab_(246, { specialResist: 0.5 });
 ab_(169, { physResist: 0.5 });
 ab_(272, { resist: { 8: 0.5 }, noStatus: ['psn', 'brn', 'par', 'slp', 'frz'] });
 ab_(25, { wonderGuard: true });
-ab_(5, { sturdy: true, dungeon: 'HP가 가득 찬 상태에서는 한 번에 쓰러지지 않는다. (함정·반동 포함)' });
+ab_(5, { sturdy: true, dungeon: 'HP가 가득 찬 상태에서는 한 번에 쓰러지지 않는다. (함정·반동 포함, 여러 번 맞는 연속기는 버티지 못한다)' });
 ab_([4, 75], { noCrit: true });
 ab_(43, { immuneFlag: 9 }); ab_(171, { immuneFlag: 18 }); ab_(142, { immuneFlag: 15, trapImmune: ['psn', 'blast'], dungeon: '가루 기술과 독가시·폭발 함정이 통하지 않는다.' });
 ab_(6, { trapImmune: ['blast'], blastImmune: true, dungeon: '폭발 함정과 폭발씨의 데미지를 받지 않는다.' });

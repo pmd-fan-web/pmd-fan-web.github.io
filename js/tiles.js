@@ -74,17 +74,17 @@ const Tiles = (() => {
   const enabled = () => CUSTOM_TILESETS && (typeof Game !== 'undefined' && Game.save && Game.save.settings && Game.save.settings.useTileset === true);   // 기본은 쓰지 않음 (v0.85, 설정에서 켠 경우만)
   // 저장 형식: 예전에는 문자열 하나, 지금은 [기본, 변형1, 변형2]
   const setOf = v => (typeof v === 'string' ? [v] : v);
-  // 원작 던전 그림 (v0.90): 레드 구조대 타일 시트를 DTEF로 바꾼 것 (tools/build_tilesets.py, 별도 에셋 저장소 sprites/tiles/)
+  // 원작 던전 그림 (v0.90): 레드 구조대·하늘의 탐험대 타일 시트를 DTEF로 바꾼 것 (tools/build_tilesets.py, 별도 에셋 저장소 sprites/tiles/)
   // 던전마다 분위기가 맞는 원작 던전을 고른다. 설정의 '원작 던전 그림'을 끄면 게임이 그린 타일
   const ORIG_TILES = {
-    forest: 'tinywoods', beach: 'rockpath', crystal: 'southerncavernb24fb50f', plains: 'lightningfield', swamp: 'poisonmaze', volcano: 'magmacavernb08fb17f',
-    desert: 'desertregion', frost: 'mtfreeze', storm: 'watermaze', dark: 'sinisterwoods', mine: 'mtsteel01f05f', sky: 'skytower', canyon: 'greatcanyon',
-    summit: 'mtfaraway30f39f', trial: 'westerncaveb1fb27f', twilight: 'darknightrelic', mystery: 'normalmaze', eternal: 'buriedrelicb51fb99f',
-    burned: 'rescueteammaze', whirl: 'silentchasm', seafloor: 'waterfallpond', ruins: 'buriedrelicb1fb20f', shrine: 'murkycave', altar: 'joyoustower',
-    coronet: 'northernrange08f16f', spiral: 'buriedrelicb21fb50f', areazero: 'southerncavernb01fb23f', skyplain: 'northwindfield20f30f', twofist: 'wishcaveb01fb13f',
-    crown: 'snowpath', ultra: 'electricmaze', meteor: 'meteorcave', zerodeep: 'purityforest80f99f', watercity: 'lapiscave', genelab: 'solarcaveb01fb06f',
-    kalos: 'purityforest61f79f', hero: 'howlingforest01f06f', flower: 'purityforest13f20f', crescent: 'icemaze', crystaldeep: 'wishcaveb90fb99f',
-    factory: 'mtsteel06f08f', seatemple: 'purityforest44f60f', magma: 'magmacavernb18fb23f', mega: 'mtfaraway10f20f',
+    forest: 'tinywoods', beach: 'thunderwavecave', crystal: 'southerncavernb24fb50f', plains: 'lightningfield', swamp: 'poisonmaze', volcano: 'magmacavernb08fb17f',
+    desert: 'desertregion', frost: 'vasticemountain', storm: 'waterfallpond', dark: 'murkyforest', mine: 'mtsteel01f05f', sky: 'skytower', canyon: 'greatcanyon',
+    summit: 'darkicemountainpeak', trial: 'deepboulderquarry', twilight: 'darkwasteland', mystery: 'normalmaze', eternal: 'buriedrelicb51fb99f',
+    burned: 'rescueteammaze', whirl: 'watermaze', seafloor: 'deeplimestonecavern', ruins: 'buriedrelicb1fb20f', shrine: 'murkycave', altar: 'joyoustower',
+    coronet: 'spacialcliffs', spiral: 'buriedrelicb21fb50f', areazero: 'purityforest80f99f', skyplain: 'northwindfield20f30f', twofist: 'darknightrelic',
+    crown: 'icicleforest', ultra: 'temporaltowerinthefutureofdarkness', meteor: 'meteorcave', zerodeep: 'southerncavernb01fb23f', watercity: 'wishcaveb01fb13f', genelab: 'electricmaze',
+    kalos: 'purityforest61f79f', hero: 'howlingforest01f06f', flower: 'westerncaveb1fb27f', crescent: 'darkicemountain', crystaldeep: 'lapiscave',
+    factory: 'mtsteel06f08f', seatemple: 'limestonecavern', magma: 'magmacavernb18fb23f', mega: 'temporalspireinthefutureofdarkness',
   };
   const ORIG_DEFAULT = 'normalmaze';
   const origOn = () => !(typeof Game !== 'undefined' && Game.save && Game.save.settings && Game.save.settings.origTiles === false);

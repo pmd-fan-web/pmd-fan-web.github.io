@@ -48,6 +48,15 @@ window.MUSIC_LOOPS = {
   factory:     [1.893, 88.743],      // 반복 86.85초
   seatemple:   [92.242, 170.376],    // 반복 78.13초
   magma:       [36.630, 92.628],     // 반복 56.00초
+  // v0.91: 특별한 순간·이야기 곡 (tools/loopfind.js)
+  outlaw:       [0.755, 68.746],      // 수배범·도둑질 (Outlaw!)
+  monsterhouse: [7.582, 54.849],      // 몬스터하우스 (Monster House!)
+  guild:        [31.104, 69.280],     // 이야기: 길드 (Wigglytuff's Guild)
+  wigglytuff:   [13.689, 58.085],     // 이야기: 길드장·승급식 (Guildmaster Wigglytuff)
+  teamskull:    [32.195, 76.951],     // 이야기: 구린내 탐험대 (Team Skull)
+  jobclear:     [1.522, 33.519],      // 이야기: 축하 (Job Clear!)
+  legend:       [45.407, 160.029],    // 이야기: 보스 앞 (Defy the Legends)
+  fear:         [12.667, 37.923],     // 이야기: 불안 (Rising Fear)
 };
 
 // 곡마다 음량 (1 = 그대로, 0.8 = 20% 작게)
