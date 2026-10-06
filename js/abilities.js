@@ -119,9 +119,11 @@ ab_(273, { absorb: { t: 10, st: 3, ch: 2 } });
 
 // ── 상태이상 / 능력 보호 ──
 ab_([15, 72, 175], { noStatus: ['slp'] });
+ab_(175, { veil: ['slp'], dungeon: '자신과 같은 편 모두(같은 층) 잠듦 상태가 되지 않는다.' });   // 스위트베일: 같은 편 전체 (v0.90)
 ab_(17, { noStatus: ['psn'] }); ab_(7, { noStatus: ['par'] }); ab_(41, { noStatus: ['brn'] }); ab_(40, { noStatus: ['frz'] });
 ab_(270, { noStatus: ['brn'], onHitBy: { t: 10, st: 2, ch: 1 } });
 ab_([20, 165], { noStatus: ['cnf'], noIntimidate: true });
+ab_(165, { veil: ['cnf'], dungeon: '자신과 같은 편 모두(같은 층) 혼란 상태가 되지 않는다. 자신은 위협도 받지 않는다.' });   // 아로마베일: 같은 편 전체 (v0.90)
 ab_(12, { noStatus: ['cnf'], noIntimidate: true, dungeon: '혼란에 걸리지 않고 위협도 통하지 않는다.' });
 ab_(39, { noFlinch: true, noIntimidate: true });
 ab_(102, { statusResist: 0.5, dungeon: '날씨가 없어서 대신 상태이상에 걸릴 확률이 절반.' });

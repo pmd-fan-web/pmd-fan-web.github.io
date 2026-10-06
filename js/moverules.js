@@ -131,6 +131,7 @@ rule([614], { text: '비행타입과 부유 특성인 상대에게도 맞는다 
 const TEAM_RANGE = 3;
 rule([791], { team: true, text: '자신과 주변(3칸 안)의 같은 편 모두의 HP를 최대 HP의 1/4 회복한다.' });
 rule([336, 597, 811], { team: true, text: '자신과 주변(3칸 안)의 같은 편 모두에게 효과가 있다.' });
+rule([777], { team: true, text: '자신과 주변(3칸 안)의 같은 편 모두의 공격과 특수공격을 2랭크씩 올린다.' });   // 데코레이션 (v0.90)
 
 // 첫 공격 전용: 그 적에게 하는 첫 공격일 때만 성공
 rule([252, 660], { first: true, text: '그 적에게 하는 첫 공격일 때만 성공한다.' });
@@ -299,7 +300,11 @@ const CALYREX_RIDERS = [
 for (const [id, fi, n, e, t, b, ab, sig, path] of CALYREX_RIDERS) {
   const base = DATA.species[898];
   if (!base || DATA.species[id]) continue;
-  DATA.species[id] = { ...base, n, e, t, b, x: 340, l: [[1, sig], ...base.l], v: [], ab: [[ab, 0]], em: '', sem: '', f: [898, path], fc: 'select', fi, sb: 898 };
+  // 기술: 버드렉스의 기술 + 함께 탄 말(블리자포스·레이스포스)의 레벨업 기술 + 전용기 (원작 기수 모습처럼)
+  const steed = DATA.species[ab === 266 ? 896 : 897], seen = new Set(), l = [];
+  for (const x of [[1, sig], ...base.l, ...(steed ? steed.l : [])]) if (!seen.has(x[1])) { seen.add(x[1]); l.push(x); }
+  l.sort((a, c) => a[0] - c[0]);
+  DATA.species[id] = { ...base, n, e, t, b, x: 340, l, v: [], ab: [[ab, 0]], em: '', sem: '', f: [898, path], fc: 'select', fi, sb: 898 };
 }
 rule([462], { pow: 'crush', text: '위력 = 120 × 상대의 남은 HP 비율 (HP가 가득이면 120).' });
 rule([717], { text: '던전에서는 상대 HP를 절반으로 줄이는 대신 위력 90으로 공격한다.' });

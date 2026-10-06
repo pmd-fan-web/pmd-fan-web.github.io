@@ -53,6 +53,14 @@ const Gfx = (() => {
   // ── 함정 (traps.png, 24×24 칸 8×3. 시트의 배치 그대로) ──
   // 능력 리셋: 원더 타일(초록 화살표) / 워프·수면·소환·폭발·배고픔(질퍽): 원작 함정 그림 / 독가시: 밤송이 / 마비: 원작에 없어 찌리리공 (임시)
   const TRAP_CELL = { psn: 12, slp: 9, par: 6, warp: 1, blast: 7, hunger: 3, summon: 14, reset: 17 };
+
+  // 계단: 함정 시트의 18번(내려가는 계단) / 19번(올라가는 계단, 탑·산)
+  function drawStairs(ctx, up, x, y) {
+    const s = sheet('traps'); if (!s.ok) return false;
+    const cell = up ? 19 : 18;
+    ctx.drawImage(s.img, (cell % 8) * 24, ((cell / 8) | 0) * 24, 24, 24, x, y, 24, 24);
+    return true;
+  }
   function drawTrap(ctx, kind, x, y) {
     const s = sheet('traps'), cell = TRAP_CELL[kind];
     if (cell == null || !s.ok) return false;
@@ -96,5 +104,5 @@ const Gfx = (() => {
   }
   // 미리 불러 둔다 (마을에서도: 도감·상점 아이콘)
   function preload(onItems) { const s = sheet('items'); if (onItems && !s.ok && !s.bad) s.img.addEventListener('load', onItems, { once: true }); sheet('traps'); sheet('status'); }
-  return { drawItem, drawTrap, drawStatus, iconHtml, preload };
+  return { drawItem, drawTrap, drawStairs, drawStatus, iconHtml, preload };
 })();

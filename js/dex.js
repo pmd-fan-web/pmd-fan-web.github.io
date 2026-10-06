@@ -31,11 +31,12 @@ const Dex = (() => {
       <div class="picker-bar"><input class="dex-q" placeholder="이름 / 영어 / 번호 검색" autocomplete="off">
       <select class="dex-g"><option value="">전체 세대</option>${gens.map(g => `<option value="${g}">${g}세대</option>`).join('')}</select>
       <select class="dex-t"><option value="">전체 타입</option>${DATA.types.map((t, i) => `<option value="${i + 1}">${t}</option>`).join('')}</select>
+      ${pokeClassSelect('dex-k')}
       <select class="dex-c"><option value="">전체</option><option value="1,2">만난 포켓몬</option><option value="2">쓰러뜨린 포켓몬</option><option value="0">아직 못 만난 포켓몬</option><option value="r">🤝 영입한 포켓몬</option><option value="s">✨ 이로치를 얻은 포켓몬</option><option value="s0">이로치를 아직 못 얻은 포켓몬</option><option value="sx">이로치 그림이 없는 포켓몬</option></select>
       <span class="dim dex-count"></span></div>
       ${(() => { medals = Game.save ? Game.dexMedals() : {}; return ''; })()}
       <div class="picker dex-grid">${ids.map(id => { const d = DATA.species[id], st = state(id), md = medals[id] || ''; return `<button class="pk dex-item${st ? '' : ' unseen'}" data-dexpoke="${id}"
-        data-s="${esc((d.n + ' ' + d.e + ' ' + dexNo(id) + ' ' + id).toLowerCase())}" data-g="${d.g}" data-t="${d.t.join(',')}" data-c="${st}" data-r="${own(id) ? 1 : ''}" data-sh="${!d.sh ? 'x' : shinyMine(id) ? 'y' : 'n'}">
+        data-s="${esc((d.n + ' ' + d.e + ' ' + dexNo(id) + ' ' + id).toLowerCase())}" data-g="${d.g}" data-t="${d.t.join(',')}" data-k="${pokeClass(id)}" data-c="${st}" data-r="${own(id) ? 1 : ''}" data-sh="${!d.sh ? 'x' : shinyMine(id) ? 'y' : 'n'}">
         ${portraitImg(id, 'portrait sm')}<span>${esc(d.n)}</span><i class="dim">${dexNo(id)}${st === 2 ? ' ⚔' : st === 1 ? ' 👁' : ''}</i>${md ? `<i class="dex-medals">${md}</i>` : ''}${own(id) ? '<i class="dex-own" title="영입한 포켓몬">🤝</i>' : ''}${shinyMine(id) ? '<i class="dex-shiny" title="이로치를 얻었어요">✨</i>' : ''}</button>`; }).join('')}</div>`;
   }
 
@@ -72,20 +73,20 @@ const Dex = (() => {
 
   // 검색/필터 연결 (DOM만 숨겨서 입력 포커스 유지)
   function wire(el) {
-    const q = el.querySelector('.dex-q'), g = el.querySelector('.dex-g'), t = el.querySelector('.dex-t'), c = el.querySelector('.dex-c');
+    const q = el.querySelector('.dex-q'), g = el.querySelector('.dex-g'), t = el.querySelector('.dex-t'), c = el.querySelector('.dex-c'), k = el.querySelector('.dex-k');
     const items = [...el.querySelectorAll('.dex-item')], cnt = el.querySelector('.dex-count');
     const filter = () => {
       const s = (q?.value || '').trim().toLowerCase();
       let n = 0;
       for (const b of items) {
-        const ok = (!s || b.dataset.s.includes(s)) && (!g || !g.value || b.dataset.g === g.value)
+        const ok = (!s || b.dataset.s.includes(s)) && (!g || !g.value || b.dataset.g === g.value) && (!k || !k.value || (b.dataset.k || '').split(',').includes(k.value))
           && (!t || !t.value || b.dataset.t.split(',').includes(t.value)) && (!c || !c.value || (c.value === 'r' ? !!b.dataset.r : c.value === 's' ? b.dataset.sh === 'y' : c.value === 's0' ? b.dataset.sh === 'n' : c.value === 'sx' ? b.dataset.sh === 'x' : c.value.split(',').includes(b.dataset.c)));
         b.style.display = ok ? '' : 'none';
         if (ok) n++;
       }
       if (cnt) cnt.textContent = `${n}개`;
     };
-    [q, g, t, c].forEach(x => x && (x.oninput = x.onchange = filter));
+    [q, g, t, c, k].forEach(x => x && (x.oninput = x.onchange = filter));
     filter();
   }
 

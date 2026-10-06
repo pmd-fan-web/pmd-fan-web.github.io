@@ -214,8 +214,8 @@ const Dungeon = (() => {
 
   // ── 보스 층: 큰 방 하나, 보스와 부하 둘, 보스를 쓰러뜨리면 계단이 나타난다 ──
   function genBossMap() {
-    const W = 54, H = 32, tiles = new Uint8Array(W * H), room = new Int16Array(W * H).fill(-1);
-    const R = { x: 13, y: 7, w: 28, h: 18 };
+    const W = 48, H = 28, tiles = new Uint8Array(W * H), room = new Int16Array(W * H).fill(-1);
+    const R = { x: 13, y: 7, w: 22, h: 14 };   // 보스방 바닥 (v0.90: 28×18 → 22×14)
     for (let y = R.y; y < R.y + R.h; y++) for (let x = R.x; x < R.x + R.w; x++) { tiles[y * W + x] = 1; room[y * W + x] = 0; }
     return { w: W, h: H, tiles, room, rooms: [R] };
   }
@@ -812,6 +812,7 @@ const Dungeon = (() => {
       targets = pool.filter(t => hostileTo(user, t) && Math.max(Math.abs(t.x - user.x), Math.abs(t.y - user.y)) <= 3 && los(user.x, user.y, t.x, t.y));
       D.fx.push({ kind: 'ring', x: user.x, y: user.y, at: t0 + dur * 0.3, dur: 350 * spd(), color });
     }
+    // 맞은 자리 이펙트 (원작 이펙트가 있는 타입의 공격 기술)
     // 치유파동·플라워힐: 같은 편 하나를 회복
     if (R.allyHeal) {
       const front = creatureAt(user.x + dx, user.y + dy);
@@ -937,6 +938,7 @@ const Dungeon = (() => {
       let total = r.dmg;
       let hits = move.hits ? (A.skillLink ? move.hits[1] : rint(move.hits[0], move.hits[1])) : 1;
       if (R.popBomb && !A.skillLink) { hits = 1; while (hits < move.hits[1] && Math.random() < 0.9) hits++; }
+      if (heldOf(user).loadedDice && move.hits && move.hits[1] > move.hits[0] && hits < 4) hits = Math.min(move.hits[1], move.hits[1] === 5 ? rint(4, 5) : 4);   // 속임수주사위: 4회 이상
       for (let i = 1; i < hits; i++) total += calcHit(user, tgt, { ...move, a: 0, p: R.escalate ? move.p * (i + 1) : move.p }).dmg || 0;
       if (R.falseSwipe) total = Math.max(0, Math.min(total, tgt.hp - 1));
       // 앙갚음: 지난 턴 이후 공격으로 받은 데미지의 1.5배 (받은 적이 없으면 실패)
@@ -1099,6 +1101,9 @@ const Dungeon = (() => {
     if (kind === 'slp' && c.noSleep) { log(`${jo(nm(c), '은')} 유루열매 덕분에 잠들지 않았다!`, at); return; }
     if (heldOf(c).noStatus && heldOf(c).noStatus.includes(kind)) { log(`${jo(nm(c), '은')} ${ITEMS[c.held].n}의 힘으로 ${STATUS_NAMES[kind]} 상태를 막았다!`, at); return; }
     if (A.noStatus && A.noStatus.includes(kind)) { abLog(c, `${jo(nm(c), '은')} ${STATUS_NAMES[kind]} 상태가 되지 않는다!`, at); return; }
+    // 스위트베일·아로마베일 (v0.90): 같은 층의 같은 편 모두를 지킨다 (공격한 쪽이 틀깨기 등이면 무시)
+    const guard = !(src && src !== c && abilityOf(src).moldBreaker) && [D.player, ...D.mons].find(x => x && x !== c && x.hp > 0 && !x.npc && !x.dead && !!(x.player || x.ally) === !!(c.player || c.ally) && (abilityOf(x).veil || []).includes(kind));
+    if (guard) { abLog(guard, `${jo(nm(guard), '의')} ${abilityName(guard.ability)} 덕분에 ${jo(nm(c), '은')} ${STATUS_NAMES[kind]} 상태가 되지 않는다!`, at); return; }
     const sr = Object.keys(A).length ? abVal(c, 'statusResist') : 0;
     if (kind === 'frz' && weatherNow() === 'sun') { if (verbose) log(`${nm(c)}에게는 효과가 없었다.`, at); return; }
     if (sr && Math.random() < sr) { abLog(c, `${jo(nm(c), '은')} 상태이상을 막아냈다!`, at); return; }
@@ -2169,6 +2174,17 @@ const Dungeon = (() => {
       choices: [{ label: last ? '나간다' : '내려간다', fn: descend }, { label: '그만둔다', fn: () => {} }], cancel: () => {},
     });
   }
+  // 올라가는 계단을 쓰는 던전 (탑·산·하늘): 원작처럼
+  const STAIRS_UP = new Set(['sky', 'summit', 'burned', 'spiral', 'twofist', 'mega', 'coronet', 'frost', 'volcano', 'skyplain', 'canyon', 'magma']);
+  // 개발용 (로컬에서만 메뉴에 나온다): 보스·중간 보스 층으로 바로 내려간다
+  function devJump(kind) {
+    if (!D || ENV !== 'dev') return;
+    const dg = D.dg, target = kind === 'boss' ? dg.floors : (dg.mid && dg.mid.floors[0]) || (dg.mode === 'rogue' ? 10 : 0);
+    if (!target || target <= run.floor) { log('이 던전에는 그 층이 없거나 이미 지나왔다.', now()); return; }
+    run.floor = target - 1; run.bossDone = null; run.bossPick = null;
+    const p = P(); D.stairs = { x: p.x, y: p.y }; D.stairsHidden = false;
+    descend();
+  }
   function descend() {
     const p = P();
     if (D.dead || p.hp <= 0) return;   // 쓰러졌으면 내려가지 않는다
@@ -2868,9 +2884,11 @@ const Dungeon = (() => {
     const s = D.stairs;
     if (!D.stairsHidden && D.explored[idx(s.x, s.y)]) {
       const sx = s.x * TILE - ox, sy = s.y * TILE - oy;
-      ctx.fillStyle = '#1b1b2a'; ctx.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
-      ctx.fillStyle = '#e8e2c8';
-      for (let k = 0; k < 4; k++) ctx.fillRect(sx + 4 + k * 2, sy + 5 + k * 4, TILE - 8 - k * 4, 2);
+      if (!Gfx.drawStairs(ctx, STAIRS_UP.has(D.dg.id), sx, sy)) {   // 원작 계단 그림 (탑·산은 올라가는 계단). 못 받았으면 직접 그린 계단
+        ctx.fillStyle = '#1b1b2a'; ctx.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+        ctx.fillStyle = '#e8e2c8';
+        for (let k = 0; k < 4; k++) ctx.fillRect(sx + 4 + k * 2, sy + 5 + k * 4, TILE - 8 - k * 4, 2);
+      }
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     // 상점 카펫
@@ -3465,7 +3483,7 @@ const Dungeon = (() => {
     map: ['지도', '🗺 지도'], mission: ['임무', '📜 임무'], tactic: ['동료', '🤝 동료'], menu: ['메뉴', '☰ 메뉴'] };
   const VP_BTNS = { a: 'attack', b: 'explore', x: 'vpmenu', y: 'look' };
   const VP_DEFAULT = { js: 100, ab: 85, vib: true, order: [1, 2, 3, 4], btns: VP_BTNS };
-  const VP_POS = { portrait: { js: [24, 52], abxy: [76, 52] }, landscape: { js: [16, 52], abxy: [84, 52] } };
+  const VP_POS = { portrait: { js: [27, 52], abxy: [76, 52] }, landscape: { js: [16, 52], abxy: [84, 52] } };   // ↻(face)는 옮긴 적이 없으면 조이스틱 왼쪽 위에 따로 둔다
   const vpSet = () => { const v = { ...VP_DEFAULT, ...((Game.save && Game.save.settings.vpad) || {}) }; v.btns = { ...VP_BTNS, ...(v.btns || {}) }; return v; };
   // ABXY 아래 작은 이름을 할당에 맞춘다
   function vpLabels() {
@@ -3499,7 +3517,14 @@ const Dungeon = (() => {
       if (overlap) { jcx = VP_GAP + js / 2; acx = W - VP_GAP - abW / 2; jcy = acy = H / 2; }
       jx = jcx / W * 100; jy = jcy / H * 100; ax = acx / W * 100; ay = acy / H * 100;
     }
-    const at = { js: [jx, jy], abxy: [ax, ay] };
+    // ↻ 방향만 바꾸기 버튼: 따로 옮길 수 있다. 기본은 조이스틱 왼쪽 위에서 조금 떨어진 곳
+    let fx, fy;
+    if (W > 0) {
+      const half = 20, jcx = jx / 100 * W, jcy = jy / 100 * H;
+      const [px, py] = pos.face ? [pos.face[0] / 100 * W, pos.face[1] / 100 * H] : [jcx - js * 0.62, jcy - js * 0.62];
+      fx = Math.min(W - half, Math.max(half, px)) / W * 100; fy = Math.min(H - half, Math.max(half, py)) / H * 100;
+    } else [fx, fy] = pos.face || [jx - 8, jy - 30];
+    const at = { js: [jx, jy], abxy: [ax, ay], face: [fx, fy] };
     for (const g of vp.querySelectorAll('.vp-grp')) { const [x, y] = at[g.dataset.grp]; g.style.left = x + '%'; g.style.top = y + '%'; }
   }
   function initVpad() {
@@ -3753,5 +3778,5 @@ const Dungeon = (() => {
     clearInterval(logicTimer); logicTimer = 0;
     pendingKey = null;
   }
-  return { moveOrder, layoutVpad, padSettings, showLog, showStatus, partyMenu, floorCandidates, updateKeyHints, init, enter, leave, get run() { return run; }, get floor() { return D; }, stopAuto, showHelp, addToBag, _log: LOG };
+  return { devJump, rebuildMap: () => { if (D) buildMapCanvas(); }, moveOrder, layoutVpad, padSettings, showLog, showStatus, partyMenu, floorCandidates, updateKeyHints, init, enter, leave, get run() { return run; }, get floor() { return D; }, stopAuto, showHelp, addToBag, _log: LOG };
 })();

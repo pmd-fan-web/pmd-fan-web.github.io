@@ -14,7 +14,9 @@
 <meta name="apple-mobile-web-app-title" content="미궁 탐험대">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css">
-<link rel="stylesheet" href="css/style.css?v=89">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="css/style.css?v=90">
 </head>
 <body>
 <div id="title-screen" class="screen">
@@ -30,6 +32,7 @@
 
 <div id="town-screen" class="screen">
   <header class="town-head pmd-box">
+    <canvas id="town-scene" aria-hidden="true"></canvas>
     <span class="town-name">🏠 보물마을</span>
     <span id="town-day"></span>
     <span id="town-online" class="town-online" hidden></span>
@@ -96,42 +99,44 @@
   </div>
   <!-- 터치 화면용 조이스틱·ABXY (js/dungeon.js initVpad). 설정에서 '방향 버튼'을 고르면 숨는다 -->
   <div id="vpad">
-    <div class="vp-grp vp-stick" data-grp="js"><div class="vp-base"><div class="vp-thumb"></div></div><button class="vp-face" title="누른 뒤 방향: 제자리에서 방향만 바꾸기">↻</button></div>
+    <div class="vp-grp vp-stick" data-grp="js"><div class="vp-base"><div class="vp-thumb"></div></div></div>
+    <div class="vp-grp vp-facegrp" data-grp="face"><button class="vp-face" title="누른 뒤 방향: 제자리에서 방향만 바꾸기">↻</button></div>
     <div class="vp-grp vp-abxy" data-grp="abxy">
       <button data-b="x" class="vp-x">X<small>행동</small></button><button data-b="y" class="vp-y">Y<small>조사</small></button>
       <button data-b="a" class="vp-a">A<small>공격</small></button><button data-b="b" class="vp-b">B<small>자동</small></button>
     </div>
-    <div class="vp-edit-note">패드를 끌어서 옮긴 뒤 아래 버튼을 누르세요 <button class="btn sm" data-vpdone>배치 끝</button></div>
+    <div class="vp-edit-note">조이스틱·↻·ABXY를 하나씩 끌어서 옮긴 뒤 누르세요 <button class="btn sm" data-vpdone>배치 끝</button></div>
   </div>
 </div>
 
 <div id="modal-root"></div>
 
-<script src="js/config.js?v=89"></script>
-<script src="js/data.js?v=89"></script>
-<script src="js/eggmoves.js?v=89"></script>
-<script src="js/extramoves.js?v=89"></script>
-<script src="js/champmoves.js?v=89"></script>
-<script src="js/extramegas.js?v=89"></script>
-<script src="js/defs.js?v=89"></script>
-<script src="js/concepts.js?v=89"></script>
-<script src="js/sprites.js?v=89"></script>
-<script src="js/mechanics.js?v=89"></script>
-<script src="js/moverules.js?v=89"></script>
-<script src="js/abilities.js?v=89"></script>
-<script src="js/forms.js?v=89"></script>
-<script src="js/ui.js?v=89"></script>
-<script src="music/loops.js?v=89" onerror="window.MUSIC_LOOPS = {}"></script>
-<script src="js/audio.js?v=89"></script>
-<script src="js/progress.js?v=89"></script>
-<script src="js/codes.js?v=89"></script>
-<script src="js/online.js?v=89"></script>
-<script src="js/tiles.js?v=89"></script>
-<script src="js/gfx.js?v=89"></script>
-<script src="js/dungeon.js?v=89"></script>
-<script src="js/dex.js?v=89"></script>
-<script src="js/guide.js?v=89"></script>
-<script src="js/starter.js?v=89"></script>
-<script src="js/main.js?v=89"></script>
+<script src="js/config.js?v=90"></script>
+<script src="js/data.js?v=90"></script>
+<script src="js/eggmoves.js?v=90"></script>
+<script src="js/extramoves.js?v=90"></script>
+<script src="js/champmoves.js?v=90"></script>
+<script src="js/extramegas.js?v=90"></script>
+<script src="js/defs.js?v=90"></script>
+<script src="js/concepts.js?v=90"></script>
+<script src="js/sprites.js?v=90"></script>
+<script src="js/townscene.js?v=90"></script>
+<script src="js/mechanics.js?v=90"></script>
+<script src="js/moverules.js?v=90"></script>
+<script src="js/abilities.js?v=90"></script>
+<script src="js/forms.js?v=90"></script>
+<script src="js/ui.js?v=90"></script>
+<script src="music/loops.js?v=90" onerror="window.MUSIC_LOOPS = {}"></script>
+<script src="js/audio.js?v=90"></script>
+<script src="js/progress.js?v=90"></script>
+<script src="js/codes.js?v=90"></script>
+<script src="js/online.js?v=90"></script>
+<script src="js/tiles.js?v=90"></script>
+<script src="js/gfx.js?v=90"></script>
+<script src="js/dungeon.js?v=90"></script>
+<script src="js/dex.js?v=90"></script>
+<script src="js/guide.js?v=90"></script>
+<script src="js/starter.js?v=90"></script>
+<script src="js/main.js?v=90"></script>
 </body>
 </html>

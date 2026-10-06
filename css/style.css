@@ -533,7 +533,7 @@ body.touch.vpad #actions { display: none; }   /* 동료 버튼은 X(행동) 메�
 .vp-base::after { transform: translate(-50%, -50%) rotate(90deg); }
 .vp-thumb { position: absolute; left: 50%; top: 50%; width: 38%; height: 38%; border-radius: 50%; transform: translate(-50%, -50%); background: radial-gradient(circle at 35% 30%, #9db3e0, #4d6496); border: 2px solid #ffffff60; box-shadow: 0 3px 8px #0009; }
 .vp-stick.on .vp-thumb { background: radial-gradient(circle at 35% 30%, #bfe4ff, #5d8fd0); }
-.vp-face { position: absolute; left: -6px; top: -6px; width: 34px; height: 34px; border-radius: 50%; font: inherit; font-size: 16px; color: #fff; background: #0b1633cc; border: 1px solid #fff5; padding: 0; touch-action: none; }
+.vp-face { display: block; width: 36px; height: 36px; border-radius: 50%; font: inherit; font-size: 16px; color: #fff; background: #0b1633cc; border: 1px solid #fff5; padding: 0; touch-action: none; }
 .vp-face.on { background: var(--accent); color: #1b1b1b; }
 .vp-abxy { width: calc(var(--ab, 64px) * 2.6); height: calc(var(--ab, 64px) * 2.6); }
 .vp-abxy button { position: absolute; width: var(--ab, 64px); height: var(--ab, 64px); border-radius: 50%; font: inherit; font-size: calc(var(--ab, 64px) * .34); font-weight: bold; color: #fff; border: 2px solid #ffffff55; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; padding: 0; touch-action: none; -webkit-tap-highlight-color: transparent; box-shadow: 0 3px 6px #0008; }
@@ -543,8 +543,9 @@ body.touch.vpad #actions { display: none; }   /* 동료 버튼은 X(행동) 메�
 .vp-abxy .vp-a { right: 0; top: 50%; transform: translateY(-50%); background: #a8434b; }
 .vp-abxy .vp-b { left: 50%; bottom: 0; transform: translateX(-50%); background: #b0883a; }
 .vp-abxy button.held { filter: brightness(1.4); box-shadow: 0 0 0 3px #fff8; }
-.vp-edit-note { display: none; position: absolute; left: 50%; top: 4px; transform: translateX(-50%); font-size: 12px; color: var(--accent); background: #000a; padding: 3px 8px; border-radius: 6px; white-space: nowrap; z-index: 2; }
-#vpad.editing .vp-edit-note { display: block; }
+.vp-edit-note { display: none; position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); font-size: 12px; color: var(--accent); background: #000a; padding: 3px 8px; border-radius: 6px; white-space: nowrap; z-index: 5; }   /* 패드 위쪽 바깥에 띄워 버튼을 가리지 않게 */
+#vpad.editing .vp-edit-note { display: block; pointer-events: none; }   /* 안내 글 아래에 있는 ↻도 끌 수 있게 (배치 끝 버튼만 눌림) */
+#vpad.editing .vp-edit-note button { pointer-events: auto; }
 #vpad.editing .vp-grp { outline: 2px dashed var(--accent); outline-offset: 4px; border-radius: 12px; }
 .vp-set .row { gap: 8px; align-items: center; }
 .vp-set input[type=range] { flex: 1; }
@@ -675,3 +676,122 @@ body.gp-skill #moves .mv[data-slot="2"] .k::after { content: "X"; } body.gp-skil
 button, .btn, .rcard, .pk, .mv, .vit, #town-tabs, #actions, #moves, #vpad, #dpad, #hud, #log, #view, #minimap, .modal .choices, .roster, .dg-mons {
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 button img, .rcard img, .pk img, #face { -webkit-user-drag: none; user-drag: none; -webkit-touch-callout: none; }
+
+/* ── 마을 디자인 (v0.90) ── */
+/* 맨 위 띠: 마을 풍경 (js/townscene.js) 위에 마을 이름·날짜·돈 */
+.town-head { position: relative; overflow: hidden; min-height: 112px; align-items: flex-start; padding: 10px 16px; }
+#town-scene { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; z-index: 0; pointer-events: none; }
+.town-head > :not(canvas) { position: relative; z-index: 1; }
+.town-head .town-name, .town-head #town-day, .town-head .money, .town-head .town-online { background: #0b1633c4; border: 1px solid #ffffff40; border-radius: 999px; padding: 3px 12px; text-shadow: 0 1px 0 #000; }
+.town-head #town-day:empty, .town-head .town-online[hidden] { display: none; }
+/* 탭: 둥근 알약 모양, 고른 탭은 빛나게 */
+#town-tabs button { border-radius: 999px; transition: background .15s, transform .1s; }
+@media (min-width: 801px) { #town-tabs button { padding: 6px 14px; } }
+#town-tabs button:hover { background: #ffffff22; }
+#town-tabs button.on { box-shadow: 0 0 0 2px #ffffff55, 0 0 12px #ffd34a80; }
+#town-tabs button:active { transform: translateY(1px); }
+/* 탭 제목: 왼쪽 금색 막대 */
+#tab-content h3 { border-left: 3px solid var(--accent); padding-left: 8px; }
+/* 맞아 주는 포켓몬: 초상화 + 원작 대화창 같은 말풍선 */
+.host { display: flex; align-items: center; gap: 10px; margin: 10px 0 6px; cursor: pointer; }
+.host .portrait { flex-shrink: 0; border-radius: 8px; box-shadow: 0 0 0 2px #ffffff55; }
+.host-bubble { position: relative; flex: 1; display: flex; flex-direction: column; gap: 2px; background: #0b1633; border: 2px solid #ffffff60; border-radius: 10px; padding: 7px 12px; line-height: 1.45; }
+.host-bubble::before { content: ''; position: absolute; left: -8px; top: 50%; transform: translateY(-50%); border: 7px solid transparent; border-right-color: #ffffff60; border-left: 0; }
+.host-bubble b { color: var(--accent); font-size: 12px; }
+@media (max-width: 800px) {
+  .town-head { min-height: 92px; gap: 6px 8px; flex-wrap: wrap; padding: 8px 10px; }
+  .town-head .town-name, .town-head #town-day, .town-head .money { padding: 2px 9px; font-size: 13px; }
+  .host { margin: 6px 0 4px; } .host-bubble { padding: 6px 10px; font-size: 13px; }
+}
+
+/* ── 테마 (v0.90): 원작 탐험대 DX의 크림색 둥근 테두리 메뉴 + 본가 게임의 사선 줄무늬 배경·주황 확정 버튼 ──
+   마을 화면·처음 화면·창(팝업)에 (던전 화면의 상태 창·버튼 줄은 그대로) */
+:root {
+  --t-cream: #fff3d6; --t-cream-d: #e9d7a8; --t-navy: #102256; --t-navy2: #0a1638; --t-ink: #1d2a55; --t-orange: #ffb43a; --t-orange-d: #e07d17;
+}
+#town-screen, #title-screen {
+  background:
+    repeating-linear-gradient(135deg, #ffffff07 0 14px, transparent 14px 28px),
+    radial-gradient(ellipse at 50% 0%, #2b4c9c 0%, #142a66 45%, #0a1636 100%);
+}
+:is(#town-screen, #modal-root, #title-screen) .pmd-box {
+  background: linear-gradient(180deg, #17306fe6, #0d1d4ce6);
+  border: 3px solid var(--t-cream); border-radius: 16px;
+  box-shadow: inset 0 0 0 2px #0a1638, inset 0 0 0 3px #ffffff22, 0 6px 18px #0009;
+}
+:is(#town-screen, #modal-root, #title-screen) .town-head { border-radius: 16px; }
+/* 탭: 본가 메뉴처럼. 고른 탭은 크림색 바탕에 남색 글자 + 왼쪽 주황 표시 */
+:is(#town-screen, #modal-root, #title-screen) #town-tabs { gap: 6px; border-bottom: 2px dashed #ffffff30; }
+:is(#town-screen, #modal-root, #title-screen) #town-tabs button { background: #0a1638aa; border: 2px solid #ffffff38; color: var(--t-cream); font-weight: bold; box-shadow: inset 0 -2px 0 #00000055; }
+:is(#town-screen, #modal-root, #title-screen) #town-tabs button:hover { background: #1d3d8aaa; border-color: #ffffff70; }
+:is(#town-screen, #modal-root, #title-screen) #town-tabs button.on { background: linear-gradient(180deg, #fffaf0, var(--t-cream)); color: var(--t-ink); border-color: var(--t-orange); box-shadow: inset 4px 0 0 var(--t-orange), 0 2px 0 var(--t-orange-d); }
+/* 버튼: 주황 확정 버튼 (아래쪽 두께로 눌리는 느낌), 보조 버튼은 남색 + 크림 테두리 */
+:is(#town-screen, #modal-root, #title-screen) .btn { background: linear-gradient(180deg, #ffd166, var(--t-orange)); color: #3a1f00; border: 2px solid #fff1c9; border-bottom: 4px solid var(--t-orange-d); border-radius: 10px; font-weight: bold; text-shadow: 0 1px 0 #fff5; }
+:is(#town-screen, #modal-root, #title-screen) .btn:active:not(:disabled) { transform: translateY(2px); border-bottom-width: 2px; }
+:is(#town-screen, #modal-root, #title-screen) .btn.ghost { background: #0a1638b0; color: var(--t-cream); border: 2px solid #ffffff55; border-bottom: 4px solid #00000080; text-shadow: none; }
+:is(#town-screen, #modal-root, #title-screen) .btn.danger { border-color: #ff9b9b; }
+/* 제목: 크림색 리본 */
+:is(#town-screen, #modal-root, #title-screen) #tab-content h3 { display: inline-block; border-left: 0; padding: 3px 14px 3px 10px; margin: 14px 0 8px; color: var(--t-ink); background: linear-gradient(180deg, #fffaf0, var(--t-cream)); border-radius: 0 999px 999px 0; box-shadow: inset 4px 0 0 var(--t-orange), 0 2px 0 #0005; }
+:is(#town-screen, #modal-root, #title-screen) #tab-content h3 .dim { color: #6b6f8a; }
+/* 카드·목록 줄: 둥글게, 위쪽에 살짝 빛 */
+:is(#town-screen, #modal-root, #title-screen) .card { border-radius: 14px; border: 2px solid #ffffff40; box-shadow: inset 0 1px 0 #ffffff30, 0 3px 10px #0006; }
+:is(#town-screen, #modal-root, #title-screen) .row { border-radius: 10px; }
+:is(#town-screen, #modal-root, #title-screen) .rcard { border-radius: 12px; background: #0a1638aa; border: 2px solid #ffffff30; }
+:is(#town-screen, #modal-root, #title-screen) .rcard.on { background: #fff3d61f; border-color: var(--t-orange); }
+/* 안내 포켓몬 말풍선: 원작 대화창처럼 크림 테두리 */
+:is(#town-screen, #modal-root, #title-screen) .host-bubble { background: #0a1638ee; border: 3px solid var(--t-cream); border-radius: 14px; box-shadow: inset 0 0 0 2px #0a1638, inset 0 0 0 3px #ffffff20; }
+:is(#town-screen, #modal-root, #title-screen) .host-bubble::before { border-right-color: var(--t-cream); }
+:is(#town-screen, #modal-root, #title-screen) .host .portrait { border-radius: 12px; box-shadow: 0 0 0 3px var(--t-cream); }
+/* 캐릭터 카드 이름 */
+:is(#town-screen, #modal-root, #title-screen) #char-card .cc-name, :is(#town-screen, #modal-root, #title-screen) #char-card h2 { color: var(--t-cream); }
+/* 탭 안의 작은 탭 (일반·테마·로그라이크, 도감 분류 등): 남색 알약, 고른 것은 하늘색 대신 크림색 */
+:is(#town-screen, #modal-root, #title-screen) .dex-tabs button { background: #0a1638aa; border: 2px solid #ffffff30; color: var(--t-cream); }
+:is(#town-screen, #modal-root, #title-screen) .dex-tabs button.on { background: var(--t-cream); color: var(--t-ink); border-color: var(--t-orange); font-weight: bold; }
+
+/* 창(팝업): 제목 리본 + 고르는 줄은 원작처럼 크림색 커서 */
+#modal-root .modal { border-radius: 18px; }
+#modal-root .modal-title { font-family: 'Jua', 'Galmuri11', sans-serif; font-size: 20px; color: var(--t-cream); text-shadow: 0 2px 0 #0a1638; letter-spacing: .5px; }
+#modal-root .choice { border-radius: 10px; padding: 7px 10px; }
+#modal-root .choice.sel { background: linear-gradient(90deg, var(--t-cream), #fff3d6cc); color: var(--t-ink); box-shadow: inset 4px 0 0 var(--t-orange); }
+#modal-root .choice.sel .sub { color: #5b5f7a; }
+#modal-root .choice.sel .cursor { color: var(--t-orange-d); }
+#modal-root .modal-x { border-radius: 50%; }
+/* 처음 화면 */
+#title-screen .title-box h1 { font-family: 'Jua', 'Galmuri11', sans-serif; font-size: 56px; color: #ffd94a; text-shadow: 0 4px 0 #b8651a, 0 7px 0 #0a1638, 0 0 24px #ffd94a66; letter-spacing: 2px; }
+#title-screen .title-box h1 small { font-family: 'Galmuri11', sans-serif; color: var(--t-cream); }
+#title-screen .btn.big { font-family: 'Jua', 'Galmuri11', sans-serif; font-size: 24px; padding: 12px 48px; border-radius: 16px; }
+/* 2) 줄 안의 작은 버튼은 보조 모양으로 (주황은 출발·구매 같은 큰 버튼만) */
+:is(#town-screen, #modal-root) .row .btn.sm:not(.go), :is(#town-screen, #modal-root) .sort-row .btn.sm { background: #0a1638b0; color: var(--t-cream); border: 2px solid #ffffff55; border-bottom: 3px solid #00000080; text-shadow: none; font-weight: normal; }
+:is(#town-screen, #modal-root) .row .btn.sm:not(.go):hover:not(:disabled) { background: #1d3d8ab0; border-color: var(--t-cream); }
+:is(#town-screen, #modal-root) .sort-row .btn.sm:not(.ghost) { background: var(--t-cream); color: var(--t-ink); border-color: var(--t-orange); font-weight: bold; }
+/* 3) 제목 글꼴: 둥글고 굵은 주아체 (본문은 픽셀 글꼴 그대로) */
+:is(#town-screen, #modal-root) #tab-content h3, #town-screen .town-name, #town-screen #town-tabs button, #town-screen .dg-head b, #town-screen .host-bubble b, #town-screen #char-card .cc-name, #town-screen .card b:first-child {
+  font-family: 'Jua', 'Galmuri11', sans-serif; letter-spacing: .3px; }
+#town-screen #tab-content h3 { font-size: 16px; font-weight: normal; }
+#town-screen #town-tabs button { font-weight: normal; font-size: 15px; }
+#town-screen .town-name { font-size: 17px; }
+#town-screen .dg-head b { font-size: 17px; font-weight: normal; }
+
+/* ── 던전 화면도 같은 테마 (v0.90 시험) ── */
+#dungeon-screen { background: repeating-linear-gradient(135deg, #ffffff06 0 14px, transparent 14px 28px), radial-gradient(ellipse at 50% 0%, #22408a 0%, #11265c 50%, #0a1636 100%); }
+#dungeon-screen #view-wrap { border-radius: 14px; box-shadow: 0 0 0 3px var(--t-cream), 0 0 0 5px #0a1638, 0 6px 18px #0009; }
+#dungeon-screen .pmd-box { background: linear-gradient(180deg, #17306fe0, #0d1d4ce0); border: 3px solid var(--t-cream); border-radius: 14px; box-shadow: inset 0 0 0 2px #0a1638, inset 0 0 0 3px #ffffff22, 0 4px 12px #0008; }
+#dungeon-screen #hud .floor, #dungeon-screen .mv .n { font-family: 'Jua', 'Galmuri11', sans-serif; letter-spacing: .3px; }
+#dungeon-screen #hud .floor { font-size: 15px; color: var(--t-cream); }
+/* 기술 칸: 둥근 카드, 왼쪽은 타입 색 */
+#dungeon-screen .mv { border-radius: 12px; border: 2px solid #ffffff45; background: linear-gradient(90deg, var(--tc) 0 7px, #102256 7px); box-shadow: inset 0 -3px 0 #00000055; padding: 6px 10px; }
+#dungeon-screen .mv:hover { border-color: var(--t-cream); filter: none; background: linear-gradient(90deg, var(--tc) 0 7px, #1b3a85 7px); }
+#dungeon-screen .mv .n { font-size: 14px; }
+#dungeon-screen .mv .k { color: var(--t-orange); }
+/* 행동 버튼: 남색 알약 + 크림 테두리, 공격·자동은 주황 */
+#dungeon-screen #actions button { border-radius: 999px; background: #0a1638c0; border: 2px solid #ffffff45; border-bottom: 3px solid #00000080; color: var(--t-cream); }
+#dungeon-screen #actions button:hover { background: #1d3d8ac0; border-color: var(--t-cream); }
+#dungeon-screen #actions button[data-k=attack], #dungeon-screen #actions button[data-k=explore] { background: linear-gradient(180deg, #ffd166, var(--t-orange)); color: #3a1f00; border-color: #fff1c9; border-bottom-color: var(--t-orange-d); font-weight: bold; }
+#dungeon-screen #actions kbd { background: #0005; border-color: #fff3; color: inherit; }
+/* 방향 버튼·조이스틱 영역 */
+#dungeon-screen #dpad button { border-radius: 12px; border: 2px solid #fff3d6aa; background: #0a1638b8; }
+#dungeon-screen #vpad { border-radius: 16px; border: 3px solid var(--t-cream); background: linear-gradient(180deg, #17306f, #0d1d4c); box-shadow: inset 0 0 0 2px #0a1638; }
+#dungeon-screen .vp-base { border-color: #fff3d680; }
+#dungeon-screen #view-wrap #log { background: #0a1638d9; border: 3px solid var(--t-cream); border-radius: 14px; box-shadow: inset 0 0 0 2px #0a1638, inset 0 0 0 3px #ffffff22; }
+#dungeon-screen #face-box { border-radius: 14px; }
+
