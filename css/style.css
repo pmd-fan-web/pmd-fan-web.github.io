@@ -838,3 +838,8 @@ button img, .rcard img, .pk img, #face { -webkit-user-drag: none; user-drag: non
 .mg-item { display: flex; align-items: center; gap: 6px; text-align: left; padding: 6px 8px; }
 .mg-item > span { display: flex; flex-direction: column; min-width: 0; }
 .mg-item[hidden] { display: none; }
+
+/* 메시지 기록 필터 · 설정 창 (v0.92) */
+.log-tabs, .set-tabs { flex-wrap: wrap; }
+.log-q { width: 100%; margin: 6px 0; box-sizing: border-box; }
+.set-body h3 { margin-top: 14px; }

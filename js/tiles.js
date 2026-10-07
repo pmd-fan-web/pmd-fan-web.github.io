@@ -151,12 +151,28 @@ const Tiles = (() => {
 
   // ── 원작 형식 타일셋으로 그리기 ──
   const VAR_CHANCE = [0.7, 0.15, 0.15];   // 기본 / 변형1 / 변형2 가 나올 비율
+  // 기본 타일셋에 없는 모양 칸 (원본 시트에 그 모양이 없음. 예: 쌍권의 탑·불탄 탑)은 가장 비슷한 모양으로 그린다 (v0.92)
+  //  상하좌우가 같은 모양을 먼저, 그다음 모서리가 덜 다른 모양. 비어 있는 칸을 그리면 검게 보였다
+  const bits = m => { let n = 0; for (; m; m &= m - 1) n++; return n; };
+  const CARD = N | E | S | W;
+  function filled(set, block, i) {
+    const empty = set.base.empty;
+    if (!empty || !empty.has(Math.floor(i / 6) * 18 + block * 6 + i % 6)) return i;
+    const m = LAYOUT[i];
+    let best = 7, cost = Infinity;
+    LAYOUT.forEach((n, j) => {
+      if (n == null || empty.has(Math.floor(j / 6) * 18 + block * 6 + j % 6)) return;
+      const c = bits((m ^ n) & CARD) * 8 + bits((m ^ n) & ~CARD);
+      if (c < cost) { cost = c; best = j; }
+    });
+    return best;
+  }
   function drawDtef(g, set, D) {
     const img = set.base.img, ts = img.width / 18;
     for (let y = 0; y < D.h; y++) for (let x = 0; x < D.w; x++) {
       const isWall = D.tiles[y * D.w + x] !== 1;
-      const i = RULE_INDEX[maskAt(D, x, y, isWall)] ?? 7;
       const block = isWall ? 0 : 2;   // 벽, (물), 바닥
+      const i = filled(set, block, RULE_INDEX[maskAt(D, x, y, isWall)] ?? 7);
       const col = block * 6 + i % 6, row = Math.floor(i / 6);
       const sx = col * ts, sy = row * ts, dx = x * TILE, dy = y * TILE;
       g.drawImage(img, sx, sy, ts, ts, dx, dy, TILE, TILE);

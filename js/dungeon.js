@@ -130,7 +130,8 @@ const Dungeon = (() => {
     const lvl = Math.round(dg.lv[0] + (dg.lv[1] - dg.lv[0]) * prog);
     const target = 230 + lvl * 6.5;
     const fams = concepts()[dg.id] || [];
-    const concept = fams.map(f => f.reduce((best, id) => (Math.abs(bstOf(id) - target) < Math.abs(bstOf(best) - target) ? id : best)))
+    // 계열마다 강함이 가장 가까운 모습. 같은 강함의 갈래 진화(시라소몬·홍수몬·카포에라, 이브이의 진화형 등)는 모두 (v0.92)
+    const concept = [...new Set(fams.flatMap(f => { const gap = id => Math.abs(bstOf(id) - target), m = Math.min(...f.map(gap)); return f.filter(id => gap(id) === m); }))]
       .sort((a, b) => Math.abs(bstOf(a) - target) - Math.abs(bstOf(b) - target));
     // 메가 진화의 탑: 메가진화하는 포켓몬(전설 제외)만
     if (dg.megaAll) return { lvl, target, concept: [], cand: megaBases().filter(id => hasSprite(id) && !DATA.species[id].lg).map(id => ({ id, s: DATA.species[id], bst: bstOf(id) })) };
@@ -751,6 +752,22 @@ const Dungeon = (() => {
       Sound.play('up', T.base);
     }
   }
+  // 유턴·볼트체인지·퀵턴 (v0.92): 맞힌 뒤 바로 뒤에 같은 편이 있으면 그 포켓몬과 자리를 바꾼다 (원작의 교체처럼 같은 편이 앞으로)
+  //  뒤가 비었거나 적이면 공격만 한다 (물러나기·적과 자리 바꾸기는 너무 세서 넣지 않았다)
+  function pivotSwap(user, at) {
+    const [dx, dy] = DIRS[(user.dir + 4) % 8], bx = user.x + dx, by = user.y + dy;
+    const a = creatureAt(bx, by);
+    if (!a || a === user || a.hp <= 0 || a.npc || hostileTo(user, a) || !diagOK(user.x, user.y, dx, dy)) return;
+    const fx = user.x, fy = user.y, dur = 125 * spd();
+    user.x = bx; user.y = by; a.x = fx; a.y = fy;
+    user.tween = { fx, fy, start: at, dur }; a.tween = { fx: bx, fy: by, start: at, dur };
+    a.swapped = D.turn;
+    if (user.player || seen(user) || seen(a)) {
+      T.cursor = Math.max(T.cursor, at + dur);
+      log(`${jo(nm(user), '은')} ${jo(nm(a), '과')} 자리를 바꿨다!`, at);
+    }
+    if (user.player) { markMoved(user, fx, fy); onStep(); }
+  }
   function useMove(user, slot, dir, opts = {}) {
     const mid = slot < 0 ? null : user.moves[slot].id;
     const R = (mid && MOVE_RULES[mid]) || {};
@@ -857,6 +874,7 @@ const Dungeon = (() => {
       resolveHit(user, t, p === move.p ? move : { ...move, p }, hitAt, R);
       (user.struck = user.struck || new Set()).add(t.id);
     }
+    if (R.pivot && user.landed && user.hp > 0) pivotSwap(user, hitAt + 150);
     if (mastery && user.landed) addMastery(user, user.moves[slot]);
     afterUse();
 
@@ -1058,6 +1076,8 @@ const Dungeon = (() => {
       log(`${jo(nm(user), '은')} 잠들어서 건강해졌다!`, at);
       return;
     }
+    // 날씨가 맞아야 하는 기술 (오로라베일: 설경일 때만)
+    if (R.needWx && weatherNow() !== R.needWx) { log(`${WX_NEED_MSG[R.needWx] || '날씨가 맞지 않아서'} 실패했다!`, at); return; }
     // 같은 편 전체 기술(생명의물방울 등)은 주변의 같은 편에게도
     const who = R.team ? [D.player, ...D.mons].filter(t => t && t.hp > 0 && !t.npc && (t === user || (!hostileTo(user, t)
       && Math.max(Math.abs(t.x - user.x), Math.abs(t.y - user.y)) <= TEAM_RANGE && los(user.x, user.y, t.x, t.y)))) : [user];
@@ -1072,10 +1092,14 @@ const Dungeon = (() => {
       const scMul = R.sunSc && (abilityOf(user).megaSol || weatherNow() === 'sun') ? 2 : 1;   // 성장: 쾌청이면 2랭크씩
       if (move.sc) for (const [st, ch] of move.sc) if (ch > 0) statChange(t, st, ch * scMul, at, t);
       if (R.cure && t.status) { t.status = null; t.statusT = 0; log(`${nm(t)}의 상태 이상이 나았다!`, at); }
-      if (R.screen) { t[R.screen === 'phys' ? 'reflectT' : 'screenT'] = SCREEN_TURNS; log(`${nm(t)}에게 ${jo(R.screen === 'phys' ? '리플렉터' : '빛의장막', '이')} 생겼다! (${SCREEN_TURNS}턴)`, at); }
+      if (R.screen) { screenKeys(R).forEach(k => { t[k] = SCREEN_TURNS; }); log(`${nm(t)}에게 ${jo(SCREEN_NAME[R.screen], '이')} 생겼다! (${SCREEN_TURNS}턴)`, at); }
       D.fx.push({ kind: 'ring', x: t.x, y: t.y, at, dur: 300 * spd(), color: '#fff6a0' });
     }
   }
+  // 벽 기술이 거는 효과: phys 리플렉터 / spec 빛의장막 / both 오로라베일 (둘 다)
+  const screenKeys = R => (R.screen === 'both' ? ['reflectT', 'screenT'] : [R.screen === 'phys' ? 'reflectT' : 'screenT']);
+  const SCREEN_NAME = { phys: '리플렉터', spec: '빛의장막', both: '오로라베일' };
+  const WX_NEED_MSG = { snow: '설경이 아니라서' };
   function heal(c, amt, at) {
     const before = c.hp; c.hp = Math.min(c.maxhp, c.hp + amt);
     if (party(c) && c.hp > before) runStat(c).heal += c.hp - before;
@@ -1601,9 +1625,8 @@ const Dungeon = (() => {
           const gain = wxValue(R.setWx, team) - (cur ? wxValue(cur, team) : 0);
           if (wxValue(R.setWx, team) > 0 && gain >= 1) s = Math.min(boss ? 80 : 50, (boss ? 30 : 15) + gain * 10);
         }
-      } else if (R.screen) {   // 벽: 싸우는 중이고 아직 없으면
-        const k = R.screen === 'phys' ? 'reflectT' : 'screenT';
-        if (foe && who.some(m => !m[k])) s = boss ? 50 : 15;
+      } else if (R.screen) {   // 벽: 싸우는 중이고 아직 없으면 (오로라베일은 설경일 때만)
+        if (foe && (!R.needWx || weatherNow() === R.needWx) && who.some(m => screenKeys(R).some(k => !m[k]))) s = boss ? 50 : 15;
       } else if (o.m.sc && o.m.sc.some(([, ch]) => ch > 0) && !o.m.ss) {   // 능력 올리기: 아직 덜 오른 대상이 있으면
         const cap = boss ? 4 : AI_STAGE_LIMIT;
         const need = who.filter(m => o.m.sc.some(([st, ch]) => ch > 0 && (m.stages[st] || 0) < cap)).length;
@@ -1651,7 +1674,7 @@ const Dungeon = (() => {
       if (R.rest) return e.hp < e.maxhp * 0.5 || !!e.status;
       if (R.allyHeal) return [D.player, ...D.mons].some(c => c && c !== e && c.hp > 0 && c.hp < c.maxhp * 0.7 && !c.npc && !hostileTo(e, c) && cheb(c, e) <= TEAM_RANGE);   // 치유파동: 다친 같은 편이 곁에 있을 때만
       if (R.setWx) return weatherNow() !== R.setWx;
-      if (R.screen) return !e[R.screen === 'phys' ? 'reflectT' : 'screenT'];
+      if (R.screen) return (!R.needWx || weatherNow() === R.needWx) && screenKeys(R).some(k => !e[k]);
       if (R.seed) return !p.seeded && !p.types.includes(12);
       if (R.taunt) return !p.tauntT;
       if (R.transform) return !e.tf;
@@ -2652,29 +2675,39 @@ const Dungeon = (() => {
     if (!D || busy()) return;
     const id = Game.save.settings.quickItem;
     if (!id || !ITEMS[id]) { log('가방에서 아이템을 고른 뒤 "빠른 사용으로 등록"을 누르세요.', now()); return; }
+    const it = ITEMS[id], p = P();
+    // 지닌 물건 (v0.92): 지금 지닌 물건과 바꾼다. 이미 지니고 있으면 바꾸기 전에 지니던 물건으로 되돌린다 (친구리본 ↔ 원래 도구)
+    if (it.held && p.held === id) {
+      const back = p.quickPrev && run.bag.findIndex(b => b.id === p.quickPrev);
+      if (back == null || back < 0) { log(`이미 ${jo(it.n, '을')} 지니고 있다.`, now()); return; }
+      equipHeld(back); return;
+    }
     const slot = run.bag.findIndex(b => b.id === id);
-    if (slot < 0) { log(`가방에 ${jo(ITEMS[id].n, '이')} 없다.`, now()); return; }
-    const it = ITEMS[id];
+    if (slot < 0) { log(`가방에 ${jo(it.n, '이')} 없다.`, now()); return; }
+    if (it.held) { const why = heldBlockReason(p.baseAbility ?? p.ability, id); if (why) { log(why, now()); return; } p.quickPrev = p.held; equipHeld(slot); return; }
     if (it.throw || !it.use || it.use === 'none') { autoFace(P(), { r: 'p' }); act({ t: 'item', slot, mode: 'throw' }); }
     else useAct(slot);
   }
+  // 가방의 지닌 물건을 리더에게 지니게 한다 (지니던 물건은 가방으로). 턴을 쓰지 않는다
+  function equipHeld(i) {
+    const p = P(), b = run.bag[i], it = ITEMS[b.id], old = p.held;
+    run.bag.splice(i, 1); p.held = b.id;
+    if (old) run.bag.push({ id: old, n: 1 });
+    log(`${jo(it.n, '을')} 지니게 했다.` + (old ? ` (${jo(ITEMS[old].n, '은')} 가방으로)` : ''), now());
+    formCheck(p, now() + 200);   // 메가스톤·폼체인지 도구
+  }
 
+  const quickVerb = id => (ITEMS[id].held ? '지닌 물건과 바꾸기, 한 번 더 누르면 되돌리기' : ITEMS[id].throw || !ITEMS[id].use || ITEMS[id].use === 'none' ? '던지기' : '사용');
   function itemMenu(i) {
     const b = run.bag[i], it = ITEMS[b.id];
     const ch = [];
     if (it.use && it.use !== 'none') ch.push({ label: '사용한다', fn: () => useAct(i) });
     if (ALLY_USES.includes(it.use) && liveAllies().length) ch.push({ label: '🤝 동료에게 쓴다', fn: () => pickAllyFor(i, () => itemMenu(i)) });
     if (b.id === 'reviver' && downAllies().length) ch.push({ label: '🌰 쓰러진 동료를 되살린다', fn: () => pickReviveFor(i, () => itemMenu(i)) });
-    if (it.held) ch.push({ label: '지니게 한다', disabled: !!heldBlockReason(P().baseAbility ?? P().ability, b.id), sub: heldBlockReason(P().baseAbility ?? P().ability, b.id), fn: () => {
-      const p = P(), old = p.held;
-      run.bag.splice(i, 1); p.held = b.id;
-      if (old) run.bag.push({ id: old, n: 1 });
-      log(`${jo(it.n, '을')} 지니게 했다.` + (old ? ` (${jo(ITEMS[old].n, '은')} 가방으로)` : ''), now());
-      formCheck(p, now() + 200);   // 메가스톤·폼체인지 도구
-    } });
+    if (it.held) ch.push({ label: '지니게 한다', disabled: !!heldBlockReason(P().baseAbility ?? P().ability, b.id), sub: heldBlockReason(P().baseAbility ?? P().ability, b.id), fn: () => equipHeld(i) });
     ch.push({ label: '던진다', fn: () => act({ t: 'item', slot: i, mode: 'throw' }) });
     const fav = Game.save.settings.quickItem === b.id;
-    ch.push({ label: fav ? '⭐ 빠른 사용 해제' : `⭐ 빠른 사용으로 등록 (T 키 / 버튼으로 바로 ${it.throw || !it.use || it.use === 'none' ? '던지기' : '사용'})`, fn: () => {
+    ch.push({ label: fav ? '⭐ 빠른 사용 해제' : `⭐ 빠른 사용으로 등록 (T 키 / 버튼으로 바로 ${quickVerb(b.id)})`, fn: () => {
       Game.setSetting('quickItem', fav ? null : b.id); quickCache = '';
       log(fav ? '빠른 사용을 해제했다.' : `${jo(it.n, '을')} 빠른 사용으로 등록했다.`, now()); openBag();
     } });
@@ -3100,12 +3133,12 @@ const Dungeon = (() => {
           <span class="k">${i + 1}</span><span class="n">${esc(d.n)}${masteryLevel(p.sp, m.id) ? `<i class="mastery">★${masteryLevel(p.sp, m.id)}</i>` : ''}</span><span class="p">${m.pp}/${m.max}</span><span class="info" data-move="${m.id}" data-pp="${m.pp}" data-max="${m.max}" data-sp="${p.sp}" title="기술 정보">?</span></button>`;
       }).join('');
     }
-    const qid = Game.save.settings.quickItem, qn = qid ? run.bag.filter(b => b.id === qid).reduce((s, b) => s + b.n, 0) : 0;
-    const qk = (qid || '') + ':' + qn;
+    const qid = Game.save.settings.quickItem, qn = qid ? run.bag.filter(b => b.id === qid).reduce((s, b) => s + b.n, 0) + (p.held === qid ? 1 : 0) : 0;
+    const qk = (qid || '') + ':' + qn + ':' + (p.held === qid);
     if (qk !== quickCache) {
       quickCache = qk;
       const qb = document.querySelector('#actions [data-k=quick]');
-      if (qb) { qb.innerHTML = qid && ITEMS[qid] ? `${ITEMS[qid].icon}×${qn} <kbd>T</kbd>` : '⭐ 빠른사용 <kbd>T</kbd>'; qb.title = qid && ITEMS[qid] ? `${ITEMS[qid].n} 바로 ${ITEMS[qid].throw || !ITEMS[qid].use || ITEMS[qid].use === 'none' ? '던지기' : '사용'} (T)` : '가방에서 아이템을 골라 "빠른 사용"으로 등록하세요'; qb.classList.toggle('empty', !!qid && !qn); }
+      if (qb) { qb.innerHTML = qid && ITEMS[qid] ? `${ITEMS[qid].icon}×${qn} <kbd>T</kbd>` : '⭐ 빠른사용 <kbd>T</kbd>'; qb.title = qid && ITEMS[qid] ? `${ITEMS[qid].n} 바로 ${quickVerb(qid)} (T)` : '가방에서 아이템을 골라 "빠른 사용"으로 등록하세요'; qb.classList.toggle('empty', !!qid && !qn); }
     }
     const shown = LOG.filter(l => l.at <= t).slice(-5);
     const lg = shown.map(l => l.text + (l.cls || '')).join('\n') + shown.length;
@@ -3293,14 +3326,41 @@ const Dungeon = (() => {
       onOpen: box => { const h = box.querySelector('.log-history'); if (h) h.scrollTop = h.scrollHeight; },
     });
   }
+  // 메시지 기록 필터 (v0.92): 글로 분류한다 (먼저 맞는 쪽). 나머지는 전투
+  const LOG_CATS = [['all', '전체'], ['battle', '⚔ 전투'], ['item', '🎒 아이템'], ['grow', '⭐ 성장'], ['ally', '🤝 동료·영입'], ['floor', '📜 층·임무']];
+  const LOG_RULES = [
+    ['grow', /레벨|배웠다|잊고|경험치|숙련도|진화|이로치/],
+    ['ally', /동료|영입|아쉬운 듯 떠나|작전|탐험대에서 빠졌다|자리를 바꿨다/],
+    ['item', /주웠다|주울 수|지니게|지녔다|가방|포켓|사용했다|던졌다|내려놓|손에 넣|샀다|팔았다|먹었다|배가|PP가|부활씨|열매|구슬|상점|켈리몬|의뢰품/],
+    ['floor', /^— |임무|구조|의뢰|수배|계단|날씨|함정|탈출|층/],
+  ];
+  const logCat = text => (LOG_RULES.find(([, re]) => re.test(text)) || ['battle'])[0];
+  let logFilter = 'all';
   function showLog() {
     if (!D) return;
-    const t = now(), rows = LOG.filter(l => l.at <= t).slice(-150);
+    const t = now(), rows = LOG.filter(l => l.at <= t).slice(-300);
     UI.open({
       title: '💬 메시지 기록', wide: true,
-      html: `<div class="log-history">${rows.map(l => `<div${l.cls ? ` class="${l.cls}"` : ''}>${esc(l.text)}</div>`).join('') || '<p class="dim">아직 메시지가 없다.</p>'}</div>`,
+      html: `<div class="dex-tabs log-tabs">${LOG_CATS.map(([k, n]) => `<button class="${logFilter === k ? 'on' : ''}" data-lf="${k}">${n}</button>`).join('')}</div>
+        <input class="log-q" placeholder="글자로 찾기 (예: 이상해꽃, 효과가 굉장)" autocomplete="off">
+        <div class="log-history">${rows.map(l => `<div data-c="${logCat(l.text)}"${l.cls ? ` class="${l.cls}"` : ''}>${esc(l.text)}</div>`).join('')}</div>
+        <p class="dim log-none" hidden>조건에 맞는 메시지가 없다.</p>`,
       choices: [{ label: '닫기', fn: () => {} }],
-      onOpen: box => { const h = box.querySelector('.log-history'); if (h) h.scrollTop = h.scrollHeight; },
+      onOpen: box => {
+        const h = box.querySelector('.log-history'), q = box.querySelector('.log-q'), none = box.querySelector('.log-none');
+        const apply = () => {
+          const w = q.value.trim();
+          let n = 0;
+          for (const el of h.children) { const ok = (logFilter === 'all' || el.dataset.c === logFilter) && (!w || el.textContent.includes(w)); el.hidden = !ok; if (ok) n++; }
+          none.hidden = n > 0;
+          box.querySelectorAll('[data-lf]').forEach(b => b.classList.toggle('on', b.dataset.lf === logFilter));
+          h.scrollTop = h.scrollHeight;
+        };
+        box.querySelectorAll('[data-lf]').forEach(b => b.onclick = () => { logFilter = b.dataset.lf; apply(); });
+        q.addEventListener('input', apply);
+        q.addEventListener('keydown', e => e.stopPropagation());   // 글자 입력이 던전 조작키로 가지 않게
+        apply();
+      },
     });
   }
   // 상태 창: 리더와 동료 (위쪽 버튼으로 바꿔 본다)
@@ -3320,13 +3380,15 @@ const Dungeon = (() => {
           ${row('스피드', p.spe, stg(p, 6))}</table>
         ${st ? `<p>능력 변화: ${esc(st)}</p>` : ''}
         ${timedEffects(p).length ? `<p>효과: ${timedEffects(p).map(([i, n, tl]) => `${i} ${n} <b>${tl}</b>턴 남음`).join(' · ')}</p>` : ''}
-        <div class="cc-moves">${p.moves.map(m => `<div class="move-row">${moveLine(m.id, m.pp, m.max)}</div>`).join('')}</div>`;
+        <div class="cc-moves">${p.moves.map(m => `<div class="move-row">${moveLine(m.id, m.pp, m.max)}</div>`).join('')}</div>
+        ${lead && p.moves.length > 1 ? '<div class="btns"><button class="btn sm ghost" data-moveorder>🔀 기술 순서 바꾸기</button></div>' : ''}`;
     };
     const tabs = cur => team.length > 1 ? `<div class="btns st-tabs">${team.map((c, i) => `<button class="btn sm${c === cur ? '' : ' ghost'}" data-st="${i}">${i ? '' : '👑 '}${esc(spName(looksOf(c)))}</button>`).join(' ')}</div>` : '';
     UI.open({
       title: '📊 탐험대 상태', wide: true,
       html: `<div class="st-wrap">${tabs(team[0])}${body(team[0])}</div>`,
-      onOpen: box => box.addEventListener('click', e => {
+      onOpen: (box, m) => box.addEventListener('click', e => {
+        if (e.target.closest('[data-moveorder]')) { UI.close(m); setTimeout(() => moveOrder(showStatus), 0); return; }
         const b = e.target.closest('[data-st]'); if (!b) return;
         const c = team[+b.dataset.st]; box.querySelector('.st-wrap').innerHTML = tabs(c) + body(c);
       }),
@@ -3335,7 +3397,7 @@ const Dungeon = (() => {
   }
 
   // 던전 안에서 리더의 기술 순서 바꾸기 (v0.87): 위아래로 옮긴다. PP는 그대로, 마을의 캐릭터 기록과 이어하기 기록에도 바로 반영
-  function moveOrder() {
+  function moveOrder(back) {
     if (!D) return;
     stopAuto();
     const p = P();
@@ -3358,7 +3420,7 @@ const Dungeon = (() => {
         [p.moves[i], p.moves[j]] = [p.moves[j], p.moves[i]];
         box.querySelector('.mo-list').innerHTML = list(); keep();
       }),
-      choices: [{ label: '닫기', fn: () => {} }],
+      choices: [...(typeof back === 'function' ? [{ label: '← 탐험대 상태', fn: () => setTimeout(back, 0) }] : []), { label: '닫기', fn: () => {} }],
     });
   }
 
@@ -3391,13 +3453,27 @@ const Dungeon = (() => {
       <tr><td>🎮 컨트롤러</td><td>${GP_GUIDE_SHORT}</td></tr></table>`);
   }
   // 컨트롤러 조작 안내 (처음 연결했을 때 한 번, 그 뒤로는 행동 메뉴·조작 패드 설정·조작법에서)
-  const GP_GUIDE_SHORT = '스틱·십자키 이동 · LB+이동 방향만 · <b>RB를 누른 채 A·B·X·Y = 기술 1~4</b> · A·B·X·Y는 버튼 할당대로 · RT 빠른사용 · Back 지도 · Start 메뉴';
+  const GP_GUIDE_SHORT = '왼쪽 스틱·십자키 이동 · 오른쪽 스틱 또는 LB+이동 방향만 · <b>RB를 누른 채 A·B·X·Y = 기술 1~4</b> · A·B·X·Y는 버튼 할당대로 · RT 빠른사용 · Back 지도 · Start 메뉴 · 닌텐도 버튼 배치는 🎮 컨트롤러 안내에서';
+  // 컨트롤러 버튼 배치 (v0.92): 브라우저는 버튼을 위치로 알려 준다 (아래 0, 오른쪽 1, 왼쪽 2, 위 3 = Xbox의 A·B·X·Y)
+  //  닌텐도 컨트롤러는 글자가 반대(오른쪽 A, 아래 B, 위 X, 왼쪽 Y)라서 닌텐도식이면 A↔B, X↔Y를 바꿔 읽는다
+  //  설정 gpLayout: 'auto'(기본, 컨트롤러 이름으로 감지) / 'xbox' / 'nintendo'
+  const GP_LAYOUTS = { auto: '자동', xbox: 'Xbox식', nintendo: '닌텐도식' };
+  const gpConnected = () => (navigator.getGamepads ? [...navigator.getGamepads()].filter(g => g && g.connected) : []);
+  const gpMain = () => { const l = gpConnected(); return l.find(g => g.mapping === 'standard') || l[0] || null; };
+  const isNintendoPad = g => !!g && /nintendo|pro controller|joy-?con|057e/i.test(g.id || '');
+  const gpLayoutSet = () => (Game.save && Game.save.settings.gpLayout) || 'auto';
+  const gpNintendo = g => { const l = gpLayoutSet(); return l === 'nintendo' || (l === 'auto' && isNintendoPad(g)); };
   function gamepadGuide() {
     const b = vpSet().btns, nm = k => esc((VP_ACTS[b[k]] || ['?'])[0]);
+    const g = gpMain(), lay = gpLayoutSet(), nin = gpNintendo(g);
+    const layText = `${nin ? '닌텐도식' : 'Xbox식'}${lay === 'auto' ? ` <span class="dim">(자동 감지${g ? '' : ' · 연결된 컨트롤러 없음'})</span>` : ''}`;
+    const next = { auto: 'xbox', xbox: 'nintendo', nintendo: 'auto' }[lay];
     UI.open({
       title: '🎮 컨트롤러 조작', wide: true,
       html: `<table class="help">
+        <tr><td>버튼 배치</td><td><b>${layText}</b> <span class="dim">— 닌텐도식: 오른쪽 A·아래 B·위 X·왼쪽 Y / Xbox식: 아래 A·오른쪽 B·왼쪽 X·위 Y. 아래의 A·B·X·Y는 컨트롤러에 적힌 글자 그대로예요.</span></td></tr>
         <tr><td>왼쪽 스틱 / 십자키</td><td>이동 (누르고 있으면 계속 걷기, 스틱은 대각선도)</td></tr>
+        <tr><td>오른쪽 스틱</td><td>기울인 쪽으로 방향만 바꾸기 (턴을 쓰지 않아요)</td></tr>
         <tr><td>LB + 이동</td><td>제자리에서 방향만 바꾸기</td></tr>
         <tr><td><b>RB + A·B·X·Y</b></td><td><b>기술 1·2·3·4번</b> (RB를 누르고 있는 동안 기술 칸에 버튼이 표시됩니다)</td></tr>
         <tr><td>A · B · X · Y</td><td>A ${nm('a')} · B ${nm('b')} · X ${nm('x')} · Y ${nm('y')} <span class="dim">(공격 버튼을 길게 누르면 정해 둔 순서로 기술)</span></td></tr>
@@ -3405,7 +3481,8 @@ const Dungeon = (() => {
         <tr><td>Back(Select) / Start</td><td>지도 / 메뉴</td></tr>
         <tr><td>창이 열려 있을 때</td><td>십자키 위아래로 고르기, A 확인, B 닫기</td></tr></table>
         <p class="dim">A·B·X·Y에 둘 행동은 행동 메뉴의 '⚙ 조작'에서 바꿀 수 있어요. 이 안내는 행동 메뉴의 '🎮 컨트롤러'와 조작법(?)에서 다시 볼 수 있어요.</p>`,
-      choices: [{ label: '알겠다', fn: () => {} }],
+      choices: [{ label: '알겠다', fn: () => {} },
+        { label: `버튼 배치 바꾸기 → ${GP_LAYOUTS[next]}${next === 'auto' ? ' (컨트롤러 이름으로 감지)' : ''}`, fn: () => { Game.setSetting('gpLayout', next); setTimeout(gamepadGuide, 0); } }],
     });
   }
 
@@ -3659,7 +3736,7 @@ const Dungeon = (() => {
   const GP_NAME = { [GP.A]: 'a', [GP.B]: 'b', [GP.X]: 'x', [GP.Y]: 'y' };
   function initGamepad() {
     if (!navigator.getGamepads) return;
-    let raf = 0, prev = [], prevDir = null, uiRepeat = 0, aAt = 0, aLong = false, faceDir = null;
+    let raf = 0, prev = [], prevDir = null, uiRepeat = 0, aAt = 0, aLong = false, faceDir = null, rFaceDir = null;
     // 표준 배치(standard)인 컨트롤러를 먼저 (가상 장치·다른 입력 장치가 먼저 잡히지 않게)
     const pad = () => { const l = [...navigator.getGamepads()].filter(g => g && g.connected); return l.find(g => g.mapping === 'standard') || l[0]; };
     // 스틱 축은 한 번이라도 가운데(0 근처)에 온 것을 본 뒤부터 쓴다 (v0.91)
@@ -3693,7 +3770,9 @@ const Dungeon = (() => {
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const g = pad(); if (!g) return;
-      const now0 = performance.now(), down = i => !!(g.buttons[i] && g.buttons[i].pressed), hit = i => down(i) && !prev[i];
+      // 닌텐도식 배치: A·B·X·Y(0~3)는 위치를 바꿔 읽는다 (0↔1, 2↔3)
+      const nin = gpNintendo(g), raw = i => (nin && i < 4 ? i ^ 1 : i);
+      const now0 = performance.now(), down = i => !!(g.buttons[raw(i)] && g.buttons[raw(i)].pressed), hit = i => down(i) && !prev[raw(i)];
       const dir = stickDir(g), any = g.buttons.some(b => b.pressed) || dir != null;
       if (any && Game.poke) Game.poke();   // 자리 비움 깨우기 등
       const skillMode = !UI.isOpen() && !!D && !bigMap && down(GP.RB);
@@ -3727,6 +3806,12 @@ const Dungeon = (() => {
             else if (!busy()) act({ t: 'move', dir });
           }
           if (dir == null || !down(GP.LB)) faceDir = null;
+          // 오른쪽 스틱 (v0.92): 기울인 쪽으로 방향만 바꾼다 (새 방향일 때 한 번)
+          const rx = axis(g, 2), ry = axis(g, 3);
+          let rdir = null;
+          if (Math.hypot(rx, ry) >= 0.5) { const o = Math.round(Math.atan2(ry, rx) / (Math.PI / 4)); rdir = dirIndex(Math.round(Math.cos(o * Math.PI / 4)), Math.round(Math.sin(o * Math.PI / 4))); }
+          if (rdir != null && rdir !== rFaceDir && !busy()) { if (D.auto) stopAuto(); rFaceDir = rdir; act({ t: 'face', dir: rdir }); }
+          if (rdir == null) rFaceDir = null;
         }
       }
       prev = g.buttons.map(b => b.pressed); prevDir = dir;
@@ -3815,5 +3900,5 @@ const Dungeon = (() => {
     clearInterval(logicTimer); logicTimer = 0;
     pendingKey = null;
   }
-  return { devJump, rebuildMap: () => { if (D) buildMapCanvas(); }, moveOrder, layoutVpad, padSettings, showLog, showStatus, partyMenu, floorCandidates, updateKeyHints, init, enter, leave, get run() { return run; }, get floor() { return D; }, stopAuto, showHelp, addToBag, _log: LOG };
+  return { devJump, rebuildMap: () => { if (D) buildMapCanvas(); }, moveOrder, layoutVpad, padSettings, gamepadGuide, showLog, showStatus, partyMenu, floorCandidates, updateKeyHints, init, enter, leave, get run() { return run; }, get floor() { return D; }, stopAuto, showHelp, addToBag, _log: LOG };
 })();

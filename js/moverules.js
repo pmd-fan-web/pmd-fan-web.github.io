@@ -87,6 +87,7 @@ rule([240], { setWx: 'rain' }); rule([241], { setWx: 'sun' }); rule([201], { set
 rule([182], { protect: true });
 rule([156], { rest: true });
 rule([115], { screen: 'phys', team: true }); rule([113], { screen: 'spec', team: true });
+rule([694], { screen: 'both', team: true, needWx: 'snow' });   // 오로라베일 (v0.92): 설경일 때만, 리플렉터 + 빛의장막
 rule([144], { transform: true });   // 변신: 앞의 포켓몬으로 (js/dungeon.js transformInto)
 rule([73], { seed: true }); rule([269], { taunt: true }); rule([281], { yawn: true });
 const SCREEN_TURNS = 20, TAUNT_TURNS = 10, SEED_TURNS = 20, REST_TURNS = 3;
@@ -193,7 +194,7 @@ rule([210], { chain: 2, text: '연속으로 쓸 때마다 위력이 2배 (최대
 rule([497], { chain: 4, text: '연속으로 쓸 때마다 위력이 40씩 오른다 (최대 200). 다른 행동을 하면 초기화.', chainAdd: true });
 rule([167], { escalate: true, text: '맞을 때마다 위력이 10씩 오른다 (10 → 20 → 30).' });
 // 교체 기술: 던전에서는 교체 없음
-rule([369, 521, 812], { text: '던전에서는 교체 효과 없이 공격만 한다.' });
+rule([369, 521, 812], { pivot: true, text: '던전에서는 맞히면 바로 뒤에 있는 같은 편과 자리를 바꾼다. 뒤가 비었거나 적이면 공격만 한다.' });
 rule([575], { text: '던전에서는 교체 효과 없이 능력만 떨어뜨린다.' });
 
 function moveRuleText(mid) {
@@ -318,6 +319,8 @@ for (const id of LEGEND_SIG) if (DATA.moves[id] && DATA.moves[id].c !== 1) DATA.
 if (DATA.moves[399]) DATA.moves[399].r = 'r';
 // 벌레의야단법석: 벌레 타입에 쓸 만한 범위기가 없어서 하이퍼보이스처럼 주변 범위로 (원작은 상대 하나, v0.77)
 if (DATA.moves[405]) DATA.moves[405].r = 'r';
+// 물리 범위기가 지진 말고는 쓸 만한 것이 적어서 (v0.92): 눈사태·고속스핀·아이스스피너·휠스핀·암석액스·비검천중파를 주변(3칸 안) 범위로
+for (const id of [419, 229, 861, 859, 830, 845]) if (DATA.moves[id]) DATA.moves[id].r = 'r';
 // 범위 이름 (선공기는 '앞 2칸')
 const RANGE_SHORT_N = { f: '앞', p: '원거리', r: '주변', s: '자신' };
 const rangeShort = id => (MOVE_RULES[id] && MOVE_RULES[id].reach ? `앞 ${MOVE_RULES[id].reach}칸` : RANGE_SHORT_N[DATA.moves[id].r]);
