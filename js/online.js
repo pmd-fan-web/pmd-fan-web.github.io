@@ -127,6 +127,7 @@ const Online = (() => {
     if (/invalid-email/.test(c)) return '아이디에 쓸 수 없는 글자가 있습니다.';
     if (/too-many-requests/.test(c)) return '시도가 너무 많아 잠시 막혔습니다. 조금 뒤에 다시 해 주세요.';
     if (/network|unavailable/.test(c)) return '서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.';
+    if (/deadline-exceeded/.test(c)) return '서버가 대답하지 않습니다. 오늘 서버 사용량 한도를 넘었을 수 있어요. (브라우저 세이브로는 계속 플레이할 수 있습니다)';
     if (/quota|resource-exhausted/.test(c)) return '오늘 서버 사용량 한도를 넘었습니다. 내일 다시 이용할 수 있어요. (브라우저 세이브로는 계속 플레이할 수 있습니다)';
     if (/permission-denied/.test(c)) return '권한이 없습니다. 다시 로그인해 보세요.';
     return '알 수 없는 오류가 났습니다. (' + (c || (e && e.message) || e) + ')';
@@ -271,14 +272,14 @@ const Online = (() => {
   // 열린 요청 중 가장 오래 기다린 것부터. 요청에는 던전·층·포켓몬 번호만 있어서 버전이 달라도 구조할 수 있다
   // (이 버전에 없는 던전·포켓몬이 담긴 요청은 게시판 화면에서 뺀다) (최근 48시간, 내 것과 다른 사람이 구조하러 간 것 제외)
   // 게시판을 다시 열어도 2분 안이면 방금 읽은 목록을 보여준다 (읽기 절약). 내가 요청을 맡거나 올리면 새로 읽는다
-  const LIST_CACHE_MS = 2 * 60 * 1000;
+  const LIST_CACHE_MS = 5 * 60 * 1000;   // 2분 → 5분 (v0.96, 읽기 한도 아끼기)
   let listCache = null;
   const dropListCache = () => { listCache = null; };
   async function listSOS() {
     if (listCache && listCache.uid === user.uid && Date.now() - listCache.at < LIST_CACHE_MS) return listCache.list;
     const since = stamp(Date.now() - SOS_EXPIRE_MS);   // 48시간이 지난 요청은 구조 실패라 보이지 않는다
     const q = await db.collection('sos').where('status', '==', 'open')
-      .orderBy(firebase.firestore.FieldPath.documentId()).startAt(since).limit(30).get();
+      .orderBy(firebase.firestore.FieldPath.documentId()).startAt(since).limit(BOARD_SIZE + 2).get();   // 30 → 12 (v0.96): 보이는 10개 + 내 요청·남이 맡은 요청 여유
     const list = q.docs.map(d => ({ id: d.id, sid: idOf(d.id), ...d.data() }))
       .filter(s => s.owner !== user.uid && !heldByOther(s)).slice(0, BOARD_SIZE);
     listCache = { uid: user.uid, at: Date.now(), list };

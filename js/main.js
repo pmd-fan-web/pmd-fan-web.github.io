@@ -173,7 +173,7 @@ const Game = (() => {
   //  서버 규칙은 20초에 한 번까지만 받아 준다. 탭을 자주 오가도 FLUSH_GAP 안에는 다시 올리지 않는다
   // 클라우드 세이브 최대 크기 (보안 규칙과 같게. 문서 한도 1MB 안, v0.64에 40만 → 90만 자)
   const CLOUD_SAVE_MAX = 900000;
-  const UPLOAD_GAP = 30 * 60 * 1000, FLUSH_GAP = 2 * 60 * 1000;
+  const UPLOAD_GAP = 30 * 60 * 1000, FLUSH_GAP = 10 * 60 * 1000;   // 창을 숨길 때: 2분 → 10분 (v0.96, 쓰기 한도 아끼기. 휴대폰은 앱을 자주 오간다)
   const RETURN_GAP = 10 * 60 * 1000;   // 던전에서 돌아올 때 (v0.76: 2분 → 10분. 짧은 탐험을 자주 돌면 돌아올 때마다 쓰기가 나갔다)   // 무료 한도(쓰기)를 아끼려고 10분 → 20분(v0.47) → 30분(v0.51), 창을 숨길 때 30초 → 2분
   // 마지막 클라우드 저장 시각도 브라우저에 남긴다 (새로고침 직후 다시 올리다 20초 제한에 걸리지 않게)
   const UP_KEY = 'pmdweb_lastup';
@@ -185,8 +185,14 @@ const Game = (() => {
     if (upTimer || inDungeon()) return;
     upTimer = setTimeout(() => { upTimer = null; if (!inDungeon()) uploadNow(); }, Math.max(0, lastUp + UPLOAD_GAP - Date.now()));
   }
+  // 서버가 한도를 넘으면 쓰기는 실패로 끝나지 않고 계속 다시 시도한다 (Firestore가 resource-exhausted를 재시도함).
+  //  기다리는 쪽이 멈추지 않게 CLOUD_WAIT 뒤에는 실패로 보고, 하나가 끝나기 전에는 새로 올리지 않는다 (v0.96)
+  const CLOUD_WAIT = 10 * 1000;
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: 'deadline-exceeded', message: 'timeout' }), ms))]);
+  let upFlight = null;
   async function uploadNow() {
     if (!bound || !Online.loggedIn() || !save || newerSave || leaving) return false;
+    if (upFlight) { scheduleUpload(); return false; }
     const m = syncMeta();
     if (m && m.uid === Online.uid() && m.at === save.savedAt) { upPending = false; return true; }   // 바뀐 것 없음
     lastUp = Date.now(); try { localStorage.setItem(UP_KEY, String(lastUp)); } catch (e) { /* 무시 */ }
@@ -196,7 +202,9 @@ const Game = (() => {
     // (예전에는 올린 뒤의 savedAt을 적어서, 그 사이 바뀐 내용이 클라우드에 안 올라가고 다음 접속 때 옛 클라우드 세이브로 덮였다)
     const at = save.savedAt || 0;
     try {
-      await Online.pushCloud(raw, at); setSyncMeta({ uid: Online.uid(), at }); cloudErr = null;
+      const push = Online.pushCloud(raw, at);
+      upFlight = push; push.then(() => {}, () => {}).finally(() => { if (upFlight === push) upFlight = null; });
+      await withTimeout(push, CLOUD_WAIT); setSyncMeta({ uid: Online.uid(), at }); cloudErr = null;
       upPending = (save.savedAt || 0) !== at; if (upPending) scheduleUpload();
       return true;
     }
@@ -263,7 +271,7 @@ const Game = (() => {
   function goIdle() {
     idle = true;
     flushUpload(0);
-    if (sosWatch) { sosWatch(); sosWatch = null; } sosWatchId = null;
+    if (sosWatch) { sosWatch(); sosWatch = null; } sosWatchId = null; sosLast = undefined;
     let el = document.getElementById('idle-cover');
     if (!el) {
       el = document.createElement('div'); el.id = 'idle-cover';
@@ -328,7 +336,7 @@ const Game = (() => {
       bound = false;
       if (!Online.loggedIn() || newerSave) return;   // 옛 화면에서는 세이브를 건드리지 않는다
       let c;
-      try { c = await Online.fetchCloud(); } catch (e) { cloudErr = Online.why(e); UI.toast('클라우드 세이브를 확인하지 못했어요. 이 브라우저의 세이브로 계속합니다.'); return; }
+      try { c = await withTimeout(Online.fetchCloud(), CLOUD_WAIT); } catch (e) { cloudErr = Online.why(e); UI.toast('클라우드 세이브를 확인하지 못했어요. 이 브라우저의 세이브로 계속합니다.'); return; }
       const uid = Online.uid(), m = syncMeta();
       if (c && cmpVer(c.ver, GAME_VERSION) > 0) {
         await new Promise(res => UI.open({ title: '새 버전이 필요해요', cancel: false,
@@ -512,15 +520,17 @@ const Game = (() => {
 
   // 게시판에 올린 내 구조 요청을 실시간으로 지켜본다: 구조되거나 누가 구조하러 가면 바로 확인 (던전 안이면 마을에 돌아왔을 때)
   let sosWatch = null, sosWatchId = null, sosPending = false;
+  let sosLast;   // 지켜보기로 받은 내 요청의 마지막 값 (undefined: 아직 못 받음). 있으면 checkOnline이 따로 읽지 않는다 (v0.96)
   function watchMySOS() {
     if (idle) return;
     const s = save && save.sos, id = s && s.online && !s.revived && Online.loggedIn() ? (s.docId || s.id) : null;
     if (id === sosWatchId) return;
     if (sosWatch) { sosWatch(); sosWatch = null; }
-    sosWatchId = id;
+    sosWatchId = id; sosLast = undefined;
     if (!id) return;
     let first = true;
     sosWatch = Online.watchSOS(id, d => {
+      if (sosWatchId === id) sosLast = d;
       if (first) { first = false; return; }   // 처음 읽은 값은 checkOnline이 이미 본다
       const s2 = save && save.sos;
       const changed = !d || d.status !== 'open' || (d.takenBy && !s2?.takenAt) || (!d.takenBy && s2?.takenAt);
@@ -555,7 +565,8 @@ const Game = (() => {
   }
   let lastCheck = 0, checking = false;
   let sosRelinked = false;
-  const claimFailed = new Set();   // 구조 완료를 서버가 거절한 요청 (이번 접속 동안은 다시 보내지 않는다)
+  const claimFailed = new Set();
+  const thxChecked = new Map(), THX_CHECK_MS = 15 * 60 * 1000;   // 감사 편지를 마지막으로 확인한 시각 (이번 접속 동안)   // 구조 완료를 서버가 거절한 요청 (이번 접속 동안은 다시 보내지 않는다)
   async function checkOnline(force) {
     if (idle || !save || !bound || !Online.loggedIn() || checking || (!force && Date.now() - lastCheck < 90 * 1000)) return;
     checking = true; lastCheck = Date.now();
@@ -569,7 +580,8 @@ const Game = (() => {
         if (docId) { s.docId = docId; s.online = true; persist(); }
       }
       if (s && s.online && !s.revived) {
-        const d = await Online.getSOS(s.docId || s.id);
+        const myId = s.docId || s.id;
+        const d = sosWatch && sosWatchId === myId && sosLast !== undefined ? sosLast : await Online.getSOS(myId);   // 지켜보는 중이면 따로 읽지 않는다
         // 서버의 값은 다른 사람이 쓴 것이라 숫자·이름을 다시 확인한다 (조작된 값이 화면에 그대로 들어가지 않게)
         // 구조한 사람의 포켓몬이 이 버전에 없어도 (더 새 버전에서 구조) 부활은 시킨다. 그림만 내 포켓몬으로
         const rs = d && d.rescuer;
@@ -605,6 +617,8 @@ const Game = (() => {
           else if (c.denied) UI.alert('구조 완료를 전하지 못했어요', `<p>${esc(c.msg)}</p><p class="dim">닉네임 문제라면 계정 창에서 닉네임을 바꾼 뒤 새로고침하면 다시 전해요.</p>`);
           continue;
         }
+        if (Date.now() - (thxChecked.get(doc) || 0) < THX_CHECK_MS) continue;   // 감사 편지 확인: 접속마다 한 번, 그 뒤 15분마다 (v0.96)
+        thxChecked.set(doc, Date.now());
         const d = await Online.getSOS(doc);
         if (!d) { r.thanked = true; persist(); continue; }
         if (d.status === 'thanked') {
@@ -702,7 +716,7 @@ const Game = (() => {
       if (starting) return;
       starting = true;
       if (onlineBoot) await Promise.race([onlineBoot, new Promise(r => setTimeout(r, 5000))]);
-      if (syncing) await syncing;
+      if (syncing) await Promise.race([syncing, new Promise(r => setTimeout(r, CLOUD_WAIT + 2000))]);   // 서버가 대답하지 않아도 들어간다 (v0.96: 한도 초과 날 이어하기가 멈추던 문제)
       starting = false;
       if (newerSave) {
         UI.open({ title: '새 버전이 필요해요', cancel: false,
