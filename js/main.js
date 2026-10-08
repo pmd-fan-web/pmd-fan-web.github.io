@@ -678,6 +678,7 @@ const Game = (() => {
     if (save) fitFloors(save);
     if (Tiles.CUSTOM && save && save.settings.useTileset === true) Tiles.probe();   // 타일셋을 켠 경우만 미리 확인 (끄면 tiles/ 요청도 하지 않는다)
     if (save && !newerSave) persist();
+    if (save) applyPad();   // 마을을 거치지 않고 이어하던 던전으로 바로 들어가도 터치 조작이 켜지게
     setTimeout(checkUpdate, 3000); setInterval(checkUpdate, 10 * 60 * 1000);
     // 플레이 시간 (v0.69부터): 창이 보이는 동안만 센다. 메모리에서 늘리고 다른 저장 때·창을 닫을 때 함께 저장된다
     let playTick = performance.now();
@@ -1513,13 +1514,15 @@ const Game = (() => {
   }
 
   function tabChar() {
-    const sp = save.current, ch = save.roster[sp];
+    const sp = tmWho(), ch = save.roster[sp];
     const evos = evoOptions(sp);
     const roster = Object.keys(save.roster).map(Number);
+    const w = sp, wc = ch;
     return `<h3>캐릭터 관리</h3>
+      ${tmWhoBar()}
       <h3>🏅 ${esc(spName(sp))}의 메달</h3>${medalSection(sp)}
-      <div class="btns"><button class="btn" data-act="change-char">🔄 캐릭터 변경</button> <button class="btn" data-act="set-moves">📘 기술 설정</button></div>
-      <p class="dim">영입한 포켓몬 ${roster.length}마리 · 지금 영입 확률 <b>${(recruitRate(ch.lv) * 100).toFixed(1)}%</b> <span class="tiny">(리더 레벨 기준, 전설·환상은 절반)</span></p>
+      <div class="btns"><button class="btn" data-act="change-char">🔄 리더 변경</button> <button class="btn" data-act="set-moves" data-arg="${sp}">📘 ${esc(spName(sp))} 기술 설정</button></div>
+      <p class="dim">영입한 포켓몬 ${roster.length}마리 · 지금 영입 확률 <b>${(recruitRate(save.roster[save.current].lv) * 100).toFixed(1)}%</b> <span class="tiny">(리더 레벨 기준, 전설·환상은 절반)</span></p>
       ${DATA.species[sp].sh ? `<h3>모습</h3><div class="row">${portraitImg(sp, 'portrait sm', 'Normal', false)} ${portraitImg(sp, 'portrait sm', 'Normal', true)}
         <span class="grow">${ch.shiny ? '✨ 이로치(색이 다른 모습)로 탐험합니다.' : '보통 모습으로 탐험합니다.'} <span class="dim">(겉모습만 바뀝니다)</span></span>
         ${shinyOk(sp) ? `<button class="btn sm" data-act="toggle-shiny">${ch.shiny ? '보통 모습으로' : '✨ 이로치로'}</button>` : '<span class="dim tiny">🔒 이 포켓몬이나 같은 진화 계열의 이로치를 쓰러뜨리거나 영입하면 고를 수 있어요</span>'}</div>` : ''}
@@ -1530,20 +1533,22 @@ const Game = (() => {
         <div class="dim">${esc(x.dungeon || x.exact || x.d)}${x.none ? ' <span class="warn">— 던전에서는 효과 없음</span>' : ''}</div></div>
         <button class="btn sm${cur ? '' : ' ghost'}" data-act="set-ability" data-arg="${aid}" ${cur || !ownedCount(hid ? 'abpatch' : 'abcapsule') ? 'disabled' : ''}>${cur ? '사용 중' : `${ITEMS[hid ? 'abpatch' : 'abcapsule'].icon} 바꾸기`}</button></div>`; }).join('')}
       <h3>기술머신 <span class="dim">(한 번 쓰면 사라지고, 배운 기술은 기술 설정에서 언제든 넣고 뺄 수 있습니다)</span></h3>
-      ${tmWhoBar()}
-      ${tmSection(tmWho(), save.roster[tmWho()])}
+      ${tmSection(w, wc)}
       <h3>🥚 교배기술 <span class="dim">(${ITEMS.eggtm.icon}교배기술머신 ×${ownedCount('eggtm')}. 하나 쓰면 교배기술 하나를 배웁니다)</span></h3>
-      ${eggSection(tmWho(), save.roster[tmWho()])}
+      ${eggSection(w, wc)}
       <h3>영양제 <span class="dim">(능력치를 영구히 올립니다. 일반 던전에서만 적용되고 로그라이크에서는 무시)</span></h3>
-      <div class="row"><span class="grow">${ch.boost && ch.boost.off ? '⏸ 영양제·구미 효과를 <b>꺼 두었습니다</b> (먹은 기록은 남아 있어요)' : '영양제·구미 효과가 켜져 있습니다.'}</span>
-        <button class="btn sm ghost" data-act="boost-toggle">${ch.boost && ch.boost.off ? '효과 켜기' : '효과 끄기'}</button></div>
-      ${vitaminSection(ch)}
+      <div class="row"><span class="grow">${wc.boost && wc.boost.off ? '⏸ 영양제·구미 효과를 <b>꺼 두었습니다</b> (먹은 기록은 남아 있어요)' : '영양제·구미 효과가 켜져 있습니다.'}</span>
+        <button class="btn sm ghost" data-act="boost-toggle" data-arg="${w}">${wc.boost && wc.boost.off ? '효과 켜기' : '효과 끄기'}</button></div>
+      ${vitaminSection(wc, w)}
       <h3>구미 <span class="dim">(아주 드문 간식. 능력치가 영구히 조금 오르고, 던전에서 먹으면 배도 찹니다)</span></h3>
-      ${gummySection(ch)}
+      ${gummySection(wc, w)}
+      <h3>${ITEMS.candy.icon} 이상한사탕 <span class="dim">(레벨이 1 오릅니다)</span></h3>
+      <div class="row"><span class="grow">${esc(spName(w))} <b>Lv${wc.lv}</b> · 이상한사탕 ×${ownedCount('candy')}</span>
+        <button class="btn sm" data-act="use-candy" data-arg="${w}" ${ownedCount('candy') && wc.lv < MAX_LEVEL ? '' : 'disabled'}>먹이기</button></div>
       <h3>지닌 물건</h3>
-      <div class="row">${ch.held ? `${ITEMS[ch.held].icon} <b>${esc(ITEMS[ch.held].n)}</b><span class="grow dim">${esc(ITEMS[ch.held].d)}</span>
-        <button class="btn sm ghost" data-act="unhold">빼기</button>` : '<span class="grow dim">지닌 물건이 없습니다. 상점에서 사거나 던전에서 주울 수 있어요.</span>'}
-        <button class="btn sm" data-act="hold">${ch.held ? '바꾸기' : '지니게 하기'}</button></div>
+      <div class="row">${wc.held ? `${ITEMS[wc.held].icon} <b>${esc(ITEMS[wc.held].n)}</b><span class="grow dim">${esc(ITEMS[wc.held].d)}</span>
+        <button class="btn sm ghost" data-act="unhold" data-arg="${w}">빼기</button>` : '<span class="grow dim">지닌 물건이 없습니다. 상점에서 사거나 던전에서 주울 수 있어요.</span>'}
+        <button class="btn sm" data-act="hold" data-arg="${w}">${wc.held ? '바꾸기' : '지니게 하기'}</button></div>
       <h3>진화</h3>
       ${evos.length ? evos.map(e => `<div class="row">${portraitImg(e.to, 'portrait sm')}<div class="grow"><b>${esc(spName(e.to))}</b> ${typeBadges(DATA.species[e.to].t)}<div class="dim">${e.req}</div>${borrowNote(e.to) ? `<div class="dim tiny">${esc(borrowNote(e.to))}</div>` : ''}</div>
         <button class="btn sm" data-act="evolve" data-arg="${e.to}" ${e.ok ? '' : 'disabled'}>진화</button></div>`).join('') : '<p class="dim">더 이상 진화하지 않습니다.</p>'}
@@ -1596,49 +1601,57 @@ const Game = (() => {
       ${other.map(id => `<div class="row">${portraitImg(id, 'portrait sm', 'Normal', ch.shiny)}<div class="grow"><b>${esc(spName(id))}</b> ${typeBadges(DATA.species[id].t)}<div class="dim">${esc(formHowText(id))}</div></div></div>`).join('')}`;
   }
   const ownedCount = id => (save.storage[id] || 0) + save.bag.filter(b => b.id === id).length;
-  function vitaminSection(ch) {
+  function vitaminSection(ch, sp) {
     const b = ch.boost || {};
     return `<div class="vit-grid">${Object.entries(VITAMINS).map(([id, [n, k, sn, v]]) => {
       const cnt = b[k] || 0, own = ownedCount(id), full = cnt >= VITAMIN_MAX;
       return `<div class="vit"><div><b>${sn}</b> <span class="dim">+${cnt * v}</span></div>
         <span class="pips">${'●'.repeat(cnt)}${'○'.repeat(VITAMIN_MAX - cnt)}</span>
-        <button class="btn sm${own ? '' : ' ghost'}" data-act="vitamin" data-arg="${id}" ${own && !full ? '' : 'disabled'} title="${esc(ITEMS[id].d)}">🥤 ${esc(n)} ×${own}</button></div>`;
+        <button class="btn sm${own ? '' : ' ghost'}" data-act="vitamin" data-arg="${id}:${sp}" ${own && !full ? '' : 'disabled'} title="${esc(ITEMS[id].d)}">🥤 ${esc(n)} ×${own}</button></div>`;
     }).join('')}</div>`;
   }
-  function gummySection(ch) {
+  function gummySection(ch, sp) {
     const b = ch.boost || {};
     const counts = Object.entries(STAT_KO).map(([k, n]) => `<span class="gm-stat"><b>${n}</b> +${(b['g_' + k] || 0) * gummyAmt(k)} <span class="dim">(${b['g_' + k] || 0}/${GUMMY_MAX})</span></span>`).join('');
     const own = Object.keys(GUMMIES).filter(id => ownedCount(id));
     return `<div class="gm-counts">${counts}</div>
-      <div class="btns">${own.length ? own.map(id => `<button class="btn sm" data-act="gummy" data-arg="${id}" title="${esc(ITEMS[id].d)}">${ITEMS[id].icon} ${esc(ITEMS[id].n)} ×${ownedCount(id)}</button>`).join(' ')
+      <div class="btns">${own.length ? own.map(id => `<button class="btn sm" data-act="gummy" data-arg="${id}:${sp}" title="${esc(ITEMS[id].d)}">${ITEMS[id].icon} ${esc(ITEMS[id].n)} ×${ownedCount(id)}</button>`).join(' ')
         : '<span class="dim">가진 구미가 없습니다. 던전 깊은 곳에서 아주 드물게 발견됩니다.</span>'}</div>`;
   }
-  function useGummy(id) {
-    const g = ITEMS[id], ch = save.roster[save.current];
+  function useGummy(id, sp = save.current) {
+    const g = ITEMS[id], ch = save.roster[sp];
     ch.boost = { ...(ch.boost || {}) };
     const up = g.gummy.filter(k => (ch.boost['g_' + k] || 0) < GUMMY_MAX);
     if (!up.length || !ownedCount(id)) { UI.toast('더 이상 오르지 않습니다.'); return; }
     takeItem(id);
     up.forEach(k => { ch.boost['g_' + k] = (ch.boost['g_' + k] || 0) + 1; });
     Sound.play('levelup');
-    UI.toast(`${jo(spName(save.current), '은')} ${jo(g.n, '을')} 먹었다! ${up.map(k => `${STAT_KO[k]} +${gummyAmt(k)}`).join(', ')}`);
+    UI.toast(`${jo(spName(sp), '은')} ${jo(g.n, '을')} 먹었다! ${up.map(k => `${STAT_KO[k]} +${gummyAmt(k)}`).join(', ')}`);
   }
-  function useVitamin(id) {
-    const [n, k, sn, v] = VITAMINS[id], ch = save.roster[save.current];
+  function useVitamin(id, sp = save.current) {
+    const [n, k, sn, v] = VITAMINS[id], ch = save.roster[sp];
     ch.boost = ch.boost || {};
     if ((ch.boost[k] || 0) >= VITAMIN_MAX || !ownedCount(id)) return;
     const bi = save.bag.findIndex(b => b.id === id);
     if (bi >= 0) save.bag.splice(bi, 1); else { save.storage[id]--; if (save.storage[id] <= 0) delete save.storage[id]; }
     ch.boost[k] = (ch.boost[k] || 0) + 1;
     Sound.play('levelup');
-    UI.toast(`${jo(spName(save.current), '은')} ${jo(n, '을')} 먹었다! ${jo(sn, '이')} ${v} 올랐다!`);
+    UI.toast(`${jo(spName(sp), '은')} ${jo(n, '을')} 먹었다! ${jo(sn, '이')} ${v} 올랐다!`);
     Progress.check();
   }
 
-  // 이상한사탕: 마을에서도 지금 캐릭터의 레벨을 1 올린다 (새로 배우는 기술은 빈 칸에, 나머지는 기술 설정에서)
-  async function useCandy() {
-    const sp = save.current, ch = save.roster[sp];
+  // 이상한사탕: 마을에서도 리더나 동료의 레벨을 1 올린다 (새로 배우는 기술은 빈 칸에, 나머지는 기술 설정에서)
+  async function useCandy(sp = null) {
     if (!ownedCount('candy')) return;
+    if (sp == null) {
+      const list = [save.current, ...partyList()];
+      if (list.length > 1) {
+        UI.open({ title: '누구에게 먹일까요?', choices: list.map(id => ({ label: `${id === save.current ? '👑 ' : '🤝 '}${esc(spName(id))} <span class="dim">Lv${save.roster[id].lv}</span>`, disabled: save.roster[id].lv >= MAX_LEVEL, fn: () => setTimeout(() => useCandy(id), 0) })) });
+        return;
+      }
+      sp = save.current;
+    }
+    const ch = save.roster[sp];
     if (ch.lv >= MAX_LEVEL) { UI.toast('이미 최고 레벨입니다.'); return; }
     if (!(await UI.confirm('이상한사탕', `<p>${esc(spName(sp))}에게 이상한사탕을 먹입니다. (Lv${ch.lv} → Lv${ch.lv + 1})</p>`, '먹인다', '그만둔다'))) return;
     takeItem('candy');
@@ -1660,7 +1673,7 @@ const Game = (() => {
     if (bi >= 0) save.bag.splice(bi, 1); else { save.storage[id]--; if (save.storage[id] <= 0) delete save.storage[id]; }
   }
   async function changeAbility(aid) {
-    const sp = save.current, ch = save.roster[sp];
+    const sp = tmWho(), ch = save.roster[sp];
     const slot = DATA.species[sp].ab.find(a => a[0] === aid); if (!slot) return;
     const need = slot[1] ? 'abpatch' : 'abcapsule', it = ITEMS[need];
     if (!ownedCount(need)) { UI.alert('특성 바꾸기', `<p>${it.icon} <b>${esc(jo(it.n, '이'))}</b> 필요합니다.</p><p class="dim">마을 상점에 가끔 진열되고, 던전에서 드물게 주울 수 있어요.</p>`); return; }
@@ -1887,10 +1900,10 @@ const Game = (() => {
       case 'ending': return showEnding(false);
       case 'ending-stats': return showEndingStats();
       case 'version-notes': UI.alert('변경 내역', VERSION_NOTES.map(([v, list]) => `<h3>v${v}${v === GAME_VERSION ? ' <span class="tag">지금 버전</span>' : ''}</h3><ul>${list.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')); return;
-      case 'vitamin': useVitamin(arg); break;
-      case 'use-candy': return useCandy();
-      case 'gummy': useGummy(arg); break;
-      case 'boost-toggle': { const ch = save.roster[save.current]; ch.boost = { ...(ch.boost || {}) }; if (ch.boost.off) delete ch.boost.off; else ch.boost.off = true; UI.toast(ch.boost.off ? '영양제·구미 효과를 껐습니다.' : '영양제·구미 효과를 켰습니다.'); break; }
+      case 'vitamin': { const [id, sp] = arg.split(':'); useVitamin(id, save.roster[+sp] ? +sp : save.current); break; }
+      case 'use-candy': return useCandy(arg && save.roster[+arg] ? +arg : null);
+      case 'gummy': { const [id, sp] = arg.split(':'); useGummy(id, save.roster[+sp] ? +sp : save.current); break; }
+      case 'boost-toggle': { const ch = save.roster[arg && save.roster[+arg] ? +arg : save.current]; ch.boost = { ...(ch.boost || {}) }; if (ch.boost.off) delete ch.boost.off; else ch.boost.off = true; UI.toast(ch.boost.off ? '영양제·구미 효과를 껐습니다.' : '영양제·구미 효과를 켰습니다.'); break; }
       case 'devolve': return devolve();
       case 'daily-go': return prepareDaily();
       case 'daily-share': { const rec = Progress.dailyRecord(); if (rec) codeBox('🗓 오늘의 도전 기록', '<p>친구에게 보내서 기록을 비교해 보세요.</p>', esc(Progress.shareText(rec).replace(/\n/g, ' · ')), '확인'); return; }
@@ -1899,7 +1912,7 @@ const Game = (() => {
       case 'sos-resume': return save.sos && save.sos.thx ? resumeSOS() : receiveAOKAgain();
       case 'aok-show': { const a = (save.aokSent || []).find(x => String(x.id) === arg); if (a) codeBox('✅ A-OK 코드', `<p>친구의 ${esc(spName(a.sp))} 구조 완료 코드입니다.</p>`, a.code); return; }
       case 'set-form': {
-        const sp = save.current, ch = save.roster[sp], id = +arg;
+        const sp = tmWho(), ch = save.roster[sp], id = +arg;
         if (id === sp) { delete ch.form; UI.toast('기본 모습으로 탐험합니다.'); break; }
         if (!(FORMS_OF[sp] || []).includes(id) || DATA.species[id].fc !== 'select') return;
         if (FORM_NEEDS[id] && !save.roster[FORM_NEEDS[id]]) { UI.toast(`${jo(spName(FORM_NEEDS[id]), '을')} 동료로 영입하면 고를 수 있어요.`); return; }
@@ -1909,7 +1922,7 @@ const Game = (() => {
         if (sig && !ch.moves.includes(sig) && ch.moves.length < 4) { ch.moves = [...ch.moves, sig]; UI.toast(`${spName(id)}의 모습으로 탐험합니다. 전용기 ${jo(DATA.moves[sig].n, '을')} 넣었어요.`); break; }
         UI.toast(`${spName(id)}의 모습으로 탐험합니다.${sig && !ch.moves.includes(sig) ? ` 전용기 ${jo(DATA.moves[sig].n, '은')} 기술 설정에서 넣을 수 있어요.` : ''}`); break;
       }
-      case 'toggle-shiny': { const ch = save.roster[save.current]; if (!shinyOk(save.current)) return; ch.shiny = !ch.shiny; UI.toast(ch.shiny ? '✨ 이로치로 바꿨습니다.' : '보통 모습으로 바꿨습니다.'); break; }
+      case 'toggle-shiny': { const ch = save.roster[tmWho()]; if (!shinyOk(tmWho())) return; ch.shiny = !ch.shiny; UI.toast(ch.shiny ? '✨ 이로치로 바꿨습니다.' : '보통 모습으로 바꿨습니다.'); break; }
       case 'save-export': exportSave(); return;
       case 'save-import': document.getElementById('save-file').click(); return;
       case 'unhold': { const ch = save.roster[arg ? +arg : save.current]; if (ch && ch.held) { storeKeep(ch.held); ch.held = null; UI.toast('지닌 물건을 창고에 넣었습니다.'); } break; }
@@ -1918,7 +1931,7 @@ const Game = (() => {
       case 'tm-target': tmTarget = +arg; break;
       case 'learn-egg': return learnEgg(+arg);
       case 'set-ability': return changeAbility(+arg);
-      case 'evolve': return evolve(+arg);
+      case 'evolve': return evolve(+arg, tmWho());
       case 'help': Dungeon.showHelp(); return;
       case 'key-settings': keySettings(); return;
       case 'settings': openSettings(); return;
@@ -1943,13 +1956,13 @@ const Game = (() => {
     persist(); renderTown();
   }
 
-  // 기술머신·교배기술머신을 쓸 포켓몬: 리더 또는 동료 (v0.91). 동료에서 빠지면 리더로 돌아간다
+  // 캐릭터 탭에서 보고 있는 포켓몬: 리더 또는 동료 (v0.91 기술머신, v0.93 캐릭터 탭 전체). 동료에서 빠지면 리더로 돌아간다
   let tmTarget = null;
   const tmWho = () => (tmTarget != null && partyList().includes(tmTarget) ? tmTarget : save.current);
   function tmWhoBar() {
     const list = [save.current, ...partyList()];
     if (list.length < 2) return '';
-    return `<div class="btns tm-who"><span class="dim">누구에게:</span> ${list.map(id => `<button class="btn sm${id === tmWho() ? '' : ' ghost'}" data-act="tm-target" data-arg="${id}">${id === save.current ? '👑 ' : '🤝 '}${esc(spName(id))} <span class="dim">Lv${save.roster[id].lv}</span></button>`).join(' ')}</div>`;
+    return `<div class="btns tm-who">${list.map(id => `<button class="btn sm${id === tmWho() ? '' : ' ghost'}" data-act="tm-target" data-arg="${id}">${id === save.current ? '👑 ' : '🤝 '}${esc(spName(id))} <span class="dim">Lv${save.roster[id].lv}</span></button>`).join(' ')}</div>`;
   }
   // 가진 기술머신 목록 (가방 + 창고)
   function ownedTMs() {
@@ -2125,7 +2138,7 @@ const Game = (() => {
       <button class="btn sm ghost danger" data-act="devolve" ${why ? 'disabled' : ''}>퇴화</button></div>`;
   }
   async function devolve() {
-    const sp = save.current, ch = save.roster[sp], root = devolveRoot(sp);
+    const sp = tmWho(), ch = save.roster[sp], root = devolveRoot(sp);
     if (devolveBlock(sp, ch)) return;
     const ok = await UI.confirm('퇴화 · 초기화', `<div class="center">${portraitImg(sp, 'portrait big', 'Normal', ch.shiny)} → ${portraitImg(root, 'portrait big', 'Normal', ch.shiny)}</div>
       <p>${esc(spName(sp))} Lv${ch.lv}을(를) <b>${esc(spName(root))} Lv${RECRUIT_LEVEL}</b>로 되돌립니다.</p>
@@ -2145,7 +2158,8 @@ const Game = (() => {
       if (isFav(sp)) save.favs = [...new Set(save.favs.map(x => x === sp ? root : x))];
       if (save.party) save.party = save.party.map(x => x === sp ? root : x);
     }
-    save.roster[root] = entry; save.current = root;
+    save.roster[root] = entry;
+    if (sp === save.current) save.current = root; else if (tmTarget === sp) tmTarget = root;
     persist(); renderTown();
     UI.toast(`${spName(root)} Lv${RECRUIT_LEVEL}로 되돌렸습니다.`);
   }
@@ -2180,6 +2194,7 @@ const Game = (() => {
     mergeMastery(save, sp, to);   // 숙련도도 진화한 모습으로
     save.roster[to] = keepOther ? other : entry;   // 합칠 때는 레벨이 높은 쪽
     if (isLeader) save.current = to;
+    if (tmTarget === sp) tmTarget = to;   // 캐릭터 탭에서 보던 동료가 진화하면 진화한 모습을 계속 본다
     // 동료 목록도 진화한 모습으로 (합쳐진 포켓몬이 리더면 동료에서는 빠진다)
     if (save.party) save.party = [...new Set(save.party.map(x => x === sp ? to : x))].filter(x => x !== save.current && save.roster[x]);
     entry = save.roster[to];
@@ -3248,11 +3263,16 @@ const Game = (() => {
   const touchDevice = () => (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window || matchMedia('(any-pointer: coarse)').matches;
   // 터치 조작 켜기: auto(터치 기기면) / on(항상) / off(끄기). v0.83 전의 '항상 표시'(dpad) 설정은 on으로 본다
   const touchCtl = () => save?.settings?.touchCtl || (save?.settings?.dpad ? 'on' : 'auto');
+  // 화면을 돌리거나 크기가 바뀌면 다시 (휴대폰 가로 화면 배치)
+  for (const ev of ['resize', 'orientationchange']) window.addEventListener(ev, () => { if (save) applyPad(); });
   function applyPad() {
     const tc = touchCtl();
     document.body.classList.toggle('touch', tc === 'on' || (tc === 'auto' && touchDevice()));
     document.body.classList.toggle('notouch', tc === 'off');
     document.body.classList.toggle('vpad', (save?.settings?.padMode || 'stick') === 'stick');   // 터치 조작: 조이스틱·ABXY (기본) / 방향 버튼
+    // 휴대폰 가로 화면 (v0.92): 터치 조작이 켜져 있고 가로가 더 길며 높이가 낮으면, 게임 화면을 꽉 채우고 조작 버튼을 그 위에 겹친다
+    const touchOn = document.body.classList.contains('touch');
+    document.body.classList.toggle('phone-land', touchOn && innerWidth > innerHeight && innerHeight <= 520);
     if (typeof Dungeon !== 'undefined' && Dungeon.layoutVpad) Dungeon.layoutVpad();
   }
 

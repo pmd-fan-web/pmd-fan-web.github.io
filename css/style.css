@@ -843,3 +843,27 @@ button img, .rcard img, .pk img, #face { -webkit-user-drag: none; user-drag: non
 .log-tabs, .set-tabs { flex-wrap: wrap; }
 .log-q { width: 100%; margin: 6px 0; box-sizing: border-box; }
 .set-body h3 { margin-top: 14px; }
+
+/* 휴대폰 가로 화면 (v0.93, body.phone-land: js/main.js applyPad). 게임 화면을 꽉 채우고 위에 겹친다:
+   왼쪽 위 상태 · 오른쪽 위 미니맵 · 왼쪽 아래 조이스틱 · 오른쪽 아래 ABXY · 가운데 아래 기술 2×2와 그 위 메시지 */
+body.phone-land #dungeon-screen { position: relative; height: 100dvh; }
+body.phone-land #view-wrap { position: absolute; inset: 0; margin: 0; border-radius: 0; }
+body.phone-land #hud { position: absolute; left: 6px; top: 6px; right: auto; z-index: 3; margin: 0; padding: 4px 8px; max-width: 200px; font-size: 11px; line-height: 1.3; gap: 1px;
+  display: flex; flex-direction: column; align-items: flex-start; flex-wrap: nowrap; background: #0b1633cc; }
+body.phone-land #hud .money, body.phone-land #hud .exp { display: none; }
+body.phone-land #hud .bar { width: 46px; }
+body.phone-land #hud .party .bar.small { width: 30px; }
+body.phone-land #minimap { width: 120px; top: 6px; right: 6px; }
+body.phone-land #face-box { display: none; }
+body.phone-land #view-wrap #log { left: 50%; right: auto; transform: translateX(-50%); width: min(42vw, 380px); bottom: 84px; height: 46px; padding: 3px 8px; font-size: 11px; line-height: 1.35; }
+body.phone-land #bottom { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; height: auto; pointer-events: none; z-index: 3; }
+body.phone-land #controls { display: block; width: auto; }
+body.phone-land #moves { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); width: min(42vw, 380px); pointer-events: auto; gap: 3px; }
+body.phone-land #moves .mv { min-height: 34px; padding: 3px 6px; font-size: 12px; opacity: .93; }
+body.phone-land #actions { display: none; }
+/* 조작 판의 배경·테두리는 없애고 (#dungeon-screen #vpad 디자인 규칙보다 우선하도록 #dungeon-screen을 붙인다) 조이스틱은 테두리만 */
+body.phone-land #dungeon-screen #vpad { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; background: none; border: none; box-shadow: none; border-radius: 0; pointer-events: none; z-index: 4; }
+body.phone-land #dungeon-screen #vpad .vp-grp, body.phone-land #dungeon-screen #vpad .vp-edit-note { pointer-events: auto; }
+body.phone-land #dungeon-screen .vp-base { background: none; box-shadow: none; border: 2px solid #ffffff40; }
+body.phone-land #dungeon-screen .vp-base::before, body.phone-land #dungeon-screen .vp-base::after { background: #ffffff20; }
+body.phone-land #auto-ind, body.phone-land #wind-ind { left: 50%; transform: translateX(-50%); white-space: nowrap; }
