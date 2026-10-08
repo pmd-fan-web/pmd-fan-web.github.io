@@ -80,13 +80,14 @@ const UI = (() => {
       case 'ArrowUp': case 'KeyW': case 'Numpad8': move(-1); break;
       case 'ArrowDown': case 'KeyS': case 'Numpad2': move(1); break;
       case 'Enter': case 'Space': case 'NumpadEnter': case 'KeyZ':
+        if (performance.now() - m.t0 < 300) break;   // 앞 창(이야기 대사 등)을 넘기던 키가 새 창까지 바로 넘기지 않게 (클릭과 같은 0.3초)
         if (n) choose(m, m.sel); else if (m.opts.cancel !== false) cancel(m);
         break;
       case 'Escape': case 'KeyX': case 'Backspace':
         if (m.opts.cancel !== false) cancel(m);
         break;
       default:
-        if (/^Digit[1-9]$/.test(e.code)) { const i = +e.code.slice(5) - 1; if (i < n) choose(m, i); }
+        if (/^Digit[1-9]$/.test(e.code)) { const i = +e.code.slice(5) - 1; if (i < n && performance.now() - m.t0 >= 300) choose(m, i); }
         else return true;
     }
     e.preventDefault();

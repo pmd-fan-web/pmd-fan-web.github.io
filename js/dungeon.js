@@ -584,6 +584,8 @@ const Dungeon = (() => {
     if (r.kind === 'mega' || fi.endsWith('-primal')) { Sound.play('shiny', at); if (c.player) setFace('Determined', 2000); }
   }
   // 층에 들어설 때 발동하는 특성 (리더와 동료. 줍기·꿀모으기는 리더만)
+  // floorStart: [능력, 단계] 하나 또는 [[능력, 단계], …] 여럿 (편승: 공격·특수공격)
+  const floorStats = f => (Array.isArray(f[0]) ? f : [f]);
   function floorStartAbility(p) {
     p.seeded = null; p.yawnT = 0; p.protecting = false;   // 지난 층의 씨앗(심은 적은 이 층에 없다)·하품
     resetBattleForm(p, D.weather);
@@ -598,7 +600,7 @@ const Dungeon = (() => {
       if (A.setWeather && (!D.wxByParty || extreme)) { setWeather(A.setWeather, p, at); D.wxByParty = true; }
       applyForecast(p);
       if (A.download) statChange(p, p.atk >= p.spa ? 2 : 4, 1, at, p);
-      if (A.floorStart) statChange(p, A.floorStart[0], A.floorStart[1], at, p);
+      if (A.floorStart) floorStats(A.floorStart).forEach(([st, n], k) => statChange(p, st, n, at + k * 150, p));
       if (A.floorRandom) statChange(p, pick([2, 3, 4, 5, 7, 8]), 1, at, p);
       if (A.pickup && Math.random() < A.pickup) { const id = weighted(dropTable(D.dropLv, D.dg)); if (addToBag(id)) abLog(p, `${jo(nm(p), '이')} ${jo(ITEMS[id].n, '을')} 주워 왔다!`, at); }
       if (A.honey && Math.random() < 0.2 && addToBag('apple')) abLog(p, `${jo(nm(p), '이')} 사과를 발견했다!`, at);
@@ -608,7 +610,7 @@ const Dungeon = (() => {
     if (A.setWeather) { setWeather(A.setWeather, p, at); D.wxByParty = true; }
     applyForecast(p);
     if (A.download) statChange(p, p.atk >= p.spa ? 2 : 4, 1, at, p);
-    if (A.floorStart) statChange(p, A.floorStart[0], A.floorStart[1], at, p);
+    if (A.floorStart) floorStats(A.floorStart).forEach(([st, n], k) => statChange(p, st, n, at + k * 150, p));
     if (A.floorRandom) statChange(p, pick([2, 3, 4, 5, 7, 8]), 1, at, p);
     if (A.pickup && Math.random() < A.pickup) { const id = weighted(dropTable(D.dropLv, D.dg)); if (addToBag(id)) abLog(p, `${jo(ITEMS[id].n, '을')} 주워 왔다!`, at); }
     if (A.honey && Math.random() < 0.2 && addToBag('apple')) abLog(p, '사과를 발견했다!', at);

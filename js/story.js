@@ -114,6 +114,12 @@ const Story = (() => {
     try { await play(sc[part], { vars: baseVars(), bgm: bgmOf(sc, part) }); } finally { running = false; }
   }
   // 마을에서: 볼 장면이 있으면 차례로 (창이 열려 있으면 닫힌 뒤)
+  // 마을에서 아직 볼 이야기가 남았는지 (승급식은 이야기가 모두 끝난 뒤에, v0.95)
+  function pending() {
+    const save = Game.save; if (!save) return false;
+    const st = state();
+    return !!st.offer || SCENES.some(x => !st.seen[x.id] && (!x.after || st.seen[x.after]) && whenOf(x)(save));
+  }
   async function check() {
     const save = Game.save;
     if (!save || running || (typeof Dungeon !== 'undefined' && Dungeon.run)) return;
@@ -199,5 +205,5 @@ const Story = (() => {
     const sc = SCENES.find(x => x.id === id); if (!sc || running) return;
     running = true; try { await runScene(sc, { again: true, full: true }); } finally { running = false; }
   }
-  return { play, fill, check, busy, askTeamName, replayHtml, replay, openList, teamLabel, inDungeon, hasPart };
+  return { play, fill, check, busy, askTeamName, replayHtml, replay, openList, teamLabel, inDungeon, hasPart, pending };
 })();

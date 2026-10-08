@@ -310,13 +310,15 @@ const Online = (() => {
   }
   // 내 구조 요청 지켜보기: 문서가 바뀔 때만 알려 준다 (처음 1번 + 바뀔 때마다 읽기 1번. 1분 30초마다 확인하는 것보다 싸고 바로 알 수 있다)
   function watchSOS(docId, cb) {
-    return db.collection('sos').doc(String(docId)).onSnapshot(d => cb(d.exists ? d.data() : null), e => noteFail('watchSOS', e));
+    return db.collection('sos').doc(String(docId)).onSnapshot(d => cb(d.exists ? d.data() : null), e => { noteFail('watchSOS', e); if (DOWN_CODES.test(String((e && e.code) || ''))) downAt = Date.now(); });   // 지켜보기가 막혀도 '서버 막힘'으로 (코드를 다시 보여 준다)
   }
   // SOS 코드의 요청 번호로 게시판 문서 찾기 (v0.57부터 올린 요청만 sid가 있다). 없으면 null
   async function findSOSById(sid) {
     const q = await db.collection('sos').where('sid', '==', +sid).limit(1).get();
     return q.empty ? null : { docId: q.docs[0].id, ...q.docs[0].data() };
   }
+  // 읽기가 되는지 서버에 직접 확인 (캐시 말고). 읽기 한도만 넘고 쓰기는 되는 날이 있어서 (v0.95)
+  async function probeSOS(id) { await db.collection('sos').doc(String(id)).get({ source: 'server' }); return true; }
   async function getSOS(id) {
     const d = await db.collection('sos').doc(String(id)).get();
     return d.exists ? d.data() : null;
@@ -422,7 +424,7 @@ const Online = (() => {
     serverDown, signUp, signIn, signOut, setName: track('setName', setName), deleteAccount, cleanName, uid: () => user && user.uid,
     fetchCloud: track('fetchCloud', fetchCloud), pushCloud: track('pushCloud', pushCloud), clearCloud: track('clearCloud', clearCloud),
     postSOS: track('postSOS', postSOS), listSOS: track('listSOS', listSOS), takeSOS: track('takeSOS', takeSOS), releaseSOS: track('releaseSOS', releaseSOS),
-    getSOS: track('getSOS', getSOS), findMySOS: track('findMySOS', findMySOS), findSOSById: track('findSOSById', findSOSById), watchSOS,
+    getSOS: track('getSOS', getSOS), probeSOS: track('probeSOS', probeSOS), findMySOS: track('findMySOS', findMySOS), findSOSById: track('findSOSById', findSOSById), watchSOS,
     claimRescue: track('claimRescue', claimRescue), thankSOS: track('thankSOS', thankSOS), deleteSOS: track('deleteSOS', deleteSOS), idOf,
   };
 })();

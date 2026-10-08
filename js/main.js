@@ -923,6 +923,7 @@ const Game = (() => {
     const st = rankState(), r = rankOf(st.pts);
     if (r <= st.seen) return;
     if (UI.isOpen() || Story.busy()) { setTimeout(checkRankUp, 1500); return; }
+    if (Story.pending()) { Story.check(); setTimeout(checkRankUp, 1500); return; }   // 볼 이야기가 남았으면 이야기 먼저
     const from = st.seen, parts = [];
     st.seen = r;
     for (const g of RANKS.slice(from + 1, r + 1).map(x => x[3]).filter(Boolean)) {
@@ -1907,7 +1908,11 @@ const Game = (() => {
       case 'devolve': return devolve();
       case 'daily-go': return prepareDaily();
       case 'daily-share': { const rec = Progress.dailyRecord(); if (rec) codeBox('🗓 오늘의 도전 기록', '<p>친구에게 보내서 기록을 비교해 보세요.</p>', esc(Progress.shareText(rec).replace(/\n/g, ' · ')), '확인'); return; }
-      case 'sos-show': if (save.sos && save.sos.online && !save.sos.revived && !Online.serverDown()) { sosPostedNote(save.sos); return; } if (save.sos) codeBox('🆘 SOS 코드', `<p>${esc(dungeonById(save.sos.dungeon).n)} ${save.sos.floor}F — ${esc(spName(save.sos.sp))} Lv${save.sos.lv}</p>${save.sos.online ? '<p class="warn">지금 서버가 막혀 있어서 구조 게시판이 동작하지 않아요. 서버가 돌아올 때까지는 이 코드로 친구에게 구조를 부탁할 수 있어요.</p>' : ''}`, sosCode(save.sos)); return;
+      case 'sos-show': if (save.sos && save.sos.online && !save.sos.revived && !Online.serverDown()) {
+        const s = save.sos, ok = await Promise.race([Online.probeSOS(s.docId || s.id).then(() => true, () => false), new Promise(res => setTimeout(() => res(false), SOS_POST_WAIT))]);
+        if (ok) { sosPostedNote(s); return; }
+        renderTown();
+      } if (save.sos) codeBox('🆘 SOS 코드', `<p>${esc(dungeonById(save.sos.dungeon).n)} ${save.sos.floor}F — ${esc(spName(save.sos.sp))} Lv${save.sos.lv}</p>${save.sos.online ? '<p class="warn">지금 서버가 막혀 있어서 구조 게시판이 동작하지 않아요. 서버가 돌아올 때까지는 이 코드로 친구에게 구조를 부탁할 수 있어요.</p>' : ''}`, sosCode(save.sos)); return;
       case 'sos-giveup': return giveUpSOS();
       case 'sos-resume': return save.sos && save.sos.thx ? resumeSOS() : receiveAOKAgain();
       case 'aok-show': { const a = (save.aokSent || []).find(x => String(x.id) === arg); if (a) codeBox('✅ A-OK 코드', `<p>친구의 ${esc(spName(a.sp))} 구조 완료 코드입니다.</p>`, a.code); return; }
@@ -2541,8 +2546,32 @@ const Game = (() => {
       onOpen: box => { const b = box.querySelector('[data-end-global]'); if (b) b.onclick = () => showEndingStats(); } });
   }
 
-  function startRun(dg, hard, abilPicks = {}) {
+  // 로그라이크 기술 고르기 (v0.95): Lv5까지 배우는 기술이 4개를 넘으면 입장할 때 4개를 고른다
+  //  처음에는 자동으로 들어가던 4개(마지막 4개)를 골라 두고, 고른 조합은 포켓몬마다 기억한다 (ch.rogueMoves)
+  //  결과: 고른 기술 배열 / null (고를 필요 없음) / false (그만둔다)
+  function pickRogueMoves(sp) {
+    const ch = save.roster[sp], pool = learnableUpTo(sp, ROGUE_LEVEL).filter(m => DATA.moves[m]);
+    if (pool.length <= 4) return Promise.resolve(null);
+    const saved = (ch.rogueMoves || []).filter(m => pool.includes(m));
+    let sel = saved.length ? saved : defaultMoves(sp, ROGUE_LEVEL).filter(m => pool.includes(m));
+    return new Promise(res => {
+      const show = focus => UI.open({ title: `📘 ${esc(spName(sp))} Lv${ROGUE_LEVEL} — 가져갈 기술 4개`, wide: true,
+        html: `<p class="dim">이 레벨까지 배우는 기술이 ${pool.length}개라 4개만 가져갈 수 있어요. 눌러서 넣고 빼세요. (고른 조합은 다음 로그라이크에도 기억해요)</p>`,
+        choices: [
+          ...pool.map((m, i) => ({ def: focus === i, label: `${sel.includes(m) ? '✅' : '⬜'} ${moveLine(m)}`, disabled: !sel.includes(m) && sel.length >= 4,
+            sub: !sel.includes(m) && sel.length >= 4 ? '4개를 골랐어요. 다른 기술을 빼면 넣을 수 있어요' : '',
+            fn: () => { sel = sel.includes(m) ? sel.filter(x => x !== m) : [...sel, m]; setTimeout(() => show(i), 0); } })),
+          { def: focus == null, label: `▶ 이 기술로 출발한다 (${sel.length}/4)`, disabled: !sel.length,
+            fn: () => { ch.rogueMoves = pool.filter(m => sel.includes(m)); persist(); res(ch.rogueMoves.slice()); } },
+          { label: '그만둔다', fn: () => res(false) }],
+        cancel: () => res(false) });
+      show(null);
+    });
+  }
+  async function startRun(dg, hard, abilPicks = {}) {
     const sp = save.current, ch = save.roster[sp];
+    const rogueMoves = !hard && dg.mode === 'rogue' ? await pickRogueMoves(sp) : null;
+    if (rogueMoves === false) return;
     noteUse(sp, 'lead'); if (dg.mode === 'normal') for (const id of partyList()) noteUse(id, 'party');   // 엔딩: 가장 많이 함께한 포켓몬
     noteUse(dg.id, 'dungeon');   // 엔딩: 가장 많이 도전한 던전
     let p, bag;
@@ -2556,7 +2585,7 @@ const Game = (() => {
       return;
     }
     if (dg.mode === 'rogue') {
-      p = makeCreature(sp, ROGUE_LEVEL, { player: true, ability: entryAbility(sp, ch) });
+      p = makeCreature(sp, ROGUE_LEVEL, { player: true, ability: entryAbility(sp, ch), moves: rogueMoves || undefined });
       p.shiny = !!ch.shiny;
       p.held = ch.held || null;   // 지닌 물건 하나는 들고 간다 (메가스톤·전용 도구·모습 바꾸는 도구). 캐릭터 기록에서는 빠지지 않는다
       bag = [{ id: 'oran', n: 1 }, { id: 'oran', n: 1 }, { id: 'apple', n: 1 }];
@@ -2711,8 +2740,19 @@ const Game = (() => {
     tab = 'mission'; renderTown();
     let posted = false;
     if (Online.loggedIn()) {
-      try { s.docId = await Online.postSOS(s); s.online = true; posted = true; persist(); renderTown(); }
-      catch (e) { console.warn(e); UI.toast('구조 게시판에 올리지 못했어요. 코드로 친구에게 부탁해 주세요.'); }
+      // 서버가 대답하지 않으면 (연결이 끊기면 쓰기가 실패하지 않고 계속 기다린다) SOS_POST_WAIT 뒤 코드를 먼저 보여 준다 (v0.95)
+      //  늦게라도 올라가면 그때 게시판 요청으로 이어 둔다 (코드와 게시판 둘 다 쓸 수 있다)
+      const post = Online.postSOS(s);
+      try {
+        const id = await Promise.race([post, new Promise(res => setTimeout(() => res(null), SOS_POST_WAIT))]);
+        if (id) { s.docId = id; s.online = true; posted = true; persist(); renderTown(); }
+        else {
+          UI.toast('구조 게시판 서버가 대답하지 않아요. 코드로 친구에게 부탁해 주세요.');
+          post.then(late => { if (late && save.sos === s && !s.revived) { s.docId = late; s.online = true; persist(); renderTown(); } }).catch(() => {});
+        }
+      } catch (e) { console.warn(e); UI.toast('구조 게시판에 올리지 못했어요. 코드로 친구에게 부탁해 주세요.'); }
+      // 쓰기는 됐어도 읽기 한도를 넘었으면 아무도 게시판을 못 본다: 읽어 보고 막혔으면 코드를 보여 준다
+      if (posted) { try { await Promise.race([Online.probeSOS(s.docId), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), SOS_POST_WAIT))]); } catch (e) { posted = false; UI.toast('구조 게시판을 지금 읽을 수 없어요. 코드로 친구에게 부탁해 주세요.'); } }
     }
     // 게시판에 올라갔으면 코드를 보여 주지 않는다 (코드를 커뮤니티에 따로 올리는 일이 많았다. 게시판에서 사라지면 다시 코드가 나온다)
     if (posted) { sosPostedNote(s); return; }
