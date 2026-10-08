@@ -32,7 +32,7 @@ const Dex = (() => {
       <select class="dex-g"><option value="">전체 세대</option>${gens.map(g => `<option value="${g}">${g}세대</option>`).join('')}</select>
       <select class="dex-t"><option value="">전체 타입</option>${DATA.types.map((t, i) => `<option value="${i + 1}">${t}</option>`).join('')}</select>
       ${pokeClassSelect('dex-k')}
-      <select class="dex-c"><option value="">전체</option><option value="1,2">만난 포켓몬</option><option value="2">쓰러뜨린 포켓몬</option><option value="0">아직 못 만난 포켓몬</option><option value="r">🤝 영입한 포켓몬</option><option value="s">✨ 이로치를 얻은 포켓몬</option><option value="s0">이로치를 아직 못 얻은 포켓몬</option><option value="sx">이로치 그림이 없는 포켓몬</option></select>
+      <select class="dex-c"><option value="">전체</option><option value="1,2">만난 포켓몬</option><option value="2">쓰러뜨린 포켓몬</option><option value="0,1">아직 못 쓰러뜨린 포켓몬</option><option value="0">아직 못 만난 포켓몬</option><option value="r">🤝 영입한 포켓몬</option><option value="s">✨ 이로치를 얻은 포켓몬</option><option value="s0">이로치를 아직 못 얻은 포켓몬</option><option value="sx">이로치 그림이 없는 포켓몬</option></select>
       <span class="dim dex-count"></span></div>
       ${(() => { medals = Game.save ? Game.dexMedals() : {}; return ''; })()}
       <div class="picker dex-grid">${ids.map(id => { const d = DATA.species[id], st = state(id), md = medals[id] || ''; return `<button class="pk dex-item${st ? '' : ' unseen'}" data-dexpoke="${id}"

@@ -867,3 +867,11 @@ body.phone-land #dungeon-screen #vpad .vp-grp, body.phone-land #dungeon-screen #
 body.phone-land #dungeon-screen .vp-base { background: none; box-shadow: none; border: 2px solid #ffffff40; }
 body.phone-land #dungeon-screen .vp-base::before, body.phone-land #dungeon-screen .vp-base::after { background: #ffffff20; }
 body.phone-land #auto-ind, body.phone-land #wind-ind { left: 50%; transform: translateX(-50%); white-space: nowrap; }
+
+/* 달성 선물 진행 (v0.94, js/main.js giftNote): 이름 · 칸 · 다음까지 · 누적 */
+.gift-box { margin: 4px 0 8px; padding: 6px 10px; border-radius: 8px; background: #ffffff0d; }
+.gift-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 2px 0; }
+.gift-name { min-width: 92px; font-weight: 600; }
+.gift-pips { letter-spacing: 1px; color: #ffd76a; font-size: 12px; }
+.gift-left { font-size: 13px; }
+.gift-total { margin-left: auto; font-size: 12px; }

@@ -2737,9 +2737,16 @@ const Game = (() => {
     storeAdd(id);
     lines.push(`🎁 ${GIFT_NAMES[kind]} ${n}번 달성 선물: ${ITEMS[id].icon} <b>${esc(ITEMS[id].n)}</b> (창고로)`);
   }
+  // 달성 선물 진행: 설명과 횟수를 섞지 않고, 횟수는 칸(●○)과 숫자로 따로 보여 준다 (v0.94)
+  const GIFT_ICONS = { rescues: '🆘', missions: '📜' };
   function giftNote() {
-    const part = kind => { const n = giftCount(kind), every = MILESTONE_GIFT[kind]; return `${GIFT_NAMES[kind]} ${every}번마다 (지금 ${n}번 · 다음까지 ${every - n % every}번)`; };
-    return `<p class="dim">🎁 달성 선물: ${part('rescues')}, ${part('missions')} — 영양제·구미(무지개구미 포함)·특성패치 중 하나를 창고로 드려요.</p>`;
+    const row = kind => {
+      const n = giftCount(kind), every = MILESTONE_GIFT[kind], k = n % every;
+      return `<div class="gift-row"><span class="gift-name">${GIFT_ICONS[kind]} ${GIFT_NAMES[kind]}</span>
+        <span class="gift-pips" title="${every}번마다 선물">${'●'.repeat(k)}${'○'.repeat(every - k)}</span>
+        <span class="gift-left">다음 선물까지 <b>${every - k}</b>번</span><span class="gift-total dim">누적 ${n}번</span></div>`;
+    };
+    return `<div class="gift-box"><div class="dim">🎁 <b>달성 선물</b> — 영양제·구미(무지개구미 포함)·특성패치 중 하나를 창고로 드려요</div>${row('rescues')}${row('missions')}</div>`;
   }
   function sosSection() {
     const s = save.sos;
