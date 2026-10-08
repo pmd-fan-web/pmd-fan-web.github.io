@@ -1,0 +1,29 @@
+rules_version = '2';
+// 비상 차단 규칙 (v0.97): 사용량이 이상하게 뛰거나 예산 알림이 오면, 이 내용을
+// Firebase 콘솔 → Firestore Database → 규칙 탭에 통째로 붙여 넣고 "게시"한다.
+// 남는 것: 로그인한 사람이 자기 클라우드 세이브를 읽고 저장하는 것 (20초에 한 번까지)
+// 닫히는 것: 구조 게시판·접속자 수·스타팅 순위·엔딩 통계·닉네임 등 나머지 전부
+//   (게임은 거절을 받아도 브라우저 세이브로 계속된다. 구조는 SOS 코드로)
+// 원래대로 돌리려면 firestore.rules 내용을 다시 붙여 넣고 게시한다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function saveThrottled() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['save'])
+        || (request.resource.data.upAt == request.time
+            && (resource.data.get('upAt', null) == null || resource.data.upAt < request.time - duration.value(20, 's')));
+    }
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      // 새 문서 만들기·닉네임 바꾸기는 막는다 (닉네임 확인을 닫았으므로). 있는 문서의 세이브만 바꿀 수 있다
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['save', 'savedAt', 'ver', 'upAt'])
+        && request.resource.data.save is string && request.resource.data.save.size() < 900000
+        && saveThrottled();
+    }
+    // 나머지는 모두 막는다
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

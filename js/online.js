@@ -1,5 +1,5 @@
 // 온라인 기능: 계정(아이디/비밀번호), 클라우드 세이브, 구조 게시판
-// Firebase 무료 요금제(Spark)만 쓴다. 한도를 넘으면 그날은 요청이 거절될 뿐 요금은 나가지 않는다.
+// Firebase 무료 요금제(Spark) 기준으로 만들었다 (2026-10-09부터 한 주 Blaze 시험). Spark에서는 한도를 넘으면 그날 요청이 거절될 뿐 요금은 나가지 않는다.
 // 서버가 막혀도 게임은 브라우저 세이브로 계속할 수 있어야 한다: 여기서 나는 오류는 전부 잡아서 알림만 한다.
 'use strict';
 
@@ -129,6 +129,7 @@ const Online = (() => {
     if (/network|unavailable/.test(c)) return '서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.';
     if (/deadline-exceeded/.test(c)) return '서버가 대답하지 않습니다. 오늘 서버 사용량 한도를 넘었을 수 있어요. (브라우저 세이브로는 계속 플레이할 수 있습니다)';
     if (/quota|resource-exhausted/.test(c)) return '오늘 서버 사용량 한도를 넘었습니다. 내일 다시 이용할 수 있어요. (브라우저 세이브로는 계속 플레이할 수 있습니다)';
+    if (c === 'need-login') return '로그인하면 볼 수 있어요.';
     if (/permission-denied/.test(c)) return '권한이 없습니다. 다시 로그인해 보세요.';
     return '알 수 없는 오류가 났습니다. (' + (c || (e && e.message) || e) + ')';
   }
@@ -178,11 +179,16 @@ const Online = (() => {
     nick = nick || id;   // 닉네임을 비우면 아이디를 닉네임으로 (그래서 아이디도 금칙어 검사)
     const bad = checkName(nick, nick === id ? 16 : 10); if (bad) throw { msg: nick === id ? '아이디를 닉네임으로 쓸 수 없어요. ' + bad : bad };
     await init();
-    let free;
-    try { free = await nameFree(nick); } catch (e) { throw { msg: why(e) }; }
-    if (!free) throw { msg: nick === id ? '아이디와 같은 닉네임을 이미 누가 쓰고 있어요. 닉네임을 따로 정해 주세요.' : TAKEN };
+    // 닉네임 목록은 로그인한 사람만 읽을 수 있다 (v0.97): 계정을 먼저 만들고 확인한 뒤, 겹치면 방금 만든 계정을 지운다
     try { user = (await auth.createUserWithEmailAndPassword(id + MAIL, pw)).user; }
     catch (e) { throw { msg: why(e) }; }
+    let free;
+    try { free = await nameFree(nick); } catch (e) { free = null; }   // 확인 실패: 아래 claimName이 다시 확인한다
+    if (free === false) {
+      await user.delete().catch(() => auth.signOut());
+      user = null; profile = null;
+      throw { msg: nick === id ? '아이디와 같은 닉네임을 이미 누가 쓰고 있어요. 닉네임을 따로 정해 주세요.' : TAKEN };
+    }
     profile = { id };
     try { await claimName(nick); }
     catch (e) {   // 그 사이에 누가 먼저 가져감: 가입은 됐으니 닉네임만 다시 정하게 한다
@@ -262,10 +268,14 @@ const Online = (() => {
     await ensureName();
     dropListCache();
     const created = Date.now(), docId = `${stamp(created)}_${s.id}`;
-    await db.collection('sos').doc(docId).set({
+    // 구조 요청은 계정마다 2분에 하나까지 (v0.97): 같은 요청에서 users/{uid}.sosAt에 서버 시각을 남기고, 보안 규칙이 간격을 확인한다
+    const b = db.batch();
+    b.set(db.collection('sos').doc(docId), {
       owner: user.uid, name: name(), dungeon: s.dungeon, floor: s.floor, sp: s.sp, lv: s.lv, shiny: !!s.shiny,
       ver: GAME_VERSION, key: openKey(), status: 'open', created, sid: s.id,
     });
+    b.set(db.collection('users').doc(user.uid), { sosAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    await b.commit();
     return docId;
   }
   const heldByOther = s => s.takenBy && s.takenBy !== user.uid && s.takenAt && s.takenAt.toMillis() > Date.now() - HOLD_MS;
@@ -397,6 +407,7 @@ const Online = (() => {
     try { cached = JSON.parse(localStorage.getItem(END_KEY)); } catch (e) { /* 무시 */ }
     if (cached && cached.day === day && cached.d && (cached.d.n > 0 || Date.now() - (cached.at || 0) < END_EMPTY_MS)) return cached;
     if (!await init()) throw new Error('offline');
+    if (!user) throw { code: 'need-login' };   // v0.97: 통계는 로그인한 사람만 읽는다
     const d = await db.collection('stats').doc('endings').get();
     const out = { day, at: Date.now(), d: d.exists ? d.data() : { n: 0 } };
     try { localStorage.setItem(END_KEY, JSON.stringify(out)); } catch (e) { /* 무시 */ }
@@ -411,6 +422,7 @@ const Online = (() => {
     try { cached = JSON.parse(localStorage.getItem(RANK_KEY)); } catch (e) { /* 무시 */ }
     if (cached && cached.day === day && cached.c) return cached;
     if (!await init()) throw new Error('offline');
+    if (!user) throw { code: 'need-login' };   // v0.97: 순위는 로그인한 사람만 읽는다
     const d = await db.collection('stats').doc('starters').get();
     const out = { day, c: (d.exists && d.data().c) || {} };
     try { localStorage.setItem(RANK_KEY, JSON.stringify(out)); } catch (e) { /* 무시 */ }

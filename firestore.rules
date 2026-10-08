@@ -10,8 +10,9 @@ service cloud.firestore {
       return shortName(n) && get(/databases/$(database)/documents/names/$(n.lower())).data.uid == request.auth.uid;
     }
 
+    // 읽기는 로그인한 사람만 (v0.97: 로그인 없이 스크립트로 읽어 요금을 올리지 못하게. 가입은 계정을 만든 뒤 닉네임을 확인한다)
     match /names/{name} {
-      allow read: if true;
+      allow read: if signedIn();
       allow create: if signedIn() && name.size() <= 16
         && request.resource.data.keys().hasOnly(['uid']) && request.resource.data.uid == request.auth.uid;
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
@@ -24,14 +25,21 @@ service cloud.firestore {
         || (request.resource.data.upAt == request.time
             && (resource.data.get('upAt', null) == null || resource.data.upAt < request.time - duration.value(20, 's')));
     }
+    // sosAt: 마지막으로 구조 요청을 올린 서버 시각 (구조 요청 간격 제한, v0.97). 바꿀 때는 지금 시각으로만
+    function sosAtOk() {
+      return !('sosAt' in request.resource.data) || request.resource.data.sosAt == request.time
+        || (resource != null && resource.data.get('sosAt', null) == request.resource.data.sosAt);
+    }
     match /users/{uid} {
       allow read, delete: if signedIn() && request.auth.uid == uid;
       allow create: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['name', 'id', 'created', 'save', 'savedAt', 'ver', 'upAt'])
+        && request.resource.data.keys().hasOnly(['name', 'id', 'created', 'save', 'savedAt', 'ver', 'upAt', 'sosAt'])
+        && sosAtOk()
         && (!('name' in request.resource.data) || ownsName(request.resource.data.name))
         && (!('save' in request.resource.data) || (request.resource.data.save is string && request.resource.data.save.size() < 900000));
       allow update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['name', 'id', 'created', 'save', 'savedAt', 'ver', 'upAt'])
+        && request.resource.data.keys().hasOnly(['name', 'id', 'created', 'save', 'savedAt', 'ver', 'upAt', 'sosAt'])
+        && sosAtOk()
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['name']) || ownsName(request.resource.data.name))
         && (!('save' in request.resource.data) || (request.resource.data.save is string && request.resource.data.save.size() < 900000))
         && saveThrottled();
@@ -71,7 +79,7 @@ service cloud.firestore {
            == (exists(statsDoc()) ? get(statsDoc()).data.c.get(string(request.resource.data.sp), 0) : 0) + 1;
     }
     match /stats/starters {
-      allow read: if true;
+      allow read: if signedIn();
       allow create, update: if signedIn() && !exists(voteDoc()) && existsAfter(voteDoc())
         && request.resource.data.keys().hasOnly(['c'])
         && request.resource.data.c.diff(resource == null ? {} : resource.data.c).affectedKeys()
@@ -121,11 +129,18 @@ service cloud.firestore {
       allow delete: if signedIn() && request.auth.uid == uid;   // 계정 삭제 (집계에 더한 숫자는 남는다)
     }
     match /stats/endings {
-      allow read: if true;
+      allow read: if signedIn();
       allow create, update: if signedIn() && !exists(endVote()) && existsAfter(endVote()) && endStatsOk(getAfter(endVote()).data);
     }
 
     // 구조 게시판
+    // 구조 요청 간격 (v0.97): 같은 요청에서 users/{내 uid}.sosAt을 지금 시각으로 남겨야 하고, 지난 요청에서 2분이 지나야 한다 (스크립트 도배 방지)
+    function myUser() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function sosGapOk() {
+      return existsAfter(myUser()) && getAfter(myUser()).data.get('sosAt', null) == request.time
+        && (!exists(myUser()) || get(myUser()).data.get('sosAt', null) == null
+            || get(myUser()).data.sosAt < request.time - duration.value(2, 'm'));
+    }
     match /sos/{id} {
       allow read: if signedIn();
       // 요청 올리기: 본인 이름으로, 열린 상태로만
@@ -146,7 +161,8 @@ service cloud.firestore {
         && request.resource.data.created > request.time.toMillis() - 300000 && request.resource.data.created < request.time.toMillis() + 300000
         && request.resource.data.dungeon is string && request.resource.data.dungeon.matches('^[a-z]{1,16}$')
         && request.resource.data.ver is string && request.resource.data.ver.size() <= 8
-        && request.resource.data.key == request.resource.data.ver + '|open';
+        && request.resource.data.key == request.resource.data.ver + '|open'
+        && sosGapOk();
       allow update: if signedIn() && (
         // 구조: 다른 사람이, 열린 요청을 구조됨으로 (한 번만)
         (resource.data.status == 'open' && resource.data.owner != request.auth.uid
