@@ -3,7 +3,7 @@
 
 // 게임 버전: 업데이트할 때 올리고, index.html의 ?v= 숫자도 같이 올린다
 // (친구와 구조 코드·오늘의 도전을 주고받으려면 버전이 같아야 한다)
-const GAME_VERSION = '0.97';
+const GAME_VERSION = '0.98';
 // 버전 비교: '0.25' > '0.9' 처럼 숫자로 비교한다
 function cmpVer(a, b) {
   const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
@@ -12,6 +12,7 @@ function cmpVer(a, b) {
 }
 const GAME_DATE = '2026-10-09';
 const VERSION_NOTES = [
+  ["0.98", ["마을 상점에서 숙련맥스를 늘 팝니다 (₽10000). 캐릭터 탭에서 쓰면 기술 하나의 숙련도가 바로 ★10이 됩니다", "본가에서 삭제되어 빠져 있던 기술 56종을 되살렸습니다 (은빛바람·괴상한바람·시그널빔·비밀의힘 등). 레벨업·기술머신·교배기술머신으로 배울 수 있습니다", "구조된 뒤 던전 목록에 '구조 대기 중'으로 막혀 보이던 문제를 고쳤습니다. 그 던전 버튼에서 바로 이어서 탐험할 수 있습니다", "구조 게시판의 요청은 올린 지 7일이 지나면 서버에서 자동으로 지웁니다"]],
   ["0.97", ["구조 요청은 계정마다 2분에 하나까지 올릴 수 있습니다 (게시판 도배 방지)", "스타팅 순위와 엔딩 통계는 로그인한 상태에서 볼 수 있습니다"]],
   ["0.96", ["서버 사용량 한도를 넘은 날 로그인한 상태에서 이어하기를 눌러도 들어가지지 않던 문제를 고쳤습니다. 클라우드 저장·불러오기가 10초 안에 끝나지 않으면 브라우저 세이브로 바로 들어갑니다", "서버 사용량을 줄였습니다: 구조 게시판은 한 번에 읽는 요청 수를 줄이고 5분 동안 다시 읽지 않습니다. 감사 편지는 접속할 때와 15분마다 확인하고, 내 구조 요청은 실시간 지켜보기로만 확인합니다. 창을 숨길 때 클라우드 저장은 10분 간격으로 합니다"]],
   ["0.95", ["로그라이크에 들어갈 때 Lv5까지 배우는 기술이 4개를 넘으면 가져갈 기술 4개를 고릅니다. 처음에는 전처럼 자동으로 들어가던 4개가 골라져 있고, 고른 조합은 포켓몬마다 기억합니다", "편승 특성: 불요의검과 같던 효과(층마다 공격 상승)를 층에 들어설 때마다 공격과 특수공격이 함께 오르도록 바꾸고, 협연 설명이 잘못 들어가 있던 원작 설명도 고쳤습니다", "이야기 대사를 키보드·컨트롤러로 빠르게 넘길 때, 이어서 뜨는 승급식·결과 창까지 바로 넘어가 버리던 문제를 고쳤습니다 (창이 뜬 뒤 0.3초 동안은 확인 키를 받지 않습니다)", "승급식은 볼 이야기가 남아 있으면 이야기가 모두 끝난 뒤에 나옵니다", "던전 켈리몬 상점의 이상한사탕 값을 1200에서 12000으로 올렸습니다", "구조 요청: 서버가 8초 안에 대답하지 않거나, 올라가도 게시판을 읽을 수 없으면(읽기 한도 초과) SOS 코드를 바로 보여 줍니다. 임무 탭의 자세히 버튼도 게시판을 읽을 수 없으면 코드를 보여 줍니다"]],
@@ -218,6 +219,7 @@ for (const [id, g] of Object.entries(GUMMIES)) {
 // ── 특성 변경 아이템: 마을의 캐릭터 탭에서 특성을 바꿀 때 소모된다 ──
 Object.assign(ITEMS, {
   abcapsule: { n: '특성캡슐', d: '특성을 다른 일반 특성으로 바꿀 때 필요하다. (마을의 캐릭터 탭에서 사용)', price: 2000, use: 'none', icon: '⚗' },
+  masterbook: { n: '숙련맥스', d: '기술 하나의 숙련도를 바로 ★10(최대)으로 만든다. (마을의 캐릭터 탭에서 사용)', price: 10000, use: 'none', icon: '💊' },
   eggtm:     { n: '교배기술머신', d: '쓰면 그 포켓몬의 교배기술 중 하나를 골라 배운다. (마을의 캐릭터 탭에서 사용)', price: 10000, use: 'none', icon: '🧬' },
   abpatch:   { n: '특성패치', d: '특성을 숨겨진 특성으로 바꿀 때 필요하다. (마을의 캐릭터 탭에서 사용)', price: 6000, use: 'none', icon: '🧩' },
 });
@@ -752,6 +754,7 @@ const MISSION_MONEY_MUL = 1.5;
 // 구조 게시판: 누가 구조하러 가면 이 시간 동안 맡은 것으로 본다 (다른 사람에게 안 보이고, 요청자에게는 "출발했어요")
 // 구조 요청은 올린 뒤 48시간이 지나면 구조 실패 (게시판에서도 빠진다)
 const SOS_EXPIRE_MS = 48 * 3600 * 1000;
+const SOS_TTL_MS = 7 * 24 * 3600 * 1000;   // 게시판 문서는 올린 지 7일 뒤 서버에서 자동으로 지운다 (Firestore TTL: sos 컬렉션의 exp 필드)
 // 구조 요청을 게시판에 올릴 때 서버 대답을 기다리는 시간. 넘으면 코드를 먼저 보여 준다 (v0.95)
 const SOS_POST_WAIT = 8000;
 // 게시판 구조: 누가 구조하러 가면 SOS_HOLD_MS 동안 다른 사람에게 안 보인다 (2시간 → 30분, v0.63).
@@ -833,7 +836,9 @@ function jo(word, t) {
 // ── 기술머신: 한 번 쓰면 사라지고, 배운 기술은 그 포켓몬이 영구히 기억한다 ──
 const TM_IDS = [];
 // 원본 기술머신 + 새로 넣은 변화 기술의 기술머신 (js/extramoves.js)
-const TM_MOVES = [...DATA.tms, ...Object.keys(typeof EXTRA_TM !== 'undefined' ? EXTRA_TM : {}).map(Number).filter(m => !DATA.tms.includes(m))];
+// 되살린 기술의 기술머신은 맨 뒤에 (js/oldmoves.js, 원래 번호가 바뀌지 않게)
+const TM_MOVES = [...DATA.tms, ...Object.keys(typeof EXTRA_TM !== 'undefined' ? EXTRA_TM : {}).map(Number).filter(m => !DATA.tms.includes(m)),
+  ...Object.keys(typeof OLD_TM !== 'undefined' ? OLD_TM : {}).map(Number).filter(m => !DATA.tms.includes(m))];
 TM_MOVES.forEach((mid, i) => {
   const m = DATA.moves[mid], id = 'tm' + mid;
   ITEMS[id] = {
@@ -849,6 +854,7 @@ TM_MOVES.forEach((mid, i) => {
 const CHEAP_LIMIT = 3000, CHEAP_MUL = 2, PRICEY_MUL = 1.5;
 for (const it of Object.values(ITEMS)) if (it.price > 0) it.price = Math.round(it.price * (it.price <= CHEAP_LIMIT ? CHEAP_MUL : PRICEY_MUL) / 10) * 10;
 ITEMS.shinycharm.price = 50000;   // 빛나는부적: 도감 완성 업적 뒤 상점에서 (가격 올리기와 따로)
+ITEMS.masterbook.price = 10000;   // 숙련맥스: 마을 상점 ₽10000 고정 (가격 올리기와 따로, v0.98)
 // 상점에 늘 있는 기본 물건은 값을 따로 더 올린다 (오랭열매·사과·과사열매 2배), 탈출구슬은 비싸게
 for (const id of ['oran', 'apple', 'leppa']) ITEMS[id].price *= 2;
 ITEMS.escape.price = 3000;
@@ -877,7 +883,7 @@ for (const id of TM_IDS) ITEMS[id].price -= TM_DISCOUNT;
 // 늘 파는 기본 물건(오랭열매·사과·과사열매)은 절반 값 (v0.52). 파는 값은 그대로
 for (const id of ['oran', 'apple', 'leppa']) { const it = ITEMS[id]; it.sellAt = sellOf(id); it.price = Math.round(it.price / 2 / 10) * 10; }
 // 상점에 늘 있는 물건 (맨 위에 고정). 나머지 진열은 날마다 바뀐다
-const SHOP_FIXED = ['oran', 'apple', 'leppa', 'stone', 'link'];
+const SHOP_FIXED = ['oran', 'apple', 'leppa', 'stone', 'link', 'masterbook'];   // 숙련맥스 (v0.98): 새로 키울 때 숙련도 올리는 수고를 덜도록
 // 업적을 달성하면 늘 진열되는 물건: 물건 → 업적 id (빛나는부적: 도감 완성. 처음 한 번은 업적 보상으로 받고, 잃어버리면 여기서 산다)
 const SHOP_UNLOCK = { shinycharm: 'dexAll' };
 const shopFixedFor = s => [...SHOP_FIXED, ...Object.keys(SHOP_UNLOCK).filter(id => s && s.ach && s.ach[SHOP_UNLOCK[id]])];
@@ -997,6 +1003,7 @@ function canLearnTM(sp, mid) {
 function canLearnTM1(sp, mid) {
   if (typeof CHAMP_TM !== 'undefined' && CHAMP_TM[sp] && CHAMP_TM[sp].includes(mid)) return true;   // 포켓몬 챔피언스 기준으로 더한 기술 (js/champmoves.js)
   if (typeof EXTRA_TM !== 'undefined' && EXTRA_TM[mid] && !DATA.tms.includes(mid)) return EXTRA_TM[mid].includes(+sp);
+  if (typeof OLD_TM !== 'undefined' && OLD_TM[mid] && !DATA.tms.includes(mid)) return OLD_TM[mid].includes(+sp);
   const i = DATA.tms.indexOf(mid);
   if (i < 0) return false;
   if (!(sp in tmBits)) tmBits[sp] = BigInt('0x' + (DATA.species[sp].tm || '0'));

@@ -1146,7 +1146,9 @@ const Game = (() => {
         ${dg.theme ? `<div class="note theme">👑 ${esc(dg.theme)} — 최종 보스 ${bossPool(dg).map(spName).join(' / ') || '?'}${bossPool(dg).length > 1 ? ' 중 하나' : ''}${midPool(dg).length ? ` · 중간 보스 ${dg.mid.floors.join(', ')}층` : ''}</div>` : ''}
         ${dg.mode === 'rogue' ? `<div class="note">입장 시 Lv${ROGUE_LEVEL}, 가방 초기화 (지닌 물건은 그대로). 나오면 원래대로 돌아갑니다.</div>` : ''}
         ${ms ? `<div class="note ms">📜 진행 중인 임무 ${ms}개</div>` : ''}
-        <div class="dg-btns">${sosLocked(dg.id) ? '<button class="btn" disabled title="구조를 받거나 포기하면 다시 들어갈 수 있어요">🆘 구조 대기 중</button>'
+        <div class="dg-btns">${sosLocked(dg.id) ? (save.sos.revived   // 구조된 뒤에는 여기서 바로 이어서 탐험 (v0.98: 구조 대기 중으로 막혀 보여서 다시 못 들어간다는 제보)
+            ? `<button class="btn" data-act="sos-resume">🆘 ${save.sos.floor}F부터 이어서 탐험</button>`
+            : '<button class="btn" disabled title="구조를 받거나 포기하면 다시 들어갈 수 있어요">🆘 구조 대기 중</button>')
           : `<button class="btn" data-act="go" data-arg="${dg.id}" ${ok ? '' : 'disabled'}>${ok ? '출발' : `🔒 ${esc(dungeonById(dg.req).n)} 클리어 필요`}</button>`}
           <button class="btn ghost" data-act="dg-info" data-arg="${dg.id}" title="나오는 적과 아이템">ℹ 정보</button></div></div>`;
     }).join('')}</div>`;
@@ -1551,6 +1553,8 @@ const Game = (() => {
       ${tmSection(w, wc)}
       <h3>🥚 교배기술 <span class="dim">(${ITEMS.eggtm.icon}교배기술머신 ×${ownedCount('eggtm')}. 하나 쓰면 교배기술 하나를 배웁니다)</span></h3>
       ${eggSection(w, wc)}
+      <h3>${ITEMS.masterbook.icon} 숙련맥스 <span class="dim">(×${ownedCount('masterbook')}. 기술 하나의 숙련도를 바로 ★${MASTERY_MAX}으로. 상점에서 늘 판매)</span></h3>
+      ${masterSection(w, wc)}
       <h3>영양제 <span class="dim">(능력치를 영구히 올립니다. 일반 던전에서만 적용되고 로그라이크에서는 무시)</span></h3>
       <div class="row"><span class="grow">${wc.boost && wc.boost.off ? '⏸ 영양제·구미 효과를 <b>꺼 두었습니다</b> (먹은 기록은 남아 있어요)' : '영양제·구미 효과가 켜져 있습니다.'}</span>
         <button class="btn sm ghost" data-act="boost-toggle" data-arg="${w}">${wc.boost && wc.boost.off ? '효과 켜기' : '효과 끄기'}</button></div>
@@ -1950,6 +1954,7 @@ const Game = (() => {
       case 'tm-target': tmTarget = +arg; break;
       case 'learn-egg': return learnEgg(+arg);
       case 'set-ability': return changeAbility(+arg);
+      case 'master-book': return useMasterBook(+arg);
       case 'evolve': return evolve(+arg, tmWho());
       case 'help': Dungeon.showHelp(); return;
       case 'key-settings': keySettings(); return;
@@ -2034,6 +2039,26 @@ const Game = (() => {
       <span class="grow">🥚 <span class="ab-link" data-move="${m}">${esc(DATA.moves[m].n)}</span> <span class="dim">${known ? '배움' : ''}</span></span>
       <button class="btn sm" data-act="learn-egg" data-arg="${m}" ${known || !have ? 'disabled' : ''}>배우기</button></div>`; }).join('')}</div>
       ${have ? '' : '<p class="dim">교배기술머신이 없습니다. 마을 상점에 가끔 진열되고, 던전에서 드물게 주울 수 있어요.</p>'}`;
+  }
+  // 숙련맥스 (v0.98): 지금 쓰는 기술 중 하나를 골라 숙련도를 ★10까지 채운다 (save.mastery[sp][mid] = ★10에 필요한 횟수)
+  function masterSection(sp, ch) {
+    const have = ownedCount('masterbook'), mv = ch.moves.length ? ch.moves : defaultMoves(sp, ch.lv);
+    return `<div class="tm-box">${mv.filter(m => DATA.moves[m]).map(m => { const lv = masteryLevel(sp, m), full = lv >= MASTERY_MAX; return `<div class="row">
+      <span class="grow"><span class="ab-link" data-move="${m}">${esc(DATA.moves[m].n)}</span> <span class="dim">★${lv}</span></span>
+      <button class="btn sm" data-act="master-book" data-arg="${m}" ${full || !have ? 'disabled' : ''}>${full ? '최대' : `★${MASTERY_MAX}으로`}</button></div>`; }).join('')}</div>
+      ${have ? '<p class="dim tiny">지금 기술 칸에 넣은 기술만 고를 수 있어요. 다른 기술은 기술 설정에서 넣은 뒤에 쓰세요.</p>' : ''}`;
+  }
+  async function useMasterBook(mid) {
+    const sp = tmWho(), ch = save.roster[sp], it = ITEMS.masterbook, mv = DATA.moves[mid];
+    if (!mv || !ownedCount('masterbook') || masteryLevel(sp, mid) >= MASTERY_MAX) return;
+    if (!(await UI.confirm(it.n, `<p>${it.icon} ${esc(jo(it.n, '을'))} 써서 ${esc(spName(sp))}의 <b>${esc(mv.n)}</b> 숙련도를 ★${masteryLevel(sp, mid)} → <b>★${MASTERY_MAX}</b>으로 올립니다.</p>
+      <p class="dim">PP 최대 +${Math.round(MASTERY_MAX * MASTERY_PP * 100)}%, PP를 안 쓸 확률 ${Math.round(MASTERY_MAX * MASTERY_FREE * 100)}%</p>`, '쓴다', '그만둔다'))) return;
+    takeItem('masterbook');
+    save.mastery = save.mastery || {};
+    const book = save.mastery[sp] = save.mastery[sp] || {};
+    book[mid] = Math.max(book[mid] || 0, masteryNeed(mid, MASTERY_MAX));
+    Sound.play('levelup'); persist(); renderTown();
+    UI.toast(`${spName(sp)}의 ${mv.n} 숙련도가 ★${MASTERY_MAX}이 되었다!`);
   }
   async function learnEgg(mid) {
     const sp = tmWho(), ch = save.roster[sp], it = ITEMS.eggtm, mv = DATA.moves[mid];
@@ -2407,6 +2432,7 @@ const Game = (() => {
 
   async function prepareRun(id) {
     const dg = dungeonById(id);
+    if (sosLocked(id) && save.sos.revived) return save.sos.thx ? resumeSOS() : receiveAOKAgain();
     if (sosLocked(id)) { UI.alert('🆘 구조 대기 중', `<p>${esc(dg.n)}에서 구조를 기다리고 있어요. 구조를 받아 이어서 탐험하거나, 임무 탭에서 구조 요청을 포기하면 다시 들어갈 수 있어요.</p>`); return; }
     const ch = save.roster[save.current];
     if (dg.mode === 'rogue') {

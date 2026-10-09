@@ -273,6 +273,8 @@ const Online = (() => {
     b.set(db.collection('sos').doc(docId), {
       owner: user.uid, name: name(), dungeon: s.dungeon, floor: s.floor, sp: s.sp, lv: s.lv, shiny: !!s.shiny,
       ver: GAME_VERSION, key: openKey(), status: 'open', created, sid: s.id,
+      // 서버가 이 시각이 지나면 문서를 알아서 지운다 (Firestore TTL 정책, v0.98). 48시간 + 감사 편지를 주고받을 여유
+      exp: firebase.firestore.Timestamp.fromMillis(created + SOS_TTL_MS),
     });
     b.set(db.collection('users').doc(user.uid), { sosAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
     await b.commit();
