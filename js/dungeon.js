@@ -1105,7 +1105,10 @@ const Dungeon = (() => {
         heal(t, Math.floor(t.maxhp * h * mul / 100), at);
       }
       const scMul = R.sunSc && (abilityOf(user).megaSol || weatherNow() === 'sun') ? 2 : 1;   // 성장: 쾌청이면 2랭크씩
-      if (move.sc) for (const [st, ch] of move.sc) if (ch > 0) statChange(t, st, ch * scMul, at, t);
+      if (move.sc) for (const [st, ch] of move.sc) {
+        if (ch > 0) statChange(t, st, ch * scMul, at, t);
+        else if (move.ss && t === user) statChange(t, st, ch, at, t);   // 껍질깨기: 자신의 방어·특방도 떨어진다 (v0.98)
+      }
       if (R.cure && t.status) { t.status = null; t.statusT = 0; log(`${nm(t)}의 상태 이상이 나았다!`, at); }
       if (R.screen) { screenKeys(R).forEach(k => { t[k] = SCREEN_TURNS; }); log(`${nm(t)}에게 ${jo(SCREEN_NAME[R.screen], '이')} 생겼다! (${SCREEN_TURNS}턴)`, at); }
       D.fx.push({ kind: 'ring', x: t.x, y: t.y, at, dur: 300 * spd(), color: '#fff6a0' });

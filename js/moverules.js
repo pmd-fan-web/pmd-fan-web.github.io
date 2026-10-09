@@ -80,6 +80,8 @@ const MOVE_DESC_FILL = {
   917: '불쾌한 음파로 공격한다. 2턴 동안 상대가 HP를 회복하지 못하게 한다.',
   918: '상대가 선제 기술을 쓰려 할 때 먼저 쳐서 풀죽게 한다.',
   919: '독으로 된 사슬로 감아 공격한다. 맹독 상태로 만들 때가 있다.',
+  868: '자신의 HP를 깎아서 공격과 특수공격, 스피드를 크게 올린다.',
+  882: '주변을 깨끗이 정리해서 자신의 공격과 스피드를 올린다.',
 };
 for (const [id, d] of Object.entries(MOVE_DESC_FILL)) if (DATA.moves[id] && !DATA.moves[id].d) DATA.moves[id].d = d;
 // 새로 넣은 변화 기술 (js/extramoves.js)
@@ -109,6 +111,7 @@ rule([553], { charge: '차가운 빛에 휩싸였다!' });
 // 되살린 기술 (v0.98, js/oldmoves.js)
 rule([13], { charge: '회오리바람을 일으켰다!' });
 rule([507], { charge: '하늘 높이 날아올랐다!', invuln: true });
+rule([868], { hpCostPct: 50, text: '최대 HP의 절반을 깎아서 사용한다. HP가 부족하면 실패한다.' });   // 제살깎기 (v0.98)
 rule([301], { chain: 3, text: '연속으로 쓸 때마다 위력이 2배 (최대 8배). 다른 행동을 하면 초기화.' });
 rule([554], { charge: '얼어붙은 공기에 휩싸였다!' });
 for (const [sp, mvs] of [[1211, [553, 559]], [1212, [554, 558]]]) {
