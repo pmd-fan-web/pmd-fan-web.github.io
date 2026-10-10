@@ -189,13 +189,18 @@ const Story = (() => {
     const st = state(), seen = SCENES.filter(sc => st.seen[sc.id]);
     const list = arr => `<div class="btns">${arr.map(sc => `<button class="btn sm ghost" data-replay="${sc.id}">${esc(sc.title)}</button>`).join(' ')}</div>`;
     const main = seen.filter(sc => !sc.side), side = seen.filter(sc => sc.side), sideAll = SCENES.filter(sc => sc.side).length;
+    const ev = typeof Game !== 'undefined' && Game.eventList ? Game.eventList() : [];   // 짧은 이벤트 (v0.99): 승급식·구린내 탐험대 등
     const m = UI.open({
       title: '📖 이야기 다시 보기', wide: true,
       html: `<h3>본편 <span class="dim">(${main.length}/${SCENES.length - sideAll})</span></h3>${main.length ? list(main) : '<p class="dim">아직 본 이야기가 없어요.</p>'}
         <h3>외전 <span class="dim">(${side.length}/${sideAll})</span></h3>${side.length ? list(side) : '<p class="dim">아직 본 외전이 없어요.</p>'}
-        <p class="dim">일반 던전을 처음 클리어하고 마을에 돌아오면 본편이, 테마 던전을 처음 클리어하면 그 던전의 외전이 나와요.</p>`,
+        <h3>짧은 이벤트 <span class="dim">(${ev.filter(e => e.open).length}/${ev.length})</span></h3><div class="btns">${ev.map(e => e.open
+          ? `<button class="btn sm ghost" data-event="${e.id}">${esc(e.title)}</button>` : '<button class="btn sm ghost" disabled>🔒 ???</button>').join(' ')}</div>
+        <p class="dim">일반 던전을 처음 클리어하고 마을에 돌아오면 본편이, 테마 던전을 처음 클리어하면 그 던전의 외전이 나와요. 짧은 이벤트는 본 것만 열리고, 본편 엔딩을 보면 모두 열려요.</p>`,
       choices: [{ label: '닫기', fn: () => {} }],
       onOpen: box => box.addEventListener('click', e => {
+        const v = e.target.closest('[data-event]');
+        if (v && !running) { UI.close(m); running = true; Promise.resolve(Game.playEvent(v.dataset.event)).finally(() => { running = false; openList(); }); return; }
         const b = e.target.closest('[data-replay]'); if (!b) return;
         UI.close(m); replay(b.dataset.replay).then(openList);   // 다 보면 목록으로 돌아온다
       }),
@@ -205,5 +210,6 @@ const Story = (() => {
     const sc = SCENES.find(x => x.id === id); if (!sc || running) return;
     running = true; try { await runScene(sc, { again: true, full: true }); } finally { running = false; }
   }
-  return { play, fill, check, busy, askTeamName, replayHtml, replay, openList, teamLabel, inDungeon, hasPart, pending };
+  const mainDone = () => { const st = state(); return SCENES.filter(sc => !sc.side).every(sc => st.seen[sc.id]); };   // 본편을 모두 봤는지
+  return { play, fill, check, busy, askTeamName, replayHtml, replay, openList, teamLabel, inDungeon, hasPart, pending, mainDone };
 })();

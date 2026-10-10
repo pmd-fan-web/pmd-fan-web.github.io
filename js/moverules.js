@@ -315,6 +315,31 @@ for (const [id, fi, n, e, t, b, ab, sig, path] of CALYREX_RIDERS) {
   l.sort((a, c) => a[0] - c[0]);
   DATA.species[id] = { ...base, n, e, t, b, x: 340, l, v: [], ab: [[ab, 0]], em: '', sem: '', f: [898, path], fc: 'select', fi, sb: 898 };
 }
+// 스케치 (v0.99): 루브도 전용. 앞의 상대가 가진 기술 중 하나를 골라 영구히 배운다 (js/dungeon.js sketchFrom)
+//  쓸 수 있는 횟수: Lv1·11·21…91이 될 때마다 1번 (원작처럼 최대 10번). 배운 기술은 save.sketched[번호]에 남는다
+const SKETCH = 166, SKETCH_LEVELS = [1, 11, 21, 31, 41, 51, 61, 71, 81, 91];
+if (!DATA.moves[SKETCH]) DATA.moves[SKETCH] = { id: SKETCH, n: '스케치', t: 1, p: 0, a: 0, pp: 1, c: 1, r: 'f', d: '상대가 가진 기술 하나를 베껴서 영구히 자신의 기술로 만든다.' };
+rule([SKETCH], { sketch: true, text: '바로 앞의 상대가 가진 기술 중 하나를 골라 영구히 배운다. 스케치 칸이 그 기술로 바뀐다. Lv1·11·21…91이 될 때마다 한 번씩 쓸 수 있다 (최대 10번).' });
+if (DATA.species[235] && !DATA.species[235].l.some(x => x[1] === SKETCH)) { DATA.species[235].l.unshift([1, SKETCH]); DATA.species[235].l.sort((a, b) => a[0] - b[0]); }
+function sketchLeft(c) {
+  const key = c.rsp || c.sp, used = ((typeof Game !== 'undefined' && Game.save && Game.save.sketched) || {})[key] || [];
+  return SKETCH_LEVELS.filter(l => l <= c.lv).length - used.length;
+}
+// 따라큐 (탈이 벗겨진 모습)·울트라네크로즈마 (v0.99). 번호는 tools/form_ids.json
+if (DATA.species[778] && !DATA.species[1247]) {
+  DATA.species[1247] = { ...DATA.species[778], n: '따라큐 (탈이 벗겨진 모습)', e: 'Mimikyu (Busted Form)', v: [], f: [778, '0001'], fc: 'battle', fi: 'mimikyu-busted',
+    cr: ['baronessfaron', 'Emmuffin'], em: 'NPCZ', sem: 'NPCZ' };
+}
+if (!DATA.abilities[233]) DATA.abilities[233] = { n: '브레인포스', d: '효과가 굉장한 기술의 위력이 더욱 올라간다.' };
+if (DATA.species[800] && !DATA.species[1248]) {
+  DATA.species[1248] = { ...DATA.species[800], n: '울트라네크로즈마', e: 'Ultra Necrozma', t: [14, 16], b: [97, 167, 97, 167, 97, 129], ab: [[233, 0]], v: [],
+    f: [800, '0003'], fc: 'item', fi: 'necrozma-ultra', cr: ['baronessfaron', 'baronessfaron'], em: 'NJSDPCZUAWH', sem: 'JSDPCNZUAWH' };
+}
+// 체리꼬 포지폼 (v0.99): 쾌청이면 바뀐다 (js/forms.js BATTLE_FORMS). 능력치·타입·특성은 원래 모습과 같다. 번호는 tools/form_ids.json
+if (DATA.species[421] && !DATA.species[1246]) {
+  DATA.species[1246] = { ...DATA.species[421], n: '체리꼬 (포지폼)', e: 'Cherrim (Sunshine Form)', v: [], f: [421, '0001'], fc: 'battle', fi: 'cherrim-sunshine',
+    cr: ['CHUNSOFT, Caitemis', 'CHUNSOFT, Emmuffin'], em: 'NACDZHJPSUW', sem: 'NACDZHJPSUW' };
+}
 rule([462], { pow: 'crush', text: '위력 = 120 × 상대의 남은 HP 비율 (HP가 가득이면 120).' });
 rule([717], { text: '던전에서는 상대 HP를 절반으로 줄이는 대신 위력 90으로 공격한다.' });
 rule([849], { team: true, cure: true, text: '자신과 주변(3칸 안)의 같은 편 모두의 HP를 최대 HP의 1/4 회복하고 상태 이상을 고친다.' });

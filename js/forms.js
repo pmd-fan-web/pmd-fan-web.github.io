@@ -22,7 +22,7 @@ const FORM_ITEMS = {
   griseousorb: 'giratina-origin', adamantorb: 'dialga-origin', lustrousorb: 'palkia-origin',
   rustedsword: 'zacian-crowned', rustedshield: 'zamazenta-crowned',
   wellspringmask: 'ogerpon-wellspring-mask', hearthflamemask: 'ogerpon-hearthflame-mask', cornerstonemask: 'ogerpon-cornerstone-mask',
-  blueorb: 'kyogre-primal', redorb: 'groudon-primal',
+  blueorb: 'kyogre-primal', redorb: 'groudon-primal', ultranecroziumz: 'necrozma-ultra',
 };
 for (const [item, fi] of Object.entries(FORM_ITEMS)) if (ITEMS[item] && FORM_ID[fi]) ITEMS[item].formTo = FORM_ID[fi];
 
@@ -59,6 +59,8 @@ for (const [fi, fid] of Object.entries(FORM_ID)) {
 const hpRate = c => c.hp / c.maxhp;
 const BATTLE_FORMS = {
   351: c => ({ sun: 'castform-sunny', rain: 'castform-rainy', snow: 'castform-snowy' })[weatherNow()],   // 캐스퐁: 날씨
+  778: c => (c.disguiseBroken ? 'mimikyu-busted' : null),                           // 따라큐: 탈이 벗겨지면 (층마다 다시, v0.99)
+  421: c => (weatherNow() === 'sun' ? 'cherrim-sunshine' : null),                   // 체리꼬: 쾌청이면 포지폼 (v0.99)
   681: c => (c.blade ? 'aegislash-blade' : null),                                    // 킬가르도: 공격 기술을 쓰면 블레이드폼, 변화 기술·대기면 실드폼
   555: c => (hpRate(c) <= 0.5 ? 'darmanitan-zen' : null),                            // 불비달마: HP 절반 이하
   746: c => (c.lv >= 20 && hpRate(c) > 0.25 ? 'wishiwashi-school' : null),          // 약어리: Lv20 이상, HP 1/4 초과
@@ -68,14 +70,14 @@ const BATTLE_FORMS = {
     return 'minior-' + ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'][c.coreColor];
   },
   875: c => (c.noice ? 'eiscue-noice' : null),                                       // 빙큐보: 물리 공격을 한 번 막으면 나이스페이스 (설경인 층에서 되돌아옴)
-  877: c => (c.hangry ? 'morpeko-hangry' : null),                                    // 모르페코: 턴마다 바뀜
+  877: c => (c.hangry ? 'morpeko-hangry' : null),                                    // 모르페코: 5턴마다 바뀜 (js/dungeon.js MORPEKO_TURNS)
   964: c => (c.hero ? 'palafin-hero' : null),                                        // 돌핀맨: 계단을 한 번 내려가면 마이티폼
   648: c => (c.pirouette ? 'meloetta-pirouette' : null),                             // 메로엣타: 옛노래를 쓸 때마다 바뀜
   718: c => (c.complete || hpRate(c) <= 0.5 ? (c.complete = true, 'zygarde-complete') : null),   // 지가르데: HP 절반 이하면 그 층 동안 퍼펙트폼
   1024: c => 'terapagos-terastal',                                                   // 테라파고스: 던전에서는 늘 테라스탈폼
 };
 // 전투 중 모습은 그 특성이 있을 때만 (캐스퐁은 날씨 특성, 나머지는 원래 특성)
-const BATTLE_ABILITY = { 351: 59, 681: 176, 555: 161, 746: 208, 774: 197, 875: 248, 877: 258, 964: 278 };
+const BATTLE_ABILITY = { 778: 209, 421: 122, 351: 59, 681: 176, 555: 161, 746: 208, 774: 197, 875: 248, 877: 258, 964: 278 };
 
 // 지금 되어야 할 모습 (우선순위: 도구·메가 > 전투 > 골라 둔 모습)
 function wantedForm(c) {

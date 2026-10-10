@@ -289,7 +289,7 @@ const Online = (() => {
   const dropListCache = () => { listCache = null; };
   async function listSOS() {
     if (listCache && listCache.uid === user.uid && Date.now() - listCache.at < LIST_CACHE_MS) return listCache.list;
-    const since = stamp(Date.now() - SOS_EXPIRE_MS);   // 48시간이 지난 요청은 구조 실패라 보이지 않는다
+    const since = stamp(Date.now() - SOS_EXPIRE_MS);   // 48시간이 지난 요청은 게시판에 보이지 않는다 (그사이 구린내 탐험대가 구조했을 것)
     const q = await db.collection('sos').where('status', '==', 'open')
       .orderBy(firebase.firestore.FieldPath.documentId()).startAt(since).limit(BOARD_SIZE + 2).get();   // 30 → 12 (v0.96): 보이는 10개 + 내 요청·남이 맡은 요청 여유
     const list = q.docs.map(d => ({ id: d.id, sid: idOf(d.id), ...d.data() }))

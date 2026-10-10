@@ -167,12 +167,18 @@ function ivyType(att, move) {
 function moveType(att, move) { const A = abilityOf(att), t = ivyType(att, move); return A.normalize && t ? 1 : A.soundType && hasFlag(move, 9) ? A.soundType : A.skin && t === 1 ? A.skin : t; }
 function bestStatKey(c) { return ['atk', 'def', 'spa', 'spd'].reduce((b, k) => (c[k] > c[b] ? k : b), 'atk'); }
 
-// 특성에 의한 능력치 배율
-function statMul(c, key) {
-  const A = abilityOf(c);
+// 플라워기프트: 쾌청이면 같은 편(탐험대끼리, 적끼리)에 플라워기프트를 가진 포켓몬이 있으면 공격·특수방어 1.5배 (v0.99)
+function flowerGiftAlly(c) {
+  if (weatherNow() !== 'sun' || typeof Dungeon === 'undefined' || !Dungeon.floor) return false;
+  const F = Dungeon.floor, mine = !!(c.player || c.ally);
+  return [F.player, ...F.mons].some(o => o && o !== c && o.hp > 0 && !o.npc && !!(o.player || o.ally) === mine && abilityOf(o).flowerGift);
+}
+// 특성에 의한 능력치 배율 (brk: 틀깨기 등으로 공격받는 쪽이면 방어 특성 배율을 무시한다, v0.99)
+function statMul(c, key, brk) {
+  const A = brk ? {} : abilityOf(c);
   let m = 1;
   if (key === 'atk') {
-    if (A.atkMul) m *= A.atkMul;
+    const am = abVal(c, 'atkMul'); if (am) m *= am;
     if (A.guts && c.status) m *= 1.5;
     if (A.toxicBoost && c.status === 'psn') m *= 1.5;
     if (A.slowStart && c.slowT > 0) m *= 0.5;
@@ -184,7 +190,10 @@ function statMul(c, key) {
   } else if (key === 'def') {
     if (A.marvel && c.status) m *= 1.5;
     if (A.defMul) m *= A.defMul;
+  } else if (key === 'spd') {
+    const dm = !brk && abVal(c, 'spdMul'); if (dm) m *= dm;
   }
+  if ((key === 'atk' || key === 'spd') && !brk && !A.flowerGift && flowerGiftAlly(c)) m *= 1.5;   // 같은 편의 플라워기프트 (쾌청)
   const bm = abVal(c, 'bestStatMul');   // 쿼크차지 / 고대활성(쾌청)
   if (bm && key === bestStatKey(c)) m *= bm;
   const H = heldOf(c);
@@ -266,7 +275,7 @@ function calcHit(att, def, move) {
   let dSt = def.stages[phys ? 3 : 5] || 0;
   if (A.unaware) dSt = 0; else if (A.infiltrate) dSt = Math.min(0, dSt);
   let Atk = (phys ? att.atk : att.spa) * statMul(att, phys ? 'atk' : 'spa') * stageMul(aSt);
-  let Def = (phys ? def.def : def.spd) * statMul(def, phys ? 'def' : 'spd') * stageMul(dSt);
+  let Def = (phys ? def.def : def.spd) * statMul(def, phys ? 'def' : 'spd', !!A.moldBreaker) * stageMul(dSt);   // 틀깨기: 상대의 이상한비늘·플라워기프트 무시
   const W = weatherNow();
   if (W === 'sand' && !phys && def.types.includes(6)) Def *= 1.5;
   if (W === 'snow' && phys && def.types.includes(15)) Def *= 1.5;
@@ -279,6 +288,7 @@ function calcHit(att, def, move) {
   if (mt && (att.types.includes(mt) || A.protean)) dmg *= A.adapt ? 2 : 1.5;
   dmg *= eff;
   if (Ha.seBoost && eff > 1) dmg *= Ha.seBoost;
+  if (A.neuroforce && eff > 1) dmg *= 1.25;   // 브레인포스
   const Wa = A.megaSol ? 'sun' : W;   // 메가솔라: 자기 기술은 늘 쾌청처럼
   if (Wa === 'sun') dmg *= mt === 10 ? 1.5 : mt === 11 ? (move.id === 876 ? 1.5 : 0.5) : 1;   // 하이드로스팀은 쾌청에서 오히려 1.5배
   if (Wa === 'rain') dmg *= mt === 11 ? 1.5 : mt === 10 ? 0.5 : 1;

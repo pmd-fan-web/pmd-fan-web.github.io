@@ -205,7 +205,7 @@ const Dungeon = (() => {
     c.shiny = !!DATA.species[sp].sh && Math.random() < SHINY_CHANCE * (heldOf(run.p).shinyMul || 1);   // 빛나는부적: 리더가 지니면 2배
     Sprites.load(sp, c.shiny);
     rollEnemyForm(c);
-    if (run.hard) c.moves = hardMoves(c);
+    if (run.hard) { c.moves = hardMoves(c); c.hpMul = HARD_FOE.hp; c.statMul = HARD_FOE.stat; recalc(c); c.hp = c.maxhp; }
     if (D.dg && D.dg.megaAll) { const st = megaStoneOf(sp); if (st) c.held = st; }   // 메가 진화의 탑: 메가스톤을 지니고 나와서 바로 메가진화
     applyForecast(c);
     D.mons.push(c);
@@ -240,7 +240,7 @@ const Dungeon = (() => {
   }
   function setupBossFloor(dg, p) {
     const R = D.rooms[0], cx = R.x + Math.floor(R.w / 2);
-    p.x = cx; p.y = R.y + R.h - 2;
+    p.x = cx; p.y = R.y + R.h - 2 - (run.hard ? HARD_BOSS_NEAR : 0);   // 하드: 보스와 2칸 더 가까이
     D.stairs = { x: cx, y: R.y + 1 }; D.stairsHidden = true; D.noSpawn = true;
     // 이 층에서 이미 정해진 보스가 있으면 (새로고침해서 이어 한 경우) 같은 보스로: 새로고침으로 이로치·전설 보스를 다시 뽑지 못하게 (v0.89)
     const keep = run.bossPick && run.bossPick.floor === run.floor && DATA.species[run.bossPick.sp] ? run.bossPick : null;
@@ -249,7 +249,7 @@ const Dungeon = (() => {
     const b = spawnEnemy({ x: cx, y: R.y + 3 }, sp, blv);
     if (keep) { b.shiny = !!keep.shiny && !!DATA.species[sp].sh; if (keep.ability != null && DATA.species[sp].ab.some(a => a[0] === keep.ability)) { b.ability = keep.ability; b.baseAbility = keep.ability; } }
     b.lv = blv; recalc(b);
-    b.boss = true; b.hpMul = 3.5; b.statMul = 1.1; recalc(b); b.hp = b.maxhp;
+    b.boss = true; b.hpMul = run.hard ? HARD_BOSS.hp : 3.5; b.statMul = run.hard ? HARD_BOSS.stat : 1.1; recalc(b); b.hp = b.maxhp;
     // 특별한 모습이 있는 보스는 원래 모습으로 나타났다가, 등장 알림 뒤에 눈앞에서 바뀐다
     bossForm(b, run.floor === dg.floors);
     if (keep) { if (keep.held !== undefined) b.held = keep.held; if (keep.selForm) b.selForm = keep.selForm; }
@@ -565,11 +565,13 @@ const Dungeon = (() => {
     applyForecast(D.player); D.mons.forEach(applyForecast);
   }
   function applyForecast(c) {
+    if (c.sp === 421) { if (D && D.player) formCheck(c); return; }   // 체리꼬: 쾌청이면 포지폼 (플라워기프트, v0.99)
     if (!abilityOf(c).forecast) return;
     c.types = [{ sun: 10, rain: 11, snow: 15 }[weatherNow()] || 1];
     if (D && D.player) formCheck(c);
   }
   // 폼체인지·메가진화 (js/forms.js): 모습이 바뀌었으면 알림과 효과. quiet면 알림 없이 (모르페코처럼 자주 바뀌는 경우)
+  const MORPEKO_TURNS = 5;   // 모르페코: 배부른 모양 ↔ 배고픈 모양 (v0.99: 매 턴 → 5턴마다)
   function formCheck(c, at, quiet) {
     const r = updateForm(c); if (!r) return;
     at = at || now();
@@ -712,6 +714,7 @@ const Dungeon = (() => {
         if (prev[ni] !== -1) continue;
         if (opts.known && !D.explored[ni]) continue;
         if (!diagOK(x, y, DIRS[d][0], DIRS[d][1])) continue;
+        if (opts.avoid && !isGoal(nx, ny) && opts.avoid(nx, ny)) continue;
         if (opts.avoidTraps && !isGoal(nx, ny) && D.traps.some(t => t.seen && t.x === nx && t.y === ny)) continue;
         if (opts.blockMons && !isGoal(nx, ny)) { const c = creatureAt(nx, ny); if (c && c !== opts.self && !(opts.passAllies && c.ally) && (opts.seenOnly ? seen(c) : true)) continue; }
         prev[ni] = cur; q.push(ni);
@@ -974,7 +977,7 @@ const Dungeon = (() => {
       // 탈·아이스페이스는 첫 대만 막는다 (v0.93): 연속기는 남은 대가 그대로 들어간다 (원작처럼)
       let blocked = false;
       if (Dd.disguise && !tgt.disguiseBroken && r.dmg > 0) {   // 탈: 층마다 첫 공격을 탈이 대신 맞는다
-        tgt.disguiseBroken = true; abLog(tgt, `${nm(tgt)}의 탈이 대신 공격을 받았다! 탈이 벗겨졌다!`, at);
+        tgt.disguiseBroken = true; abLog(tgt, `${nm(tgt)}의 탈이 대신 공격을 받았다! 탈이 벗겨졌다!`, at); formCheck(tgt, at, true);
         damage(tgt, pctDmg(tgt, 1 / 8), null, at); blocked = true;
       } else if (move.c === 2 && tgt.sp === 875 && !tgt.noice && (tgt.baseAbility ?? tgt.ability) === 248 && !A.moldBreaker) {
         abLog(tgt, `${jo(nm(tgt), '은')} 얼음 얼굴로 공격을 막아냈다!`, at); tgt.noice = true; formCheck(tgt, at); blocked = true;
@@ -1026,6 +1029,8 @@ const Dungeon = (() => {
       else { tgt.seeded = { by: user, t: SEED_TURNS, k: 0 }; log(`${nm(tgt)}에게 씨앗을 심었다!`, at); }
     } else if (R.transform) {
       if (!transformInto(user, tgt, at, true)) log('그러나 실패했다!', at);
+    } else if (R.sketch) {
+      sketchFrom(user, tgt, at);
     } else if (R.taunt) {
       if (tgt.tauntT) log('그러나 실패했다!', at);
       else { tgt.tauntT = TAUNT_TURNS; log(`${jo(nm(tgt), '은')} 도발에 넘어가 버렸다! (${TAUNT_TURNS}턴 동안 공격 기술만)`, at); }
@@ -1045,6 +1050,33 @@ const Dungeon = (() => {
       }
       if (move.ss || move.sc.some(([, ch]) => ch > 0)) user.selfScDone = true;
     }
+  }
+  // 스케치 (v0.99): 리더는 상대 기술 중 골라서, 동료는 아무거나 하나. 적이 쓰면 아무 일도 없다
+  function sketchFrom(user, tgt, at) {
+    if (!(user.player || user.ally) || user.tf) { log('그러나 아무 일도 일어나지 않았다!', at); return; }
+    const left = sketchLeft(user);
+    if (left <= 0) { log('스케치할 수 있는 횟수를 다 썼다! (Lv11·21…91이 될 때마다 한 번씩 늘어난다)', at); return; }
+    const have = new Set([...user.moves.map(m => m.id), ...(user.tms || [])]);
+    const cands = [...new Set((tgt.moves || []).map(m => m.id))].filter(m => DATA.moves[m] && m !== SKETCH && m !== 165 && !have.has(m));
+    if (!cands.length) { log(`${nm(tgt)}에게서 새로 배울 수 있는 기술이 없다!`, at); return; }
+    if (!user.player) { learnSketch(user, pick(cands), at); return; }
+    const mvLabel = m => { const d = DATA.moves[m]; return `${esc(d.n)} <span class="dim">${typeName(d.t)} · ${['', '변화', '물리', '특수'][d.c]}${d.p ? ' · 위력 ' + d.p : ''}</span>`; };
+    D.prompts.push(() => UI.open({
+      title: `✏️ 스케치 — ${esc(nm(tgt))}의 기술`,
+      html: `<p>하나를 골라 영구히 배웁니다. 스케치 칸이 그 기술로 바뀌어요. <span class="dim">(남은 스케치 ${left}번)</span></p>`,
+      choices: [...cands.map(m => ({ label: mvLabel(m), sub: DATA.moves[m].d || '', fn: () => learnSketch(user, m, now()) })), { label: '그만둔다 (횟수는 줄지 않는다)', fn: () => {} }],
+      cancel: () => {},
+    }));
+  }
+  function learnSketch(user, mid, at) {
+    const S = Game.save, key = user.rsp || user.sp, i = user.moves.findIndex(m => m.id === SKETCH), mv = newMove(user, mid);
+    if (i >= 0) user.moves[i] = mv; else if (user.moves.length < 4) user.moves.push(mv);
+    user.tms = [...new Set([...(user.tms || []), mid])];
+    S.sketched = S.sketched || {}; S.sketched[key] = [...(S.sketched[key] || []), mid];
+    if (S.roster[key]) S.roster[key].tms = [...new Set([...(S.roster[key].tms || []), mid])];
+    Sound.play('levelup', at);
+    log(`✏️ ${jo(nm(user), '은')} ${jo(DATA.moves[mid].n, '을')} 스케치했다! (마을의 기술 설정에서도 언제든 넣을 수 있다)`, at);
+    Game.persist();
   }
   function setFlinch(c, at) {
     if (abilityOf(c).noFlinch) { abLog(c, `${jo(nm(c), '은')} 풀죽지 않는다!`, at); return; }
@@ -1310,7 +1342,7 @@ const Dungeon = (() => {
       else if (Math.random() < ENEMY_DROP_CHANCE && free) { const id = rollMega('floor', c.lv, D.dg) || pickDrop(D.dropLv, D.dg); D.items.push(id ? { x: c.x, y: c.y, id, n: 1 } : { x: c.x, y: c.y, money: moneyPile(D.lvl) }); }
       if (c.shiny && Game.unlockShiny(c.sp)) log(`✨ 이제 캐릭터 탭에서 ${jo(spName(c.sp), '과')} 그 진화 계열의 이로치 모습을 고를 수 있다!`, at + 300);
       if (run.mode === 'normal' && !c.outlaw && !NO_RECRUIT.includes(c.sp) && canRecruit(c.sp, Game.save.roster)) {   // 남은 진화가 없으면 진화 전 모습은 영입하지 않는다 (js/defs.js)
-        const rate = recruitRate(P().lv) * (DATA.species[c.sp].lg ? 0.5 : 1) * (heldOf(P()).recruitMul || 1);
+        const rate = recruitRateFor(P().lv, (Game.save.rank || {}).pts) * (DATA.species[c.sp].lg ? 0.5 : 1) * (heldOf(P()).recruitMul || 1);   // 등급 보너스 (v0.99)
         if (Math.random() < rate) D.prompts.push(() => recruitPrompt(c));
       }
     }
@@ -1707,6 +1739,7 @@ const Dungeon = (() => {
       if (R.seed) return !p.seeded && !p.types.includes(12);
       if (R.taunt) return !p.tauntT;
       if (R.transform) return !e.tf;
+      if (R.sketch) return false;   // 스케치는 리더가 직접
       if (R.yawn) return !p.status && !p.yawnT;
       if (R.protect) return !e.protectPrev;
       if (m.c === 1 && m.ail) { const k = AILMENT_MAP[m.ail]; return !p.status && !(k === 'slp' && p.noSleep) && !p.types.some(t => (STATUS_IMMUNE_TYPES[k] || []).includes(t)); }   // 상태 이상 기술: 이미 걸렸거나 안 통하는 상대에게는 쓰지 않는다
@@ -2319,7 +2352,7 @@ const Dungeon = (() => {
     D.delayed = D.delayed.filter(x => D.turn < x.at);
     // 배고픔 / 회복
     const b0 = p.belly;
-    p.belly = Math.max(0, p.belly - 0.08 * (weatherNow() === 'snow' && !p.types.includes(15) ? 1.5 : 1) * (heldOf(p).bellyMul || 1));
+    p.belly = Math.max(0, p.belly - 0.08 * (weatherNow() === 'snow' && !p.types.includes(15) ? 1.5 : 1) * (heldOf(p).bellyMul || 1) * (run.hard ? HARD_BELLY_MUL : 1));
     // 맹독구슬·화염구슬: 지닌 포켓몬(동료 포함)에게 5턴마다 (상태이상이 없을 때)
     if (run.turnsOnFloor % 5 === 0) for (const c of [p, ...allies()]) if (heldOf(c).orb && !c.status && c.hp > 0) { log(`${nm(c)}의 ${jo(ITEMS[c.held].n, '이')} 반응했다!`, T.base); inflict(c, heldOf(c).orb, T.base, true); }
     if (p.belly > 0) {
@@ -2369,11 +2402,11 @@ const Dungeon = (() => {
       D.spawnT = run.hard ? rint(...HARD_SPAWN) : rint(30, 45);   // 하드모드: 더 빨리 다시 나타난다
       if (D.mons.filter(m => !m.npc && !m.ally).length < 12) { const t = randomRoomTile({ hidden: true, far: 7 }); if (t) spawnEnemy(t); }
     }
-    // 모습 확인 (HP·날씨에 따라 바뀌는 포켓몬, 모르페코는 턴마다)
+    // 모습 확인 (HP·날씨에 따라 바뀌는 포켓몬, 모르페코는 MORPEKO_TURNS턴마다)
     for (const c of [p, ...D.mons]) {
       if (c.hp <= 0 || !FORMS_OF[c.sp]) continue;
-      if (c.sp === 877) c.hangry = !c.hangry;
-      formCheck(c, T.base, c.sp === 877);
+      if (c.sp === 877 && D.turn % MORPEKO_TURNS === 0) c.hangry = !c.hangry;
+      formCheck(c, T.base);
     }
     computeVis();
     endTurnTiming();
@@ -2826,6 +2859,8 @@ const Dungeon = (() => {
       step = bfs(p.x, p.y, (x, y) => x === a.x && y === a.y, AO);
       if (!step) { stopAuto('그곳까지 갈 수 없다.'); return; }
     } else {
+      // 자동 탐색은 계단 칸을 밟고 지나가지 않는다 (계단으로 갈 때만 밟는다, v0.99)
+      if (D.stairs) AO.avoid = (x, y) => x === D.stairs.x && y === D.stairs.y;
       // 구조 의뢰 대상이 보이면 옆까지 가서 멈춘다 (한 번 멈춘 뒤에는 다시 O를 누르면 그냥 지나간다)
       const sos = D.mons.find(m => m.npc && m.mission && seen(m) && !(D.npcSeen && D.npcSeen.has(m)));
       if (sos) {
@@ -2835,6 +2870,21 @@ const Dungeon = (() => {
         }
         step = bfs(p.x, p.y, (x, y) => Math.max(Math.abs(sos.x - x), Math.abs(sos.y - y)) <= 1, AO);
         if (!a.toSos) { a.toSos = true; log(`구조할 ${jo(spName(sos.sp), '을')} 발견했다!`, now()); }
+      }
+      // 켈리몬 상점: 상인이 처음 보이면 옆까지 가서 멈춘다 (v0.99)
+      const shop = !step && D.mons.find(m => m.shopkeeper && m.npc && m.hp > 0 && seen(m));
+      if (shop && !D.shopNoted) {
+        if (cheb(shop, p) <= 1) { D.shopNoted = true; stopAuto('켈리몬 상점이 바로 앞에 있다! (켈리몬 쪽으로 움직이면 상점 · O: 계속 탐색)'); return; }
+        step = bfs(p.x, p.y, (x, y) => Math.max(Math.abs(shop.x - x), Math.abs(shop.y - y)) <= 1, AO);
+        if (step && !a.toShop) { a.toShop = true; log('켈리몬 상점을 발견했다!', now()); }
+      }
+      // 계단이 처음 보이면 앞까지 가서 멈춘다 (구조 대상처럼. 다시 O를 누르면 남은 곳을 계속 탐색, v0.99)
+      const st = D.stairs;
+      if (!step && st && !D.stairsNoted && !D.stairsHidden && D.explored[idx(st.x, st.y)]) {
+        const d = Math.max(Math.abs(st.x - p.x), Math.abs(st.y - p.y));
+        if (d <= 1) { D.stairsNoted = true; stopAuto(d ? '계단이 바로 앞에 있다! (계단으로 움직이면 내려간다 · O: 계속 탐색)' : '계단 위에 있다! (O: 계속 탐색)'); return; }
+        step = bfs(p.x, p.y, (x, y) => Math.max(Math.abs(st.x - x), Math.abs(st.y - y)) <= 1 && !(x === st.x && y === st.y), AO);
+        if (step && !a.toStairsSeen) { a.toStairsSeen = true; log('계단을 발견했다!', now()); }
       }
       // 아이템: 이미 본 바닥의 아이템 (일부러 내려놓거나 던진 것은 빼고, 가방이 가득 차 못 주운 것은 지금 들어갈 자리가 있으면)
       const wantItem = (x, y) => {

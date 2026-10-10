@@ -563,6 +563,13 @@ const Game = (() => {
     } catch (e) { console.warn(e); return { error: true }; }
     finally { claimingNow.delete(doc); }
   }
+  // 코드 구조 보답 (v0.99): 게시판 구조처럼 구조한 그 자리에서 무작위 아이템과 돈 (감사 코드를 주고받지 않아도 되게)
+  function codeRescueBonus(m, lines) {
+    const rdg = dungeonById(m.dungeon), rlv = rdg?.lv?.[1] || 20;
+    const item = rollMega('rescue', rlv, rdg) || weighted(rewardPool(rlv, rdg)), money = 50 + (m.floor || 5) * 15;
+    storeAdd(item); save.money += money;
+    lines.push(`구조 보답: ${ITEMS[item].icon} <b>${esc(ITEMS[item].n)}</b> (창고로) · ₽${money}`);
+  }
   let lastCheck = 0, checking = false;
   let sosRelinked = false;
   const claimFailed = new Set();
@@ -588,8 +595,6 @@ const Game = (() => {
         if (d && d.status === 'rescued' && rs) {
           const known = hasKey(DATA.species, rs.sp);
           await receiveAOK({ id: s.id, sp: known ? +rs.sp : s.sp, lv: clamp(Math.floor(+rs.lv) || 1, 1, MAX_LEVEL), sh: known && rs.shiny ? 1 : 0, noGift: rs.noGift === true }, Online.cleanName(rs.name));
-        } else if (d && d.status === 'open' && sosLeft(s) <= 0) {
-          failSOS(s);
         } else if (d && d.status === 'open') {
           // 다른 탐험대가 구조하러 갔는지 (맡은 지 30분이 지나면 다시 게시판으로, 구조 중이면 연장됨)
           const at = d.takenBy && d.takenAt && d.takenAt.toMillis ? d.takenAt.toMillis() : 0;
@@ -597,8 +602,6 @@ const Game = (() => {
           if (taken && !s.takenAt) UI.toast('🏃 다른 탐험대가 구조하러 출발했어요!');
           if ((s.takenAt || null) !== taken) { s.takenAt = taken; persist(); }
           setTimeout(() => autoRescue(s), 0);
-        } else if (!d && sosLeft(s) <= 0) {
-          failSOS(s);
         } else if (!d) {   // 요청이 서버에서 사라짐: 게시판으로는 더 기다릴 수 없다 (코드로 구조받거나 포기)
           s.online = false; persist();
           UI.alert('🆘 구조 요청', '<p>구조 게시판에서 내 구조 요청을 찾을 수 없어요. 임무 탭에서 SOS 코드를 친구에게 보내거나, 포기하고 돌아갈 수 있어요.</p>');
@@ -921,23 +924,28 @@ const Game = (() => {
     return Math.max(1, Math.round(p));
   }
   function addRankPts(m, lines) { const p = missionRankPts(m); rankState().pts += p; lines.push(`🏅 탐험대 포인트 +${p}`); }
-  const rankBadge = (r = rankLv()) => `<span class="rank-badge r${r}" title="탐험대 등급">${RANKS[r][1]} ${RANKS[r][0]} 랭크</span>`;
+  // 마스터는 별 수까지 (★0은 붙이지 않는다). stars를 안 주면 지금 포인트로
+  const rankBadge = (r = rankLv(), stars = r === RANKS.length - 1 ? masterStars(rankState().pts) : 0) => `<span class="rank-badge r${r}" title="탐험대 등급">${RANKS[r][1]} ${RANKS[r][0]}${stars ? ` ★${stars}` : ''} 랭크</span>`;
   function rankSection() {
     const st = rankState(), r = rankOf(st.pts), nx = RANKS[r + 1];
-    const pct = nx ? clamp((st.pts - RANKS[r][2]) / (nx[2] - RANKS[r][2]) * 100, 0, 100) : 100;
+    const stars = masterStars(st.pts), starBase = RANKS[r][2] + stars * MASTER_STAR_PTS;   // 마스터: 다음 별까지
+    const pct = nx ? clamp((st.pts - RANKS[r][2]) / (nx[2] - RANKS[r][2]) * 100, 0, 100) : clamp((st.pts - starBase) / MASTER_STAR_PTS * 100, 0, 100);
     return `<h3>🏅 탐험대 등급</h3><div class="row rank-row"><span class="grow">${rankBadge(r)} <b>${st.pts}</b>점
-      ${nx ? `<span class="dim">· 다음 ${nx[1]} ${nx[0]}까지 ${nx[2] - st.pts}점</span>` : '<span class="dim">· 최고 등급!</span>'}
+      ${nx ? `<span class="dim">· 다음 ${nx[1]} ${nx[0]}까지 ${nx[2] - st.pts}점</span>` : `<span class="dim">· 다음 ★${stars + 1}까지 ${starBase + MASTER_STAR_PTS - st.pts}점 (별마다 무지개구미)</span>`}
       <span class="bar rank-bar"><i style="width:${pct}%"></i></span>
-      <span class="dim">혜택: 게시판 의뢰 ${RANK_BOARD[r]}개 · 진행 임무 ${RANK_MISSION_MAX[r]}개 · 임무 보상 돈 +${r * 5}%${r >= RANK_STAR_FROM ? ` · ★우대 의뢰 ${Math.round(rankStarRate(r) * 100)}%쯤` : ` · ${RANKS[RANK_STAR_FROM][0]} 랭크부터 ★우대 의뢰`}</span>
+      <span class="dim">혜택: 게시판 의뢰 ${RANK_BOARD[r]}개 · 진행 임무 ${RANK_MISSION_MAX[r]}개 · 임무 보상 돈 +${r * 5}% · 영입 확률 +${r}%p${r >= RANK_STAR_FROM ? ` · ★우대 의뢰 ${Math.round(rankStarRate(r) * 100)}%쯤` : ` · ${RANKS[RANK_STAR_FROM][0]} 랭크부터 ★우대 의뢰`}</span>
       <span class="dim">임무를 완료하면 포인트가 쌓여요. 깊은 층·어려운 던전일수록, 수배는 1.5배, 친구 구조는 3배!</span></span></div>`;
   }
   // 승급식: 마을에서 (창이 열려 있으면 닫힌 뒤). 선물은 장면 전에 먼저 넣고 저장한다 (중간에 새로고침해도 두 번 받지 않게)
   async function checkRankUp() {
     if (!save || Dungeon.run) return;
     const st = rankState(), r = rankOf(st.pts);
-    if (r <= st.seen) return;
+    const last = RANKS.length - 1, stars = masterStars(st.pts);
+    if (st.seenStar == null) st.seenStar = 0;
+    if (r <= st.seen && !(r === last && st.seen === last && stars > st.seenStar)) return;
     if (UI.isOpen() || Story.busy()) { setTimeout(checkRankUp, 1500); return; }
     if (Story.pending()) { Story.check(); setTimeout(checkRankUp, 1500); return; }   // 볼 이야기가 남았으면 이야기 먼저
+    if (r <= st.seen) return masterStarUp(st, stars);   // 마스터 별만 올랐다
     const from = st.seen, parts = [];
     st.seen = r;
     for (const g of RANKS.slice(from + 1, r + 1).map(x => x[3]).filter(Boolean)) {
@@ -947,13 +955,49 @@ const Game = (() => {
     const money = RANKS.slice(from + 1, r + 1).reduce((a, x) => a + ((x[3] && x[3].money) || 0), 0);
     persist(); renderTown();
     const nx = RANKS[r + 1];
+    markEvent('rankup');
     await Story.play(rankScene(from, r), { bgm: 'wigglytuff', vars: { 탐험대: Story.teamLabel(), 랭크: RANKS[r][0], 포인트: st.pts, 다음: nx ? nx[2] - st.pts : 0 } });
     // 승급 창 (music/rankup) → 승급 선물 창 (music/bigreward)
     Sound.fanfare('rankup', 'achieve');
-    await UI.alert(`${RANKS[r][1]} ${RANKS[r][0]} 랭크로 승급!`, `<p class="center">${rankBadge(r)}</p>
-      <p class="center">혜택: 게시판 의뢰 ${RANK_BOARD[r]}개 · 진행 임무 ${RANK_MISSION_MAX[r]}개 · 임무 보상 돈 +${r * 5}%${r >= RANK_STAR_FROM ? ' · ★우대 의뢰' : ''}</p>`, '승급 선물 받기');
+    await UI.alert(`${RANKS[r][1]} ${RANKS[r][0]} 랭크로 승급!`, `<p class="center">${rankBadge(r, 0)}</p>
+      <p class="center">혜택: 게시판 의뢰 ${RANK_BOARD[r]}개 · 진행 임무 ${RANK_MISSION_MAX[r]}개 · 임무 보상 돈 +${r * 5}% · 영입 확률 +${r}%p${r >= RANK_STAR_FROM ? ' · ★우대 의뢰' : ''}</p>`, '승급 선물 받기');
     Sound.fanfare('bigreward', 'achieve');
-    UI.alert('🎁 승급 선물', `<p>${parts.join(' · ')}${money ? ` · ₽${money}` : ''}</p><p class="dim">물건은 창고에 넣어 두었어요.</p>`);
+    await UI.alert('🎁 승급 선물', `<p>${parts.join(' · ')}${money ? ` · ₽${money}` : ''}</p><p class="dim">물건은 창고에 넣어 두었어요.</p>`);
+    if (r === last && masterStars(st.pts) > st.seenStar) setTimeout(checkRankUp, 500);   // 마스터가 되면서 별도 이미 쌓였으면 이어서
+  }
+  // 마스터 별 승급 (v0.99): 별이 오를 때마다 무지개구미. 여러 개 한꺼번에 올랐으면 그만큼
+  async function masterStarUp(st, stars) {
+    const from = st.seenStar, n = stars - from;
+    st.seenStar = stars;
+    const parts = [];
+    for (const [id, k] of MASTER_STAR_GIFT) if (ITEMS[id]) { storeKeep(id, k * n); parts.push(`${ITEMS[id].icon} <b>${esc(ITEMS[id].n)}</b>${k * n > 1 ? ' ×' + k * n : ''}`); }
+    persist(); renderTown();
+    const r = RANKS.length - 1, next = RANKS[r][2] + (stars + 1) * MASTER_STAR_PTS - st.pts;
+    markEvent('masterstar');
+    await Story.play(masterStarScene(n, stars), { bgm: 'wigglytuff', vars: { 탐험대: Story.teamLabel(), 포인트: st.pts, 다음: next } });
+    Sound.fanfare('rankup', 'achieve');
+    await UI.alert(`${RANKS[r][1]} 마스터 ★${stars} 랭크!`, `<p class="center">${rankBadge(r, stars)}</p><p class="center">🎁 ${parts.join(' · ')} <span class="dim">(창고로)</span></p>`);
+  }
+  const masterStarScene = (n, stars) => [
+    [40, 'Joyous', '친구친구~! 다들 모여 봐~!'],
+    [441, 'Normal', '{탐험대|가} 의뢰를 열심히 해낸 덕분에 탐험대 포인트가 {포인트}점이 되었다!'],
+    [40, 'Happy', n > 1 ? `마스터 랭크에 별이 ${n}개나 더~! 이제 마스터 ★${stars}야~!` : `마스터 랭크에 별이 하나 더~! 이제 마스터 ★${stars}야~!`],
+    [441, 'Happy', '선물은 창고에 넣어 두었다! 다음 별까지 {다음}점, 방심하지 말도록!'],
+    [40, 'Joyous', '앞으로도 잘 부탁해~! 야아앗~!!'],
+  ];
+  // ── 짧은 이벤트 다시 보기 (v0.99, 정보 탭 → 이야기 다시 보기): 본 것만 열리고, 본편 엔딩을 보면 모두 열린다 ──
+  const EVENTS = [['rankup', '🏅 탐험대 승급식'], ['masterstar', '🏆 마스터 별 승급식'], ['skunk', '🦨 구린내 탐험대의 구조']];
+  function markEvent(id) { save.eventsSeen = { ...(save.eventsSeen || {}), [id]: true }; }
+  function eventSeen(id) {
+    const r = save.rank || {};   // 이 기능 전에 본 승급식도 열어 둔다
+    return !!(save.eventsSeen || {})[id] || (id === 'rankup' && r.seen > 0) || (id === 'masterstar' && r.seenStar > 0);
+  }
+  const eventList = () => { const all = !!save.endingSeen || Story.mainDone(); return EVENTS.map(([id, title]) => ({ id, title, open: all || eventSeen(id) })); };   // 엔딩을 봤거나 본편을 모두 봤으면 전부
+  async function playEvent(id) {
+    const st = rankState(), vars = { 탐험대: Story.teamLabel(), 포인트: st.pts };
+    if (id === 'rankup') { const r = Math.max(1, rankOf(st.pts)), nx = RANKS[r + 1]; return Story.play(rankScene(r - 1, r), { bgm: 'wigglytuff', vars: { ...vars, 랭크: RANKS[r][0], 다음: nx ? nx[2] - st.pts : 0 } }); }
+    if (id === 'masterstar') { const s = Math.max(1, masterStars(st.pts)); return Story.play(masterStarScene(1, s), { bgm: 'wigglytuff', vars: { ...vars, 다음: MASTER_STAR_PTS } }); }
+    if (id === 'skunk') return Story.play(skunkScene(spName(save.current), ''), { bgm: 'teamskull' });
   }
   // 승급식 대사 (푸크린 길드: 길드장 푸크린, 조수 페라페)
   function rankScene(from, r) {
@@ -991,7 +1035,7 @@ const Game = (() => {
   // 임무 정렬: 받은 순서(그대로) / 층수 (던전 → 층 순서)
   const dgOrder = id => DUNGEONS.findIndex(d => d.id === id);
   const sortMissions = list => save.missionSort === 'floor' ? list.slice().sort((a, b) => dgOrder(a.dungeon) - dgOrder(b.dungeon) || a.floor - b.floor) : list;
-  const rewardText = m => m.kind === 'sos' ? `₽${m.reward} + ${m.online ? '구조 보답(무작위 아이템·돈)' : 'A-OK 코드'}` : `₽${m.reward}${m.item ? ` + ${ITEMS[m.item].icon}${ITEMS[m.item].n}` : ''}`;
+  const rewardText = m => m.kind === 'sos' ? `₽${m.reward} + 구조 보답(무작위 아이템·돈)${m.online ? '' : ' + A-OK 코드'}` : `₽${m.reward}${m.item ? ` + ${ITEMS[m.item].icon}${ITEMS[m.item].n}` : ''}`;
 
   let ccOpen = null;   // 휴대폰에서 캐릭터 카드를 펼쳐 두었는지
   // ── 탭마다 맞아 주는 포켓몬 (말풍선 한 줄, 날마다 바뀐다. 누르면 다음 말) ──
@@ -1074,7 +1118,7 @@ const Game = (() => {
   const itemLabel = id => `${Gfx.iconHtml(id)} <b>${esc(ITEMS[id].n)}</b>`;   // 원작 아이콘이 있으면 그림 (js/gfx.js)
 
   const DG_TABS = [['normal', '🗺 일반 던전', d => d.mode === 'normal' && !d.theme], ['theme', '👑 테마 던전', d => !!d.theme],
-    ['rogue', '🌀 로그라이크', d => d.mode === 'rogue' && !d.daily], ['daily', '🗓 오늘의 도전', d => false], ['hard', '☠ 하드 (테스트 중)', d => false]];
+    ['rogue', '🌀 로그라이크', d => d.mode === 'rogue' && !d.daily], ['daily', '🗓 오늘의 도전', d => false], ['hard', '☠ 하드', d => false]];
   // ── 포켓몬별 클리어 기록과 메달 (오늘의 도전 제외) ──
   const MEDALS = [
     { k: 'normal', icon: '🎖', n: '일반 던전 정복', d: '일반 던전을 모두 클리어' },
@@ -1112,8 +1156,7 @@ const Game = (() => {
       const list = m.k === 'all' ? DUNGEONS.filter(d => ['normal', 'theme', 'rogue'].some(k => DG_TABS.find(t => t[0] === k)[2](d))) : medalDungeons(m.k);
       const n = list.filter(d => c[d.id]).length;
       return `<div class="medal-row${got.includes(m.k) ? ' got' : ''}"><span class="medal">${m.icon}</span><b>${esc(m.n)}</b> <span class="dim">${esc(m.d)} · ${n}/${list.length}</span></div>`;
-    }).join('')}${hardUnlocked(save) ? (() => { const hc = (save.hardClears || {})[sp] || {}, all = hardDungeons(), n = all.filter(d => hc[d.id]).length;
-      return `<div class="medal-row${n >= all.length ? ' got' : ''}"><span class="medal">☠</span><b>하드모드</b> <span class="dim">하드모드로 클리어한 일반·테마 던전 · ${n}/${all.length}</span></div>`; })() : ''}</div>`;
+    }).join('')}</div>`;
   }
 
   function tabDungeon() {
@@ -1155,20 +1198,17 @@ const Game = (() => {
   }
 
   // ── ☠ 하드 탭 ──
-  const kitText = lv => { const c = {}; for (const b of hardKit(lv)) c[b.id] = (c[b.id] || 0) + b.n; return Object.entries(c).map(([id, n]) => `${ITEMS[id].icon}${esc(ITEMS[id].n)}×${n}`).join(' '); };
   function hardTabHtml() {
     if (!hardUnlocked(save)) {
       const all = hardDungeons(), n = all.filter(d => save.cleared[d.id]).length;
       return `<p>🔒 <b>하드모드</b>는 일반·테마 던전(숨은 던전 제외)을 모두 클리어하면 열려요. <span class="dim">(${n}/${all.length})</span></p>`;
     }
-    const mine = (save.hardClears || {})[save.current] || {};
-    return `<p class="warn">🧪 하드모드는 테스트 중이에요. 규칙·난이도·보상이 바뀔 수 있어요.</p><p class="dim">탐험대와 적 모두 던전 최고 레벨로 고정 (경험치 없음, 레벨이 진화 조건보다 낮으면 진화 전 모습). 가방은 기본 아이템으로 시작하고 지닌 물건만 그대로예요. 적이 똑똑해지고 좋은 기술을 들고 나와요.</p>
+    const hc = Object.assign({}, ...Object.values(save.hardClears || {}), save.hardCleared || {}), hn = HARD_LIST.filter(id => hc[id]).length;   // 예전 캐릭터별 기록도 합친다
+    return `<p><b>☠ 하드 클리어 ${hn}/${HARD_LIST.length}</b> <span class="dim">(계정 기록: 어느 포켓몬으로 깨도 같이 쌓여요)</span></p><p class="dim">탐험대와 적 모두 던전 최고 레벨로 고정 (경험치 없음, 레벨이 진화 조건보다 낮으면 진화 전 모습). 가방과 지닌 물건은 일반 던전처럼 가져가요. 적이 똑똑해지고 좋은 기술을 들고 나와요.</p>
       <div class="cards">${HARD_LIST.map(dungeonById).filter(Boolean).map(dg => `<div class="card dg normal" style="--c1:${dg.pal[1]};--c2:${dg.pal[2]}">
-        <div class="dg-head"><b>☠ ${esc(dg.n)}</b> ${(save.hardCleared || {})[dg.id] ? '<i class="clear">클리어</i>' : ''}${mine[dg.id] ? `<i class="clear me" title="${esc(jo(spName(save.current), '으로'))} 하드 클리어">☠</i>` : ''}</div>
+        <div class="dg-head"><b>☠ ${esc(dg.n)}</b> ${hc[dg.id] ? '<i class="clear">클리어</i>' : ''}</div>
         <div class="dim">${dg.floors}층 · 탐험대·적 Lv${dg.lv[1]} 고정</div>
-        <div class="note">기본 아이템: ${kitText(dg.lv[1])}</div>
-        <div class="note theme">클리어 보상: 테스트 중이라 아직 없음 (주운 아이템과 돈은 가져옴)</div>
-        <div class="dg-btns"><button class="btn" data-act="go-hard" data-arg="${dg.id}">출발</button> <button class="btn ghost" data-act="dg-info" data-arg="${dg.id}">ℹ 정보</button></div></div>`).join('')}</div>`;
+        <div class="dg-btns"><button class="btn" data-act="go-hard" data-arg="${dg.id}">출발</button> <button class="btn ghost" data-act="dg-info-hard" data-arg="${dg.id}">ℹ 정보</button></div></div>`).join('')}</div>`;
   }
   function prepareHard(id) {
     const dg = dungeonById(id); if (!dg || !hardUnlocked(save) || !HARD_LIST.includes(id)) return;
@@ -1183,23 +1223,24 @@ const Game = (() => {
       return `<div class="row">${portraitImg(d, 'portrait xs')} <b>${esc(spName(d))}</b> Lv${lv} <span class="dim">(${esc(spName(x))}의 진화 전 모습)</span>
         · 특성 <select data-hab="${x}">${list.map(a => `<option value="${a}" ${a === def ? 'selected' : ''}>${esc(abilityName(a))}${DATA.species[d].ab.find(z => z[0] === a)?.[1] ? ' (숨겨진 특성)' : ''}</option>`).join('')}</select>${heldTxt(x)}</div>`;
     });
-    UI.open({ title: `☠ ${esc(dg.n)} (하드)`, wide: true, html: `<p class="warn">🧪 하드모드는 테스트 중이에요. 규칙·난이도·보상이 바뀔 수 있어요.</p>${team.join('')}<ul>
+    UI.open({ title: `☠ ${esc(dg.n)} (하드)`, wide: true, html: `${team.join('')}<ul>
       <li>탐험대와 적 모두 <b>Lv${lv}</b> 고정. 경험치·숙련도는 오르지 않아요.</li>
-      <li>가방: ${kitText(lv)} <span class="dim">(마을 가방은 그대로 두고 가요. 지닌 물건은 그대로)</span></li>
-      <li>클리어하거나 탈출하면 주운 아이템과 돈을 가져와요 (기본 아이템은 빼고). 클리어 보상은 테스트 중이라 아직 없어요.</li>
-      <li class="warn">쓰러지면 주운 아이템과 돈을 모두 잃어요. 구조 요청과 임무는 없어요.</li></ul>`,
+      <li>가방과 지닌 물건은 일반 던전처럼 가져가요. 클리어하거나 탈출하면 가방 그대로 돌아와요. 클리어하면 하드 클리어 기록(☠)이 남아요.</li>
+      <li class="warn">쓰러지면 일반 던전처럼 가방 아이템 절반과 주운 돈을 잃고, 지닌 물건도 잃을 수 있어요. 구조 요청과 임무는 없어요.</li></ul>`,
       choices: [{ label: '출발한다', fn: () => startRun(dg, true, picks) }, { label: '그만둔다', fn: () => {} }],
       onOpen: box => box.querySelectorAll('[data-hab]').forEach(s => s.onchange = () => { picks[s.dataset.hab] = +s.value; }) });
   }
 
   // ── 던전 정보: 나오는 적, 보스, 아이템, 특징 ──
-  function showDungeonInfo(id) {
+  function showDungeonInfo(id, hard) {
     const dg = id === 'daily' ? Progress.setupDaily() : dungeonById(id);
     if (!dg) return;
-    UI.open({ title: `${esc(dg.n)} 정보`, wide: true, html: dungeonInfoHtml(dg), choices: [{ label: '닫기', fn: () => {} }] });
+    UI.open({ title: `${hard ? '☠ ' : ''}${esc(dg.n)} ${hard ? '(하드) ' : ''}정보`, wide: true, html: dungeonInfoHtml(dg, hard), choices: [{ label: '닫기', fn: () => {} }] });
   }
-  function dungeonInfoHtml(dg) {
-    const floorLv = f => Math.round(dg.lv[0] + (dg.lv[1] - dg.lv[0]) * (dg.floors > 1 ? (f - 1) / (dg.floors - 1) : 0));
+  // hard: 하드모드 규칙으로 (레벨 고정·적 보정·보스 배율·아이템 한 등급 위, v0.99)
+  function dungeonInfoHtml(dg, hard) {
+    const normLv = f => Math.round(dg.lv[0] + (dg.lv[1] - dg.lv[0]) * (dg.floors > 1 ? (f - 1) / (dg.floors - 1) : 0));
+    const floorLv = f => (hard ? dg.lv[1] : normLv(f));
     // 출현 포켓몬: 층 구간마다 후보를 모은다
     const band = dg.floors <= 10 ? Math.ceil(dg.floors / 2) : 5;
     const bands = [];
@@ -1215,34 +1256,43 @@ const Game = (() => {
     // 보스
     const finals = bossPool(dg).length ? bossPool(dg) : BOSSES[dg.id] && DATA.species[BOSSES[dg.id]] ? [BOSSES[dg.id]] : [];
     const bossHtml = `<h3>보스</h3>
-      <div class="row"><span class="grow"><b>${dg.floors}층 (최종)</b> ${finals.length ? finals.map(spName).join(' / ') + (finals.length > 1 ? ' 중 하나' : '') : '그 층 후보 중 가장 강한 포켓몬'} · Lv${floorLv(dg.floors) + 3}</span></div>
+      <div class="row"><span class="grow"><b>${dg.floors}층 (최종)</b> ${finals.length ? finals.map(spName).join(' / ') + (finals.length > 1 ? ' 중 하나' : '') : '그 층 후보 중 가장 강한 포켓몬'} · Lv${Math.min(MAX_LEVEL, floorLv(dg.floors) + 3)}</span></div>
       ${finals.length ? mon(finals) : ''}
       ${midPool(dg).length ? `<div class="row"><span class="grow"><b>중간 보스 ${dg.mid.floors.join(', ')}층</b> 아래 중 하나씩 (한 탐험에서 겹치지 않음)</span></div>${mon(midPool(dg))}` : ''}
       ${dg.mode === 'rogue' ? '<p class="dim">10층마다 그 층 후보 중 가장 강한 포켓몬이 중간 보스로 나온다.</p>' : ''}
-      <p class="dim">보스는 HP 3.5배, 공격·방어·특공·특방 1.1배, 레벨 +3. 쓰러뜨리면 계단이 나타나고 돈과 좋은 아이템을 준다.</p>`;
+      <p class="dim">보스는 HP ${hard ? HARD_BOSS.hp : 3.5}배, 공격·방어·특공·특방 ${hard ? HARD_BOSS.stat : 1.1}배, 레벨 +3${hard ? ` (최고 Lv${MAX_LEVEL})` : ''}. 쓰러뜨리면 계단이 나타나고 돈과 좋은 아이템을 준다.${hard ? ` 보스방에서는 보스와 ${HARD_BOSS_NEAR}칸 더 가까이에서 시작한다.` : ''}</p>`;
     // 특징
     const firstAt = lv => { for (let f = 1; f <= dg.floors; f++) if (floorLv(f) >= lv) return f; return 0; };
     const trapF = firstAt(FEATURE_LV.trap), shopF = firstAt(FEATURE_LV.shop), houseF = firstAt(FEATURE_LV.house);
     const feat = [
-      `적 레벨 ${dg.lv[0]} ~ ${dg.lv[1]} (층마다 점점 강해짐)`,
+      ...(hard ? [
+        `<b>탐험대와 적 모두 Lv${dg.lv[1]} 고정</b> (경험치·숙련도 없음, 레벨이 진화 조건보다 낮으면 진화 전 모습)`,
+        `일반 적: HP ${HARD_FOE.hp}배, 공격·방어·특공·특방 ${HARD_FOE.stat}배. 똑똑해지고 좋은 기술을 골라 들고 나온다`,
+        `적이 더 빨리 다시 나타난다 (${HARD_SPAWN[0]}~${HARD_SPAWN[1]}턴마다, 보통 30~45)`,
+        `몬스터하우스: 2층부터 ${Math.round(HARD_HOUSE.first * 100)}%, 한 층에 여럿 (최대 ${HARD_HOUSE.max}개)`,
+        `배고픔이 ${HARD_BELLY_MUL}배 빨리 닳는다`,
+        `아이템이 한 등급 위로 나온다`,
+        '가방과 지닌 물건은 일반 던전처럼 가져간다. 구조 요청과 임무는 없다',
+      ] : [`적 레벨 ${dg.lv[0]} ~ ${dg.lv[1]} (층마다 점점 강해짐)`]),
       dg.wx && dg.wx.length ? `날씨: ${dg.wx.map(([w, p]) => `${WEATHERS[w].icon}${WEATHERS[w].n} ${Math.round(p * 100)}%`).join(' · ')} (층마다 결정)` : '날씨 없음',
       trapF ? `함정: ${trapF}층부터` : '함정 없음',
       shopF ? `켈리몬 상점: ${shopF}층부터 층마다 ${Math.round(SHOP_CHANCE * 100)}%` : '켈리몬 상점 없음',
-      houseF ? `몬스터하우스: ${houseF}층부터 층마다 ${Math.round(HOUSE_CHANCE * 100)}%` : '몬스터하우스 없음',
+      hard ? '' : houseF ? `몬스터하우스: ${houseF}층부터 층마다 ${Math.round(HOUSE_CHANCE * 100)}%` : '몬스터하우스 없음',
       dg.hidden ? '숨은 던전 (메달 진행도에는 들어가지 않는다)' : '',
-      dg.extra ? `${dg.theme} 시리즈가 일반 적으로도 섞여 나온다` : '',
+      dg.extra ? (dg.theme ? `${dg.theme} 시리즈가 일반 적으로도 섞여 나온다` : `${dg.extra.filter(id => DATA.species[id]).map(spName).join('·')}도 일반 적으로 섞여 나온다`) : '',
       `한 층에 머물 수 있는 시간: ${WIND.limit}턴 (넘으면 바람에 날려감)`,
       dg.mode === 'rogue' ? `로그라이크: Lv${ROGUE_LEVEL}, 기본 가방으로 입장 (지닌 물건은 그대로)` : '',
     ].filter(Boolean);
     // 아이템: 마지막 층 기준 드롭 확률 (앞쪽 층은 등급이 낮은 아이템만)
-    const table = dropTable(dropLvFor(dg, dg.floors, dg.lv[1]), dg);
+    const dropLvAt = f => dropLvFor(dg, f, hard ? normLv(f) + HARD_DROP_LV : normLv(f));   // 하드: 한 등급 위 (js/dungeon.js D.lvl)
+    const table = dropTable(dropLvAt(dg.floors), dg);
     const total = table.reduce((a, d) => a + d[1], 0) / (1 - (table.money || 0));   // 돈 무더기로 바뀌는 몫까지 포함한 전체
     const groups = { heal: ['🍎 회복·음식', []], berry: ['🍒 열매', []], throw: ['📌 던지는 도구', []], misc: ['🔮 씨앗·구슬·기타', []], rare: ['💎 희귀 (영양제·구미·사탕 등)', []], held: ['🎗 지닌 물건', []], tm: ['💿 기술머신', []] };
     const merged = {};
     for (const [iid, w] of table) merged[iid] = (merged[iid] || 0) + w;
     // 아이템 단계: 층마다 적 레벨로 정해진다 (초반·중반·후반·최종)
     const stages = [];
-    for (let f = 1; f <= dg.floors; f++) { const st = dropStage(dropLvFor(dg, f, floorLv(f))); if (!stages.length || stages[stages.length - 1][0] !== st) stages.push([st, f]); }
+    for (let f = 1; f <= dg.floors; f++) { const st = dropStage(dropLvAt(f)); if (!stages.length || stages[stages.length - 1][0] !== st) stages.push([st, f]); }
     const tierNote = stages.length <= 1 ? `${DROP_STAGE_NAMES[stages[0][0]]} 단계 아이템` : `아이템 단계: ${stages.map(([st, f]) => `${DROP_STAGE_NAMES[st]} ${f}층~`).join(', ')}`;
     for (const [iid, w] of Object.entries(merged)) groups[itemGroup(iid)][1].push([iid, w]);
     const pctT = w => { const p = w / total * 100; return p >= 1 ? p.toFixed(1) + '%' : p >= 0.1 ? p.toFixed(2) + '%' : p.toFixed(3) + '%'; };
@@ -1262,7 +1312,7 @@ const Game = (() => {
         <ul class="dg-feat">${feat.map(x => `<li>${x}</li>`).join('')}</ul>
         ${bossHtml}
         <h3>나오는 포켓몬 <span class="dim">${seenIn([...allIds])}/${allIds.size}종 만남 · 층마다 이 중 6종이 무작위로 등장${!dg.extra && [...PARADOX_PAST, ...PARADOX_FUTURE].some(id => allIds.has(id)) ? ' (패러독스 포켓몬은 드물게)' : ''} · 어두운 것은 아직 못 만난 포켓몬</span></h3>
-        ${bands.map((b, i) => `<details${i === 0 ? ' open' : ''}><summary><b>${b.a === b.b ? b.a : `${b.a}~${b.b}`}층</b> <span class="dim">Lv${floorLv(b.a)}~${floorLv(b.b)} · ${b.ids.length}종 (만남 ${seenIn(b.ids)})</span></summary>${mon(b.ids)}</details>`).join('')}
+        ${bands.map((b, i) => `<details${i === 0 ? ' open' : ''}><summary><b>${b.a === b.b ? b.a : `${b.a}~${b.b}`}층</b> <span class="dim">${hard ? `Lv${dg.lv[1]}` : `Lv${floorLv(b.a)}~${floorLv(b.b)}`} · ${b.ids.length}종 (만남 ${seenIn(b.ids)})</span></summary>${mon(b.ids)}</details>`).join('')}
         <h3>나오는 아이템 <span class="dim">마지막 층 기준 확률 · 한 층에 아이템 ${ITEMS_PER_FLOOR[0]}~${ITEMS_PER_FLOOR[1]}개, 돈 2~4무더기 · ${tierNote}</span></h3>
         ${itemHtml}
         ${table.money ? `<p>💰 <b>돈 무더기</b> <span class="dim">${pctT(total * table.money)} · 아이템 자리에 대신 놓이는 돈</span></p>` : ''}
@@ -1435,12 +1485,29 @@ const Game = (() => {
       });
     });
   }
+  // 🔁 자동 판매 창 (v0.99): 분류 탭(일반·지닌 물건·기술머신·전용·메가스톤) + 이름 검색으로 찾아서 켠다. 켜 둔 목록도 같은 분류로 거른다
+  const AS_CATS = [['all', '전체'], [1, '🎒 일반'], [2, '🎗 지닌 물건'], [3, '💿 기술머신'], [4, '⭐ 전용 도구'], [5, '♾️ 메가스톤']];
+  const AS_SHOW = 60;   // 후보는 한 번에 이만큼만 (검색으로 좁힌다)
+  let asCat = 'all', asQ = '';
   function autoSellDialog() {
     storeDialog('🔁 자동 판매', autoSellBox, (el, refresh) => {
-      el.addEventListener('click', async e => { const b = e.target.closest('[data-asoff]'); if (b) { await toggleAutoSell(b.dataset.asoff); refresh(); } });
-      el.addEventListener('change', async e => {
-        if (e.target.dataset.asadd && e.target.value) { await toggleAutoSell(e.target.value); refresh(); }
-        if (e.target.dataset.askeep) { setAutoSellKeep(e.target.dataset.askeep, e.target.value); refresh(); }
+      el.addEventListener('click', async e => {
+        const off = e.target.closest('[data-asoff]'), on = e.target.closest('[data-ason]'), cat = e.target.closest('[data-ascat]'), allOn = e.target.closest('[data-asallon]');
+        if (off) { await toggleAutoSell(off.dataset.asoff); refresh(); }
+        if (on) { await toggleAutoSell(on.dataset.ason); refresh(); }
+        if (cat) { asCat = cat.dataset.ascat === 'all' ? 'all' : +cat.dataset.ascat; el.innerHTML = autoSellBox(); }
+        if (allOn) {   // 창고에 있는 이 분류의 것을 한 번에 켠다
+          const ids = asCands().filter(id => (save.storage[id] || 0) > 0);
+          if (ids.length && await UI.confirm('자동 판매', `<p>창고에 있는 ${ids.length}종을 모두 자동 판매로 등록할까요? (창을 닫을 때 남길 개수를 넘는 것은 팔아요)</p>`, '등록한다', '그만둔다')) {
+            save.autoSell = [...new Set([...(save.autoSell || []), ...ids])]; refresh();
+          }
+        }
+      });
+      el.addEventListener('change', e => { if (e.target.dataset.askeep) { setAutoSellKeep(e.target.dataset.askeep, e.target.value); refresh(); } });
+      el.addEventListener('input', e => {
+        if (!e.target.dataset.asq) return;
+        asQ = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart;
+        el.innerHTML = autoSellBox(); const inp = el.querySelector('[data-asq]'); inp.focus(); inp.setSelectionRange(pos, pos);
       });
     }, sellStoredAutoSell);   // 창을 닫을 때 창고에 있던 것 중 남길 개수를 넘는 것을 판다
   }
@@ -1451,19 +1518,32 @@ const Game = (() => {
     }
     persist(); renderTown();
   }
-  function autoSellBox() {
-    const list = (save.autoSell || []).filter(id => ITEMS[id]);
-    // 한 줄에 하나씩. 추가는 목록에서 고른다 (창고·가방에 있는 것 먼저)
+  const asFits = id => (asCat === 'all' || itemKindNo(id) === asCat) && (!asQ || ITEMS[id].n.toLowerCase().includes(asQ));
+  // 아직 켜지 않은 후보: 창고·가방에 있는 것 먼저, 그다음 종류 순서
+  function asCands() {
+    const list = new Set(save.autoSell || []);
     const have = new Set([...Object.keys(save.storage).filter(k => save.storage[k] > 0), ...save.bag.map(b => b.id)]);
-    const opts = Object.keys(ITEMS).filter(id => id !== 'quest' && !list.includes(id) && ITEMS[id].price).sort(byKind);
-    const opt = id => `<option value="${id}">${ITEMS[id].icon} ${esc(ITEMS[id].n)}</option>`;
-    return `<div class="autosell"><p class="dim">고른 아이템은 창고에 들어올 때(맡기기·의뢰 보상 등) 넣지 않고 바로 팔아요. <b>남길 개수</b>를 정하면 그만큼은 창고에 넣고 넘치는 것만 팔아요 (0이면 모두 판매). 창고에 이미 있던 것은 이 창을 닫을 때 팔아요. 직접 사거나 되산 물건은 팔지 않아요. 판 물건은 상점 탭에서 되살 수 있어요. (${list.length}개)</p>
-      <div class="row"><select data-asadd="1"><option value="">＋ 자동 판매할 아이템 고르기</option>
-        <optgroup label="창고·가방에 있는 것">${opts.filter(id => have.has(id)).map(opt).join('')}</optgroup>
-        <optgroup label="그 밖의 아이템">${opts.filter(id => !have.has(id)).map(opt).join('')}</optgroup></select></div>
-      ${list.map(id => `<div class="row">${itemLabel(id)}<span class="grow dim">창고 ${save.storage[id] || 0}개 · ${ITEMS[id].stack ? '5개에' : '하나에'} ₽${sellValue({ id, n: ITEMS[id].stack ? 5 : 1 })}</span>
+    return Object.keys(ITEMS).filter(id => id !== 'quest' && !list.has(id) && ITEMS[id].price && asFits(id))
+      .sort((a, b) => (have.has(b) - have.has(a)) || byKind(a, b));
+  }
+  function autoSellBox() {
+    const list = (save.autoSell || []).filter(id => ITEMS[id]), shownOn = list.filter(asFits);
+    const cands = asCands(), haveN = cands.filter(id => (save.storage[id] || 0) > 0).length;
+    const tabs = `<div class="dex-tabs dg-tabs">${AS_CATS.map(([k, n]) => {
+      const c = list.filter(id => k === 'all' || itemKindNo(id) === k).length;
+      return `<button class="${asCat === k ? 'on' : ''}" data-ascat="${k}">${n}${c ? ` <span class="dim">${c}</span>` : ''}</button>`; }).join('')}</div>`;
+    const sellTxt = id => `${ITEMS[id].stack ? '5개에' : '하나에'} ₽${sellValue({ id, n: ITEMS[id].stack ? 5 : 1 })}`;
+    return `<div class="autosell"><p class="dim">고른 아이템은 창고에 들어올 때(맡기기·의뢰 보상 등) 넣지 않고 바로 팔아요. <b>남길 개수</b>만큼은 창고에 넣고 넘치는 것만 팔아요 (0이면 모두 판매). 창고에 이미 있던 것은 이 창을 닫을 때 팔아요. 직접 사거나 되산 물건은 팔지 않아요. 판 물건은 상점 탭에서 되살 수 있어요.</p>
+      ${tabs}
+      <input data-asq="1" placeholder="아이템 이름 검색" value="${esc(asQ)}" autocomplete="off" style="width:100%;margin:6px 0">
+      <h3>✅ 자동 판매 중 <span class="dim">${shownOn.length}${shownOn.length !== list.length ? ` / 전체 ${list.length}` : ''}개</span></h3>
+      ${shownOn.map(id => `<div class="row">${itemLabel(id)}<span class="grow dim">창고 ${save.storage[id] || 0}개 · ${sellTxt(id)}</span>
         <label class="dim tiny">남길 개수 <input type="number" min="0" max="999" step="1" data-askeep="${id}" value="${autoSellKeep(id)}" style="width:4.2em"></label>
-        <button class="btn sm ghost" data-asoff="${id}">끄기</button></div>`).join('')}</div>`;
+        <button class="btn sm ghost" data-asoff="${id}">끄기</button></div>`).join('') || '<p class="dim">이 분류에 켜 둔 아이템이 없어요.</p>'}
+      <h3>＋ 켜기 <span class="dim">${cands.length}종${cands.length > AS_SHOW ? ` 중 ${AS_SHOW}종 (검색으로 좁혀 보세요)` : ''}</span>
+        ${haveN ? `<button class="btn sm ghost" data-asallon="1">창고에 있는 ${haveN}종 모두 켜기</button>` : ''}</h3>
+      ${cands.slice(0, AS_SHOW).map(id => `<div class="row">${itemLabel(id)}<span class="grow dim">${(save.storage[id] || 0) ? `창고 ${save.storage[id]}개 · ` : ''}${sellTxt(id)}</span>
+        <button class="btn sm" data-ason="${id}">켜기</button></div>`).join('') || '<p class="dim">찾는 아이템이 없어요.</p>'}</div>`;
   }
   let autoSoldMoney = 0, autoSoldTimer = null;
   // 창고에 맡긴다. 자동 판매 아이템이면 대신 판다 (true: 팔았음)
@@ -1539,7 +1619,7 @@ const Game = (() => {
       ${tmWhoBar()}
       <h3>🏅 ${esc(spName(sp))}의 메달</h3>${medalSection(sp)}
       <div class="btns"><button class="btn" data-act="change-char">🔄 리더 변경</button> <button class="btn" data-act="set-moves" data-arg="${sp}">📘 ${esc(spName(sp))} 기술 설정</button></div>
-      <p class="dim">영입한 포켓몬 ${roster.length}마리 · 지금 영입 확률 <b>${(recruitRate(save.roster[save.current].lv) * 100).toFixed(1)}%</b> <span class="tiny">(리더 레벨 기준, 전설·환상은 절반)</span></p>
+      <p class="dim">영입한 포켓몬 ${roster.length}마리 · 지금 영입 확률 <b>${(recruitRateFor(save.roster[save.current].lv, rankState().pts) * (HELD_ITEMS[save.roster[save.current].held]?.hold?.recruitMul || 1) * 100).toFixed(1)}%</b> <span class="tiny">(리더 레벨 기준${rankLv() ? `, 탐험대 등급 +${rankLv()}%p` : ''}${HELD_ITEMS[save.roster[save.current].held]?.hold?.recruitMul ? ', 친구리본 포함' : ''}, 전설·환상은 절반)</span></p>
       ${DATA.species[sp].sh ? `<h3>모습</h3><div class="row">${portraitImg(sp, 'portrait sm', 'Normal', false)} ${portraitImg(sp, 'portrait sm', 'Normal', true)}
         <span class="grow">${ch.shiny ? '✨ 이로치(색이 다른 모습)로 탐험합니다.' : '보통 모습으로 탐험합니다.'} <span class="dim">(겉모습만 바뀝니다)</span></span>
         ${shinyOk(sp) ? `<button class="btn sm" data-act="toggle-shiny">${ch.shiny ? '보통 모습으로' : '✨ 이로치로'}</button>` : '<span class="dim tiny">🔒 이 포켓몬이나 같은 진화 계열의 이로치를 쓰러뜨리거나 영입하면 고를 수 있어요</span>'}</div>` : ''}
@@ -1916,6 +1996,7 @@ const Game = (() => {
       case 'restore-backup': return restoreBackup(+arg);
       case 'dgtab': dgTab = arg; break;
       case 'dg-info': return showDungeonInfo(arg);
+      case 'dg-info-hard': return showDungeonInfo(arg, true);
       case 'ending': return showEnding(false);
       case 'ending-stats': return showEndingStats();
       case 'version-notes': UI.alert('변경 내역', VERSION_NOTES.map(([v, list]) => `<h3>v${v}${v === GAME_VERSION ? ' <span class="tag">지금 버전</span>' : ''}</h3><ul>${list.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')); return;
@@ -2619,7 +2700,7 @@ const Game = (() => {
       const lv = dg.lv[1];
       p = makeHardMember(sp, lv, { player: true }, abilPicks[sp]);
       p.belly = 100;
-      const run = { dungeon: dg.id, floor: 1, mode: 'normal', hard: true, hardLv: lv, p, bag: hardKit(lv), kit: hardKit(lv), money: 0, done: [], party: partyList().map(id => makeHardMember(id, lv, { ally: true }, abilPicks[id])).map(a => Object.assign(a, { ally: true })), carried: null };
+      const run = { dungeon: dg.id, floor: 1, mode: 'normal', hard: true, hardLv: lv, p, bag: JSON.parse(JSON.stringify(save.bag)), kit: [], money: 0, done: [], party: partyList().map(id => makeHardMember(id, lv, { ally: true }, abilPicks[id])).map(a => Object.assign(a, { ally: true })), carried: null };
       show('dungeon-screen');
       Dungeon.enter(run);
       return;
@@ -2643,6 +2724,22 @@ const Game = (() => {
     Dungeon.enter(run);
   }
 
+  // 쓰러졌을 때 (일반·하드 던전): 가방 아이템 절반 (점착 1/4), 지닌 물건 50% (점착 25%), 주운 돈을 잃는다. 결과 문구를 돌려준다
+  function faintLoss(p, r) {
+    const lines = [], bag = r.bag.slice();
+    const half = abilityOf(p).stickyHold ? bag.length / 4 : bag.length / 2;
+    const loseN = Math.floor(half) + (Math.random() < half % 1 ? 1 : 0);
+    if (abilityOf(p).stickyHold) lines.push(`[${abilityName(p.ability)}] 아이템을 꽉 붙잡고 있었다!`);
+    const lost = [];
+    for (let i = 0; i < loseN; i++) lost.push(bag.splice(rand(bag.length), 1)[0]);
+    save.bag = bag;
+    if (p.held && Math.random() < (abilityOf(p).stickyHold ? 0.25 : 0.5)) { lost.push({ id: p.held, n: 1 }); if (save.roster[p.rsp || p.sp]) save.roster[p.rsp || p.sp].held = null; }
+    save.money = Math.max(0, save.money - r.money);
+    if (lost.length) lines.push(`가방의 아이템 ${lost.length}개를 잃어버렸다: ${lost.map(b => ITEMS[b.id].icon + esc(ITEMS[b.id].n) + (b.n > 1 ? '×' + b.n : '')).join(', ')}`);
+    else lines.push('가방의 아이템은 무사했다.');
+    if (r.money) lines.push(`주웠던 돈 ₽${jo(r.money, '을')} 잃어버렸다...`);
+    return lines;
+  }
   // 오늘의 도전: 그날 정해진 포켓몬으로, 하루 한 번
   async function prepareDaily() {
     if (Progress.dailyRecord()) return;
@@ -2836,7 +2933,6 @@ const Game = (() => {
       h += `<div class="row sos-row">${portraitImg(s.sp, 'portrait sm', s.revived ? 'Happy' : 'Pain', s.shiny)}<div class="grow">
         ${s.revived ? `<b>구조되었습니다!</b> ${esc(dg.n)} ${s.floor}F에서 이어서 탐험할 수 있어요.` : `<b>구조를 기다리는 중</b> — ${esc(dg.n)} ${s.floor}F에서 쓰러진 ${esc(spName(s.sp))} Lv${s.lv}`}
         <div class="dim">가방 ${s.snap.bag.length}칸${s.snap.held ? ` · 지닌 물건 ${esc(ITEMS[s.snap.held].n)}` : ''}이 함께 기다리고 있습니다.</div>
-        ${s.revived ? '' : `<div class="${sosLeft(s) < 6 * 3600e3 ? 'warn' : 'dim'}">⏳ 구조 가능 시간 ${Math.max(0, Math.floor(sosLeft(s) / 3600e3))}시간 ${Math.max(0, Math.floor(sosLeft(s) / 60000) % 60)}분 남음 <span class="dim">(48시간이 지나면 구조 실패: 포기와 같은 패널티)</span></div>`}
         ${s.online && !s.revived ? (s.takenAt && s.takenAt > Date.now() - SOS_HOLD_MS
           ? `<div class="ok">🏃 다른 탐험대가 구조하러 출발했어요! (${Math.max(1, Math.round((Date.now() - s.takenAt) / 60000))}분 전) <span class="dim">구조하던 탐험대가 게임을 끄거나 30분 넘게 던전에 들어가지 않으면 다시 게시판에 올라가요.</span></div>`
           : '<div class="dim">📋 구조 게시판에 올라가 있어요. 누군가 구조하러 가면 여기에 표시되고, 구조하면 자동으로 알려 드려요.</div>') : ''}
@@ -2846,8 +2942,8 @@ const Game = (() => {
     if (Online.enabled()) h += Online.loggedIn()
       ? '<div class="row"><span class="grow">📋 <b>구조 게시판</b> <span class="dim">다른 플레이어의 구조 요청을 골라서 구하러 갈 수 있어요.</span></span><button class="btn sm" data-act="sos-board">게시판 보기</button></div>'
       : '<div class="row"><span class="grow dim">📋 로그인하면 구조 게시판에서 다른 플레이어를 구조하거나 구조 요청을 올릴 수 있어요.</span><button class="btn sm ghost" data-act="account">로그인</button></div>';
-    h += `<div class="code-box"><input id="code-input" placeholder="친구에게 받은 코드 입력 (SOS / A-OK / 감사 코드)" autocomplete="off"><button class="btn sm" data-act="code-enter">입력</button></div>`;
-    const sent = (save.aokSent || []).slice(-3);
+    h += `<div class="code-box"><input id="code-input" placeholder="친구에게 받은 코드 입력 (SOS / A-OK 코드)" autocomplete="off"><button class="btn sm" data-act="code-enter">입력</button></div>`;
+    const sent = (save.aokSent || []).filter(a => a.at && a.at > Date.now() - SOS_EXPIRE_MS).slice(-3);   // 최근 48시간에 보낸 것만 (v0.99)
     if (sent.length) h += `<div class="dim">보낸 A-OK 코드: ${sent.map(a => `<a href="#" data-act="aok-show" data-arg="${a.id}">${esc(spName(a.sp))} (${a.code.slice(0, 9)}…)</a>`).join(', ')}</div>`;
     return h;
   }
@@ -2887,7 +2983,7 @@ const Game = (() => {
     const reward = Math.round((150 + d.fl * 40) * (1 + dungeonTier(dg) * 0.5) * MISSION_MONEY_MUL / 10) * 10;
     const ok = await UI.confirm('🆘 구조 요청', `<div class="center">${portraitImg(d.sp, 'portrait big', 'Pain', !!d.sh)}</div>
       <p class="center"><b>${esc(dg.n)} ${d.fl}F</b>에서 ${from ? `<b>${esc(from)}</b> 님` : '친구'}의 Lv${d.lv} <b>${esc(jo(spName(d.sp), '이'))}</b> 쓰러져 있습니다.</p>
-      <p class="center dim">그 층까지 내려가서 말을 걸면 구조 성공. 보상 ₽${reward} + ${from ? '마을로 돌아오면 구조 완료가 자동으로 전해져요' : 'A-OK 코드'}</p>
+      <p class="center dim">그 층까지 내려가서 말을 걸면 구조 성공. 보상 ₽${reward} + 구조 보답 + ${from ? '마을로 돌아오면 구조 완료가 자동으로 전해져요' : 'A-OK 코드'}</p>
       ${from ? '<p class="center dim">구조를 마치면 구조 보답(무작위 아이템과 돈)도 받아요. 30분 동안은 이 요청이 다른 사람에게 보이지 않아요. 그 던전에 들어가 있는 동안은 자동으로 연장돼요.</p>' : ''}`, '구조하러 간다', '그만둔다');
     if (!ok) return;
     if (docId) {   // 게시판 요청: 먼저 맡는다 (이미 누가 맡았으면 받을 수 없음)
@@ -2908,9 +3004,16 @@ const Game = (() => {
     s.revived = { sp: d.sp, lv: d.lv, sh: !!d.sh, ...(from ? { from } : {}), ...(d.noGift ? { noGift: true } : {}) };
     const ci = document.getElementById('code-input'); if (ci) ci.value = '';
     if (s.online && !from) { s.online = false; Online.deleteSOS(s.docId || s.id).catch(() => {}); }   // 코드로 구조됨: 게시판에서 내린다
+    if (!s.online) s.thx = 'code';   // 코드 구조 (v0.99): 감사 코드 없이 바로 이어서 탐험 (창을 닫아도 임무 탭에서 이어진다)
     persist(); renderTown();
     await UI.alert('구조되었다!', `<div class="center">${portraitImg(d.sp, 'portrait big', 'Happy', !!d.sh)} ${portraitImg(s.sp, 'portrait big', 'Joyous', s.shiny)}</div>
       <p class="center">${from ? `<b>${esc(from)}</b> 님` : '친구'}의 <b>${esc(spName(d.sp))}</b> Lv${d.lv} 덕분에 ${esc(jo(spName(s.sp), '이'))} 되살아났다!</p>`);
+    // 코드로 구조됨 (v0.99): 감사 코드를 주고받지 않는다. 구조한 친구는 구조 보답을 이미 받았다
+    if (!s.online) {
+      UI.open({ title: '구조되었다!', html: '<p class="dim">구조해 준 친구는 구조 보답을 이미 받았어요.</p>',
+        choices: [{ label: '쓰러진 층부터 이어서 탐험한다', fn: resumeSOS, def: true }, { label: '나중에 (임무 탭에서 이어서 탐험)', fn: () => {} }] });
+      return;
+    }
     // 감사 선물 (선택). 선물을 받지 않는 탐험대면 감사 편지만
     if (s.revived.noGift) {
       UI.open({ title: '💌 감사 편지', html: `<p><b>${esc(from || '구조해 준 탐험대')}</b> 님은 감사 선물을 받지 않아요. 감사 편지만 보낼게요.</p>`,
@@ -2933,6 +3036,7 @@ const Game = (() => {
   }
   function receiveAOKAgain() {
     const s = save.sos; if (!s || !s.revived) return;
+    if (!s.online) { s.thx = 'code'; persist(); return resumeSOS(); }   // 예전 코드 구조: 감사 코드 없이 바로
     UI.confirm('이어서 탐험', `<p>구조해 준 ${s.online ? '탐험대에게 감사 편지를' : '친구에게 감사 코드를'} 보내지 않았어요. 선물 없이 감사 ${s.online ? '편지를 보내고' : '코드를 만들고'} 이어서 탐험할까요?</p>`, '그렇게 한다', '그만둔다')
       .then(ok => { if (ok) sendThanks(s, null); });
   }
@@ -3000,24 +3104,27 @@ const Game = (() => {
     if (!s.created) { s.created = (s.docId && +String(s.docId).split('_')[0]) || Date.now(); persist(); }
     return s.created;
   }
-  const sosLeft = s => sosCreated(s) + SOS_EXPIRE_MS - Date.now();
-  // 48시간 동안 구조받지 못함 → 구조 실패 (게시판으로 구조됐는지는 먼저 확인한 뒤에 부른다)
-  let sosFailing = false;
-  function failSOS(s) {
-    if (sosFailing || !s || s.revived || save.sos !== s) return;
-    sosFailing = true;
-    const html = endSOS(s);
-    UI.alert('🆘 구조 실패', `<div class="center">${portraitImg(s.sp, 'portrait big', 'Pain', s.shiny)}</div>
-      <p class="center">${esc(dungeonById(s.dungeon)?.n || '')} ${s.floor}F에서 쓰러진 ${esc(jo(spName(s.sp), '은'))} 48시간 동안 구조받지 못했다...</p>${html}`).then(() => { sosFailing = false; });
-  }
-  // 게시판 확인이 안 되는 요청 (코드로만 부탁했거나 로그인하지 않음)은 시간만 보고 끝낸다
+  // 게시판 확인이 안 되는 요청 (코드로만 부탁했거나 로그인하지 않음): 구린내 탐험대를 기다린다
+  //  (v0.99: 48시간 구조 실패는 없앴다. 30분 뒤 구린내 탐험대가 대신 구조한다)
   function checkSOSExpiry() {
     const s = save && save.sos;
-    if (s && !s.revived && sosLeft(s) <= 0 && !(s.online && Online.loggedIn())) failSOS(s);
     // 게시판 요청은 서버에서 아무도 구조하지 않은 것을 확인한 뒤(checkOnline)에. 서버가 막혔으면 기다리지 않는다
-    else if (s && !s.revived && (!(s.online && Online.loggedIn()) || Online.serverDown())) autoRescue(s);
+    if (s && !s.revived && (!(s.online && Online.loggedIn()) || Online.serverDown())) autoRescue(s);
   }
 
+  function skunkScene(who, place) {
+    const [SKUNK, ZUBAT] = SOS_AUTO_TEAM;
+    return [
+      [null, null, `${place || '던전 깊은 곳'}… 쓰러진 ${jo(who, '은')} 오지 않는 구조대를 하염없이 기다리고 있었다.`],
+      [ZUBAT, 'Surprised', '형님! 여기 누가 쓰러져 있는뎁쇼!'],
+      [SKUNK, 'Normal', `…뭐야, 길드의 그 ${who} 아니냐. 꼴 좋구나, 크크크.`],
+      [ZUBAT, 'Worried', '어떡할까요, 형님? 그냥 두고 갈깝쇼?'],
+      [SKUNK, 'Normal', '…여기서 뻗어 있으면 우리 앞길이 막히잖아. 주뱃, 업어라.'],
+      [ZUBAT, 'Happy', '넵, 형님! 역시 형님은 마음이 넓으셔요!'],
+      [SKUNK, 'Angry', '착각하지 마라! 빚을 하나 지워 두는 것뿐이다. 나중에 두 배로 갚아라!'],
+      [null, null, `${SOS_AUTO_NAME} 덕분에 ${jo(who, '이')} 기운을 되찾았다!`],
+    ];
+  }
   // 구조 요청을 올린 뒤 SOS_AUTO_MS(30분) 동안 아무도 구조하지 않으면 구린내 탐험대가 대신 구조한다 (v0.92: 사람이 적은 시간에도 이어서 할 수 있게)
   //  다른 탐험대가 구조하러 가 있는 동안은 기다린다. 게시판 요청은 내린다. 감사 선물은 없다
   const sosAutoLeft = s => sosCreated(s) + SOS_AUTO_MS - Date.now();
@@ -3031,17 +3138,9 @@ const Game = (() => {
     s.thx = 'auto';   // 감사 편지 없이 바로 이어서 탐험
     if (s.online) { s.online = false; if (Online.loggedIn()) Online.deleteSOS(s.docId || s.id).catch(() => {}); }
     persist(); renderTown();
-    const [SKUNK, ZUBAT] = SOS_AUTO_TEAM, who = spName(s.sp), dg = dungeonById(s.dungeon);
-    await Story.play([
-      [null, null, `${dg ? dg.n + ' ' : ''}${s.floor}F… 쓰러진 ${jo(who, '은')} 오지 않는 구조대를 하염없이 기다리고 있었다.`],
-      [ZUBAT, 'Surprised', '형님! 여기 누가 쓰러져 있는뎁쇼!'],
-      [SKUNK, 'Normal', `…뭐야, 길드의 그 ${who} 아니냐. 꼴 좋구나, 크크크.`],
-      [ZUBAT, 'Worried', '어떡할까요, 형님? 그냥 두고 갈깝쇼?'],
-      [SKUNK, 'Normal', '…여기서 뻗어 있으면 우리 앞길이 막히잖아. 주뱃, 업어라.'],
-      [ZUBAT, 'Happy', '넵, 형님! 역시 형님은 마음이 넓으셔요!'],
-      [SKUNK, 'Angry', '착각하지 마라! 빚을 하나 지워 두는 것뿐이다. 나중에 두 배로 갚아라!'],
-      [null, null, `${SOS_AUTO_NAME} 덕분에 ${jo(who, '이')} 기운을 되찾았다!`],
-    ], { bgm: 'teamskull' });
+    const [SKUNK, ZUBAT] = SOS_AUTO_TEAM, dg = dungeonById(s.dungeon);
+    markEvent('skunk');
+    await Story.play(skunkScene(spName(s.sp), `${dg ? dg.n + ' ' : ''}${s.floor}F`), { bgm: 'teamskull' });
     sosAutoBusy = false;
     if (save.sos !== s) return;
     UI.open({
@@ -3090,7 +3189,8 @@ const Game = (() => {
     else {
       code = Codes.encode('aok', { id: m.sosId, sp: p.sp, lv: p.lv, sh: p.shiny ? 1 : 0 });
       save.rescued[m.sosId] = { sp: m.client, shiny: m.shiny, thanked: false };
-      save.aokSent = [...(save.aokSent || []), { id: m.sosId, sp: m.client, code }].slice(-10);
+      save.aokSent = [...(save.aokSent || []), { id: m.sosId, sp: m.client, code, at: Date.now() }].slice(-10);
+      codeRescueBonus(m, lines);
     }
     Progress.add('rescues'); noteFirst('rescue', { dungeon: m.dungeon, floor: m.floor }); milestoneGift('rescues', lines);
     Progress.add('missions');
@@ -3135,10 +3235,11 @@ const Game = (() => {
     if (!success) Progress.add('faints');
     if (outcome === 'faint') noteFirst('faint', { dungeon: dg.id, floor: r.floor });   // 엔딩: 처음 쓰러진 곳
     if (!dg.daily) save.best[dg.id] = Math.max(save.best[dg.id] || 0, reached);
-    if (outcome === 'clear' && r.hard) {   // 하드모드 클리어: 캐릭터(원래 포켓몬)마다 따로 기록
-      const k = p.rsp || p.sp; save.hardClears = save.hardClears || {}; save.hardClears[k] = save.hardClears[k] || {};
-      const was = save.hardClears[k][dg.id]; save.hardClears[k][dg.id] = true;
-      if (!was) lines.push(`☠ ${esc(jo(spName(k), '으로'))} ${esc(jo(dg.n, '을'))} 하드모드로 처음 클리어했다!`);
+    if (outcome === 'clear' && r.hard) {   // 하드모드 클리어: 계정 기준 기록 (v0.99, save.hardCleared). 어느 포켓몬으로 깼는지도 남겨 둔다 (hardClears)
+      const k = p.rsp || p.sp; save.hardClears = save.hardClears || {}; save.hardClears[k] = { ...(save.hardClears[k] || {}), [dg.id]: true };
+      const was = (save.hardCleared || {})[dg.id];
+      save.hardCleared = { ...(save.hardCleared || {}), [dg.id]: true };
+      if (!was) lines.push(`☠ ${esc(jo(dg.n, '을'))} 하드모드로 처음 클리어했다! <span class="dim">(하드 클리어 ${HARD_LIST.filter(id => save.hardCleared[id]).length}/${HARD_LIST.length})</span>`);
     } else if (outcome === 'clear' && !dg.daily) {
       const was = clearsOf(p.sp)[dg.id];
       const got = recordClear(p.sp, dg);
@@ -3149,18 +3250,19 @@ const Game = (() => {
     saveParty(r);
     if (r.hard) {
       saveHardMember(p, true);
-      if (success) {
-        // 주운 것만 가져온다: 가방에서 기본 아이템 개수만큼 뺀다 (마을 가방은 그대로)
-        const left = {}; for (const b of r.kit || []) left[b.id] = (left[b.id] || 0) + b.n;
-        const got = [];
-        for (const b of r.bag) { const take = Math.min(b.n, left[b.id] || 0); if (take) left[b.id] -= take; if (b.n - take > 0) got.push({ id: b.id, n: b.n - take }); }
-        got.forEach(b => storeDeposit(b.id, b.n));
-        lines.push(got.length ? `주운 아이템 ${got.length}종을 창고에 넣었다.` : '주운 아이템은 없다.');
+      if (r.kit && r.kit.length) {   // 예전 방식(기본 아이템)으로 들어간 탐험: 주운 것만 창고로, 쓰러지면 모두 잃는다
+        if (success) {
+          const left = {}; for (const b of r.kit) left[b.id] = (left[b.id] || 0) + b.n;
+          const got = [];
+          for (const b of r.bag) { const take = Math.min(b.n, left[b.id] || 0); if (take) left[b.id] -= take; if (b.n - take > 0) got.push({ id: b.id, n: b.n - take }); }
+          got.forEach(b => storeDeposit(b.id, b.n));
+          lines.push(got.length ? `주운 아이템 ${got.length}종을 창고에 넣었다.` : '주운 아이템은 없다.');
+        } else { save.money = Math.max(0, save.money - r.money); lines.push('쓰러져서 주운 아이템과 돈을 모두 잃었다...'); }
+      } else if (success) {   // v0.99: 가방을 일반 던전처럼 가져갔다가 그대로 가져온다
+        save.bag = r.bag;
         if (r.money) lines.push(`주운 돈 ₽${r.money}`);
-        if (outcome === 'clear') { save.hardCleared = save.hardCleared || {}; save.hardCleared[dg.id] = true; }   // 클리어 보상은 테스트 중이라 아직 없음
-      } else {
-        save.money = Math.max(0, save.money - r.money);
-        lines.push('쓰러져서 주운 아이템과 돈을 모두 잃었다...');
+      } else {   // 쓰러지면 일반 던전처럼: 가방 절반, 지닌 물건 50%, 주운 돈
+        lines.push(...faintLoss(p, r));
       }
     } else if (dg.mode === 'normal') {
       if (!r.hard && (save.roster[p.sp] || p.sp === save.current)) save.roster[p.sp] = { ...save.roster[p.sp], lv: p.lv, exp: p.exp, moves: ownMoves(p).map(m => m.id), held: p.held || null, ...(p.tms ? { tms: p.tms } : {}), ...(p.boost ? { boost: p.boost } : {}) };
@@ -3183,8 +3285,8 @@ const Game = (() => {
           } else if (m.kind === 'sos') {
             const code = Codes.encode('aok', { id: m.sosId, sp: p.sp, lv: p.lv, sh: p.shiny ? 1 : 0 });
             save.rescued = save.rescued || {}; save.rescued[m.sosId] = { sp: m.client, shiny: m.shiny, thanked: false };
-            save.aokSent = [...(save.aokSent || []), { id: m.sosId, sp: m.client, code }].slice(-10);
-            aoks.push({ m, code });
+            save.aokSent = [...(save.aokSent || []), { id: m.sosId, sp: m.client, code, at: Date.now() }].slice(-10);
+            aoks.push({ m, code }); codeRescueBonus(m, lines);
             Progress.add('rescues'); noteFirst('rescue', { dungeon: m.dungeon, floor: m.floor }); milestoneGift('rescues', lines);
           }
           Progress.add('missions');
@@ -3196,18 +3298,7 @@ const Game = (() => {
         }
         save.missions.accepted = save.missions.accepted.filter(m => !r.done.includes(m.id));
       } else {
-        const bag = r.bag.slice();
-        const half = abilityOf(p).stickyHold ? bag.length / 4 : bag.length / 2;
-        const loseN = Math.floor(half) + (Math.random() < half % 1 ? 1 : 0);
-        if (abilityOf(p).stickyHold) lines.push(`[${abilityName(p.ability)}] 아이템을 꽉 붙잡고 있었다!`);
-        const lost = [];
-        for (let i = 0; i < loseN; i++) lost.push(bag.splice(rand(bag.length), 1)[0]);
-        save.bag = bag;
-        if (p.held && Math.random() < (abilityOf(p).stickyHold ? 0.25 : 0.5)) { lost.push({ id: p.held, n: 1 }); if (save.roster[p.rsp || p.sp]) save.roster[p.rsp || p.sp].held = null; }
-        save.money = Math.max(0, save.money - r.money);
-        if (lost.length) lines.push(`가방의 아이템 ${lost.length}개를 잃어버렸다: ${lost.map(b => ITEMS[b.id].icon + esc(ITEMS[b.id].n) + (b.n > 1 ? '×' + b.n : '')).join(', ')}`);
-        else lines.push('가방의 아이템은 무사했다.');
-        if (r.money) lines.push(`주웠던 돈 ₽${jo(r.money, '을')} 잃어버렸다...`);
+        lines.push(...faintLoss(p, r));
         lines.push(`레벨은 유지된다. (Lv${p.lv})`);
       }
     } else {
@@ -3369,7 +3460,7 @@ const Game = (() => {
   // 상점 기술머신 분류 (다음 진열부터)
   function setTmFocus(v) { save.tmFocus = v || null; persist(); UI.toast(v ? '다음 진열부터 그 분류의 기술머신만 나와요. (🔄 새로고침하거나 다음 날)' : '기술머신 분류를 고르지 않았어요.'); }
   function setMissionFocus(id) { save.missionFocus = id || null; persist(); UI.toast(id ? `${dungeonById(id).n}의 의뢰가 더 자주 붙어요. (다음 새 의뢰부터)` : '자주 뜨는 지역을 해제했어요.'); }
-  return { persist, rescueNow, rescueDialog, poke: () => { lastInput = Date.now(); if (idle) wakeIdle(); }, missionAlert, logSale, setTmFocus, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
+  return { eventList, playEvent, persist, rescueNow, rescueDialog, poke: () => { lastInput = Date.now(); if (idle) wakeIdle(); }, missionAlert, logSale, setTmFocus, shinyOk, setMissionFocus, hasClears, medalSection, dexMedals, askUpdate, recruit, unlockShiny, showMissions, importSave, noteShiny, boot, endRun, saveRunSnapshot, dungeonMenu, setSetting, renderTown, get save() { return save; }, setTab(t) { tab = t; renderTown(); } };
 })();
 
 window.addEventListener('DOMContentLoaded', () => {
