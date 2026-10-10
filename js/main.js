@@ -107,7 +107,7 @@ const Game = (() => {
     s.settings = { fast: false, autoDescend: false, ...(s.settings || {}) };
     s.bag = s.bag || []; s.storage = s.storage || {}; s.cleared = s.cleared || {}; s.best = s.best || {};
     s.missions = s.missions || { board: [], accepted: [] }; s.missions.board = s.missions.board || []; s.missions.accepted = s.missions.accepted || [];
-    s.shop = s.shop || []; s.money = s.money || 0; s.day = s.day || 1; s.clears = s.clears || {};
+    s.shop = s.shop || []; s.money = Math.max(0, Math.floor(+s.money || 0));   // 소수점이 된 돈은 내림 (v0.99: 단계 사이 칸 수의 확장 비용) s.day = s.day || 1; s.clears = s.clears || {};
     s.bagMax = s.bagMax || Math.max(BAG_BASE, s.bag.length);
     // v0.44: 창고 기본 40 → 300칸. 확장한 단계는 그대로 이어진다 (예: 120칸 = 4단계 → 380칸)
     // v0.50: 진화 전 모습에 남아 있던 숙련도를 지금 모습으로 (진화 전 모습이 따로 목록에 있으면 그대로 둔다)
@@ -1580,9 +1580,9 @@ const Game = (() => {
     const bc = bagUpgradeCost(save.bagMax), sc = storageUpgradeCost(save.storageMax);
     const bFull = save.bagMax >= BAG_LIMIT, sFull = save.storageMax >= STORAGE_LIMIT;
     return `<div class="upgrades">
-      <div class="row">🎒 <span class="grow">가방 <b>${save.bagMax}</b>칸${bFull ? ' (최대)' : ` → ${save.bagMax + BAG_STEP}칸`}</span>
+      <div class="row">🎒 <span class="grow">가방 <b>${save.bagMax}</b>칸${bFull ? ' (최대)' : ` → ${Math.min(BAG_LIMIT, bagNext(save.bagMax))}칸`}</span>
         <button class="btn sm" data-act="up-bag" ${bFull || save.money < bc ? 'disabled' : ''}>${bFull ? '최대' : '₽' + bc + ' 확장'}</button></div>
-      <div class="row">📦 <span class="grow">창고 <b>${save.storageMax}</b>칸${sFull ? ' (최대)' : ` → ${save.storageMax + STORAGE_STEP}칸`}</span>
+      <div class="row">📦 <span class="grow">창고 <b>${save.storageMax}</b>칸${sFull ? ' (최대)' : ` → ${Math.min(STORAGE_LIMIT, storageNext(save.storageMax))}칸`}</span>
         <button class="btn sm" data-act="up-storage" ${sFull || save.money < sc ? 'disabled' : ''}>${sFull ? '최대' : '₽' + sc + ' 확장'}</button></div></div>`;
   }
 
@@ -1966,15 +1966,15 @@ const Game = (() => {
       case 'up-bag': {
         const cost = bagUpgradeCost(save.bagMax);
         if (save.bagMax >= BAG_LIMIT || save.money < cost) return;
-        if (!(await UI.confirm('가방 확장', `<p>₽${cost}을 내고 가방을 ${save.bagMax}칸 → ${save.bagMax + BAG_STEP}칸으로 늘립니다.</p>`, '확장한다', '그만둔다'))) return;
-        save.money -= cost; save.bagMax += BAG_STEP; UI.toast(`가방이 ${save.bagMax}칸이 되었습니다!`);
+        if (!(await UI.confirm('가방 확장', `<p>₽${cost}을 내고 가방을 ${save.bagMax}칸 → ${Math.min(BAG_LIMIT, bagNext(save.bagMax))}칸으로 늘립니다.</p>`, '확장한다', '그만둔다'))) return;
+        save.money -= cost; save.bagMax = Math.min(BAG_LIMIT, bagNext(save.bagMax)); UI.toast(`가방이 ${save.bagMax}칸이 되었습니다!`);
         break;
       }
       case 'up-storage': {
         const cost = storageUpgradeCost(save.storageMax);
         if (save.storageMax >= STORAGE_LIMIT || save.money < cost) return;
-        if (!(await UI.confirm('창고 확장', `<p>₽${cost}을 내고 창고를 ${save.storageMax}칸 → ${save.storageMax + STORAGE_STEP}칸으로 늘립니다.</p>`, '확장한다', '그만둔다'))) return;
-        save.money -= cost; save.storageMax += STORAGE_STEP; UI.toast(`창고가 ${save.storageMax}칸이 되었습니다!`);
+        if (!(await UI.confirm('창고 확장', `<p>₽${cost}을 내고 창고를 ${save.storageMax}칸 → ${Math.min(STORAGE_LIMIT, storageNext(save.storageMax))}칸으로 늘립니다.</p>`, '확장한다', '그만둔다'))) return;
+        save.money -= cost; save.storageMax = Math.min(STORAGE_LIMIT, storageNext(save.storageMax)); UI.toast(`창고가 ${save.storageMax}칸이 되었습니다!`);
         break;
       }
       case 'discard': {
