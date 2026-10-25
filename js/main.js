@@ -83,14 +83,37 @@ const Game = (() => {
   // 지금 메모리의 옛 세이브를 다시 저장하면 바꾼 세이브가 덮여 버린다 (v0.78 전까지 불러오기·초기화가 안 되던 원인)
   let leaving = false;
   function reloadAfterReplace() { leaving = true; clearTimeout(upTimer); location.reload(); }
+  // ── 창이 여러 개 (v1.09): 같은 브라우저에 게임 창(탭)이 둘 이상 열려 있으면, 다른 창이 더 나중에 저장한 순간 이 창은 멈춘다 ──
+  //  예전에는 구조 요청 때 열어 둔 옛 창이 구조 소식에 반응해 자기 옛 세이브를 저장하면서, 다른 창에서 한 진행을 통째로 덮었다
+  //  저장할 때마다 이 창의 표시(STAMP_KEY)를 남기고, 저장 직전에 표시가 남의 것으로 바뀌었으면 저장하지 않는다
+  const STAMP_KEY = 'pmdweb_save_stamp', WIN_ID = Math.random().toString(36).slice(2, 8);
+  let myStamp = '', stampNo = 0, staleWin = false;
+  const readStamp = () => { try { return localStorage.getItem(STAMP_KEY) || ''; } catch (e) { return ''; } };
+  const writeStamp = () => { myStamp = WIN_ID + ':' + (++stampNo); try { localStorage.setItem(STAMP_KEY, myStamp); } catch (e) { /* 무시 */ } };
+  function isStale() {
+    if (!staleWin && readStamp() !== myStamp) markStale();
+    return staleWin;
+  }
+  function markStale() {
+    if (staleWin) return;
+    staleWin = true;
+    clearTimeout(upTimer); upTimer = null;
+    if (sosWatch) { sosWatch(); sosWatch = null; sosWatchId = null; }
+    UI.open({ title: '다른 창에서 진행 중', cancel: false,
+      html: '<p>이 게임이 다른 창(탭)에서 더 나중에 저장됐습니다. 세이브가 덮이지 않도록 이 창은 저장을 멈췄습니다.</p>',
+      choices: [{ label: '새로고침', fn: () => location.reload() }] });
+  }
+  window.addEventListener('storage', e => { if ((e.key === STAMP_KEY && (e.newValue || '') !== myStamp) || (e.key === SAVE_KEY && save)) markStale(); });
   function persist() {
-    if (newerSave || leaving || !save) return;
+    if (newerSave || leaving || !save || isStale()) return;
     const body = bodyOf(save);
     if (body !== lastBody) { save.savedAt = Date.now(); lastBody = body; }
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* 저장 불가 환경 */ }
+    writeStamp();
     scheduleUpload();
   }
   function load() {
+    myStamp = readStamp();
     try { const s = localStorage.getItem(SAVE_KEY); const v = s ? migrateSave(JSON.parse(s), s) : null; if (v) lastBody = bodyOf(v); return v; }
     catch (e) { return null; }
   }
@@ -233,7 +256,7 @@ const Game = (() => {
   const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: 'deadline-exceeded', message: 'timeout' }), ms))]);
   let upFlight = null;
   async function uploadNow() {
-    if (!bound || !Online.loggedIn() || !save || newerSave || leaving) return false;
+    if (!bound || !Online.loggedIn() || !save || newerSave || leaving || isStale()) return false;
     if (upFlight) { scheduleUpload(); return false; }
     const m = syncMeta();
     if (m && m.uid === Online.uid() && m.at === save.savedAt) { upPending = false; return true; }   // 바뀐 것 없음
@@ -368,6 +391,7 @@ const Game = (() => {
     if (newerSave) return false;
     lastBody = bodyOf(save);
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* 무시 */ }
+    writeStamp();
     setSyncMeta({ uid: Online.uid(), at: c.savedAt });
     return true;
   }
@@ -564,7 +588,7 @@ const Game = (() => {
   let sosWatch = null, sosWatchId = null, sosPending = false;
   let sosLast;   // 지켜보기로 받은 내 요청의 마지막 값 (undefined: 아직 못 받음). 있으면 checkOnline이 따로 읽지 않는다 (v0.96)
   function watchMySOS() {
-    if (idle) return;
+    if (idle || staleWin) return;
     const s = save && save.sos, id = s && s.online && !s.revived && Online.loggedIn() ? (s.docId || s.id) : null;
     if (id === sosWatchId) return;
     if (sosWatch) { sosWatch(); sosWatch = null; }
@@ -625,7 +649,7 @@ const Game = (() => {
   const claimFailed = new Set();
   const thxChecked = new Map(), THX_CHECK_MS = 15 * 60 * 1000;   // 감사 편지를 마지막으로 확인한 시각 (이번 접속 동안)   // 구조 완료를 서버가 거절한 요청 (이번 접속 동안은 다시 보내지 않는다)
   async function checkOnline(force) {
-    if (idle || !save || !bound || !Online.loggedIn() || checking || (!force && Date.now() - lastCheck < 90 * 1000)) return;
+    if (idle || !save || !bound || !Online.loggedIn() || checking || (!force && Date.now() - lastCheck < 90 * 1000) || isStale()) return;
     checking = true; lastCheck = Date.now();
     try {
       await flushThanks();
