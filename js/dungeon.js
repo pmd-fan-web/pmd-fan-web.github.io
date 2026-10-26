@@ -3444,6 +3444,7 @@ const Dungeon = (() => {
     else if (c.status === 'slp') { anim = 'Sleep'; }
     let alpha = 1;
     if (c.dead) alpha = clamp(1 - (t - c.deadAt) / 350, 0, 1);
+    else if (c.charging && c.charging.invuln) alpha = 0.3;   // 구멍파기·다이빙·공중날기 등으로 숨은 동안 (v1.10): 흐리게
     const flash = c.hurtAt && t >= c.hurtAt && t < c.hurtAt + 120;
     // 새 그림(모습 바꾸기·이로치·메가진화)을 받는 동안은 회색 공 대신: 직전에 그리던 그림 → 같은 모습의 보통 색 → 원래 모습
     let look = looksOf(c), sh = !!c.shiny;
@@ -3809,6 +3810,11 @@ const Dungeon = (() => {
   function sendKey(k) { if (!D) return; if (busy()) pendingKey = k; else handleKey(k); }
   function onKeyDown(e) {
     if (!D) return;
+    // 키로 연 창은 같은 키를 다시 누르면 닫는다 (v1.10). 그 창에서 더 연 창(가방의 아이템 메뉴 등)도 함께
+    if (winKey && UI.isOpen() && UI.top() !== winKey.before && keyAct(e.code) === winKey.a && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      while (UI.isOpen() && UI.top() !== winKey.before) UI.close(UI.top());
+      winKey = null; e.preventDefault(); return;
+    }
     if (UI.key(e)) return;
     // Ctrl·Alt 조합은 브라우저 단축키로 둔다 (Ctrl+W 등)
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -3847,9 +3853,13 @@ const Dungeon = (() => {
     if (handleKey(k)) e.preventDefault();
   }
   function onKeyUp(e) { heldMove.delete(e.code); turnHeld.delete(e.code); }
+  // 창을 여는 키: 다시 누르면 닫는다 (onKeyDown). before = 그 키를 누르기 전 맨 위의 창
+  const WIN_KEY_ACTS = new Set(['bag', 'party', 'missions', 'status', 'log', 'help', 'menu', 'dginfo', 'quick']);
+  let winKey = null;
   function handleKey(k) {
     if (!D || D.dead) return false;
     const a = k.dir != null ? null : keyAct(k.code);
+    if (WIN_KEY_ACTS.has(a)) winKey = { a, before: UI.top() };
     const dir = k.dir != null ? k.dir : MOVE_ACTION_DIR[a];
     if (dir != null) {
       // 방향만 바꾸기 키(기본 Shift)+방향: 제자리에서 방향만 바꾼다

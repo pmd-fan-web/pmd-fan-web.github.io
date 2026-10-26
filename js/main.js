@@ -85,15 +85,19 @@ const Game = (() => {
   function reloadAfterReplace() { leaving = true; clearTimeout(upTimer); location.reload(); }
   // ── 창이 여러 개 (v1.09): 같은 브라우저에 게임 창(탭)이 둘 이상 열려 있으면, 다른 창이 더 나중에 저장한 순간 이 창은 멈춘다 ──
   //  예전에는 구조 요청 때 열어 둔 옛 창이 구조 소식에 반응해 자기 옛 세이브를 저장하면서, 다른 창에서 한 진행을 통째로 덮었다
-  //  저장할 때마다 이 창의 표시(STAMP_KEY)를 남기고, 저장 직전에 표시가 남의 것으로 바뀌었으면 저장하지 않는다
+  //  저장할 때마다 이 창의 표시(STAMP_KEY: 창 번호:횟수:저장 시각)를 남기고, 저장 직전에 남의 표시로 바뀌었으면 저장 시각을 견준다
+  //  남이 내 세이브보다 더 나중 내용을 저장했을 때만 멈춘다. 새로고침할 때 닫히는 이전 페이지가 새 페이지가 열린 뒤에
+  //  마지막 저장을 하는 경우가 있는데 (v1.09 문제: 혼자 열린 창이 멈춤), 그건 내용이 같아서 저장 시각이 같다
   const STAMP_KEY = 'pmdweb_save_stamp', WIN_ID = Math.random().toString(36).slice(2, 8);
   let myStamp = '', stampNo = 0, staleWin = false;
   const readStamp = () => { try { return localStorage.getItem(STAMP_KEY) || ''; } catch (e) { return ''; } };
-  const writeStamp = () => { myStamp = WIN_ID + ':' + (++stampNo); try { localStorage.setItem(STAMP_KEY, myStamp); } catch (e) { /* 무시 */ } };
-  function isStale() {
-    if (!staleWin && readStamp() !== myStamp) markStale();
-    return staleWin;
+  const writeStamp = () => { myStamp = WIN_ID + ':' + (++stampNo) + ':' + ((save && save.savedAt) || 0); try { localStorage.setItem(STAMP_KEY, myStamp); } catch (e) { /* 무시 */ } };
+  // 남의 표시를 봤을 때: 그쪽 세이브가 더 나중이면 멈추고, 아니면 (같거나 옛것) 그 표시를 받아들인다
+  function seeStamp(st) {
+    if (staleWin || st === myStamp) return;
+    if ((+String(st).split(':')[2] || 0) > ((save && save.savedAt) || 0)) markStale(); else myStamp = st;
   }
+  function isStale() { seeStamp(readStamp()); return staleWin; }
   function markStale() {
     if (staleWin) return;
     staleWin = true;
@@ -103,7 +107,7 @@ const Game = (() => {
       html: '<p>이 게임이 다른 창(탭)에서 더 나중에 저장됐습니다. 세이브가 덮이지 않도록 이 창은 저장을 멈췄습니다.</p>',
       choices: [{ label: '새로고침', fn: () => location.reload() }] });
   }
-  window.addEventListener('storage', e => { if ((e.key === STAMP_KEY && (e.newValue || '') !== myStamp) || (e.key === SAVE_KEY && save)) markStale(); });
+  window.addEventListener('storage', e => { if (e.key === STAMP_KEY) seeStamp(e.newValue || ''); else if (e.key === SAVE_KEY && e.newValue === null && save) markStale(); });   // 다른 창에서 세이브를 지움 (초기화)
   function persist() {
     if (newerSave || leaving || !save || isStale()) return;
     const body = bodyOf(save);
