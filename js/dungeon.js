@@ -2249,6 +2249,7 @@ const Dungeon = (() => {
       }
       case 'wait': used = true; break;
       case 'item': used = useItem(action.slot, action.mode, action.move, action.ally); break;
+      case 'dropMany': used = dropMany(action.slots); break;
       case 'foot': used = footAction(action.mode, action.slot, action.ally); break;
     }
     if (!used) return false;
@@ -2912,6 +2913,39 @@ const Dungeon = (() => {
     Game.persist();
     log(`${nm(c)}의 ${STAT_KO[it.vit]}이 영구히 올랐다! (${ch.boost[it.vit]}/${VITAMIN_MAX})`, at); Sound.play('levelup', at);
   }
+  // 여러 개 내려놓기 (v1.10 보강): 발밑부터 가까운 빈 바닥(3칸 안, 계단·함정·아이템 없는 곳)에 하나씩. 한 턴
+  function dropSpots(n) {
+    const p = P(), out = [], seen = new Set([idx(p.x, p.y)]), q = [[p.x, p.y]];
+    while (q.length && out.length < n) {
+      const [x, y] = q.shift();
+      if (floorAt(x, y) && !itemAt(x, y) && !(x === D.stairs.x && y === D.stairs.y) && !D.traps.some(t => t.x === x && t.y === y)) out.push({ x, y });
+      for (const [dx, dy] of DIRS) {
+        const nx = x + dx, ny = y + dy;
+        if (Math.max(Math.abs(nx - p.x), Math.abs(ny - p.y)) > 3 || seen.has(idx(nx, ny)) || !floorAt(nx, ny)) continue;
+        seen.add(idx(nx, ny)); q.push([nx, ny]);
+      }
+    }
+    return out;
+  }
+  function dropMany(slots) {
+    const pick = [...new Set(slots)].filter(i => run.bag[i]).sort((a, b) => a - b);
+    const spots = dropSpots(pick.length);
+    if (!pick.length || !spots.length) { log('여기에는 내려놓을 수 없다.', now()); return false; }
+    const done = pick.slice(0, spots.length);
+    done.forEach((i, k) => { const b = run.bag[i]; D.items.push({ x: spots[k].x, y: spots[k].y, id: b.id, n: b.n }); D.ignore.add(idx(spots[k].x, spots[k].y)); });
+    [...done].reverse().forEach(i => run.bag.splice(i, 1));
+    log(`아이템 ${done.length}개를 내려놓았다.${done.length < pick.length ? ` (자리가 없어 ${pick.length - done.length}개는 가방에 남았다)` : ''}`, T.base);
+    return true;
+  }
+  function dropManyMenu() {
+    let box = null;
+    UI.open({
+      title: '📤 여러 개 내려놓기', wide: true,
+      html: `<p class="dim">발밑부터 가까운 빈 바닥에 하나씩 내려놓습니다. (한 턴)</p><div class="drop-list">${run.bag.map((b, i) => `<label class="row chk"><input type="checkbox" data-ds="${i}"> ${ITEMS[b.id].icon} ${esc(ITEMS[b.id].n)}${b.n > 1 ? ' ×' + b.n : ''}</label>`).join('')}</div>`,
+      onOpen: b => { box = b; },
+      choices: [{ label: '내려놓는다', fn: () => { const slots = [...box.querySelectorAll('[data-ds]:checked')].map(x => +x.dataset.ds); if (slots.length) act({ t: 'dropMany', slots }); } }, { label: '그만둔다', fn: () => {} }],
+    });
+  }
   function useItem(slot, mode, moveIdx, allyIdx) {
     const p = P(), b = run.bag[slot]; if (!b) return false;
     const it = ITEMS[b.id];
@@ -3030,6 +3064,7 @@ const Dungeon = (() => {
         run.bag.push({ id: p.held, n: 1 }); log(`${jo(ITEMS[p.held].n, '을')} 가방에 넣었다.`, now()); p.held = null; formCheck(p); openBag();
       } }] : []),
         ...(bag.length > 1 ? [{ def: !foot, label: '↕ 가방 정리 (종류별로 정렬)', fn: () => { sortBag(); openBag(); } }] : []),
+        ...(bag.length > 1 ? [{ label: '📤 여러 개 내려놓기', fn: dropManyMenu }] : []),
         ...bag.map((b, i) => ({
         def: !foot && bag.length <= 1 && i === 0,
         label: `${ITEMS[b.id].icon} ${esc(ITEMS[b.id].n)}${sigTag(b.id)}${b.n > 1 ? ' ×' + b.n : ''}`, sub: esc(ITEMS[b.id].d),
