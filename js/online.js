@@ -59,7 +59,7 @@ const Online = (() => {
   }
   const freshProfile = () => profile && Date.now() - profileAt < 15000;
   async function readProfile() {
-    const d = await db.collection('users').doc(user.uid).get();
+    const d = await db.collection('users').doc(user.uid).get(); countRead('profile');
     profile = d.exists ? d.data() : {};
     profileAt = Date.now();
     // 닉네임을 겹치지 않게 하기 전에 만든 계정: 로그인할 때 차지해 둔다 (이미 다른 사람이 쓰면 바꾸라고 안내)
@@ -97,14 +97,32 @@ const Online = (() => {
     d.c[k] = (d.c[k] || 0) + 1;
     try { localStorage.setItem(DIAG_KEY, JSON.stringify(d)); } catch (x) { /* 무시 */ }
   }
+  // ── 읽기 측정 (v1.11): 어느 기능이 서버 읽기를 얼마나 쓰는지 기능별로 세어 diag/{uid}에 남긴다 (콘솔에서 tools/read_stats.py로 모아 본다)
+  //  계정 10개 중 1개만, READ_UNTIL까지. 2시간에 한 번 (쓰기 1번). min = 접속해 있던 분 (창이 보이고 자리 비움이 아닐 때)
+  //  수는 요금 기준: 문서 수 (결과가 없어도 1), 집계는 1000건마다 1. 보안 규칙 안의 get()은 여기서 셀 수 없다
+  const READ_UNTIL = Date.parse('2026-11-03T23:00:00+09:00'), READ_KEY = 'pmdweb_reads';
+  const sampled = () => !!user && Date.now() < READ_UNTIL && [...user.uid].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % 10 === 0;
+  function readsLoad() {
+    try { const d = JSON.parse(localStorage.getItem(READ_KEY)); if (d && d.uid === user.uid && d.c) return d; } catch (e) { /* 무시 */ }
+    return { uid: user.uid, day: today(), c: {}, sent: 0, minAt: 0 };
+  }
+  const readsSave = d => { try { localStorage.setItem(READ_KEY, JSON.stringify(d)); } catch (e) { /* 무시 */ } };
+  function countRead(op, n = 1) {
+    if (!sampled()) return;
+    const d = readsLoad();
+    if (Object.keys(d.c).length >= 30 && !d.c[op]) return;   // 규칙: c는 30칸까지
+    d.c[op] = (d.c[op] || 0) + Math.max(1, n); readsSave(d);
+  }
+  function noteMinute() {
+    if (!sampled()) return;
+    const d = readsLoad(); if (Date.now() - (d.minAt || 0) < 55 * 1000) return;
+    d.minAt = Date.now(); d.c.min = (d.c.min || 0) + 1; readsSave(d);
+  }
   async function flushDiag() {
-    if (!user) return;
-    if (Date.now() > DIAG_UNTIL + 3600 * 1000) return;
-    const d = diagRead(), last = Date.now() > DIAG_UNTIL;   // 끝난 뒤 마지막 한 번
-    if (!Object.keys(d.c).length || (Date.now() - d.at < DIAG_GAP && !(last && !d.final))) return;
-    if (last) d.final = true;
-    d.at = Date.now();
-    try { localStorage.setItem(DIAG_KEY, JSON.stringify(d)); } catch (x) { /* 무시 */ }
+    if (!sampled()) return;
+    const d = readsLoad();
+    if (!d.c.min || Date.now() - (d.sent || 0) < DIAG_GAP) return;
+    d.sent = Date.now(); readsSave(d);
     await db.collection('diag').doc(user.uid).set({ day: d.day, ver: GAME_VERSION, c: d.c, at: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
   }
   // 바깥에서 부르는 서버 기능: 실패하면 세어 둔다 (오류는 그대로 다시 던진다)
@@ -159,13 +177,13 @@ const Online = (() => {
   // ── 닉네임은 겹치지 않게: names/{소문자 닉네임} = { uid } 로 먼저 차지한다 (아이디는 로그인 기능이 알아서 겹치지 않게 한다)
   const nameKey = n => String(n).trim().normalize('NFC').toLowerCase();
   async function nameFree(n) {
-    const d = await db.collection('names').doc(nameKey(n)).get();
+    const d = await db.collection('names').doc(nameKey(n)).get(); countRead('nameFree');
     return !d.exists || (user && d.data().uid === user.uid);
   }
   async function claimName(n, old) {
     const ref = db.collection('names').doc(nameKey(n));
     await db.runTransaction(async t => {
-      const d = await t.get(ref);
+      const d = await t.get(ref); countRead('claimName');
       if (d.exists && d.data().uid !== user.uid) throw { taken: true };
       if (!d.exists) t.set(ref, { uid: user.uid });
     });
@@ -241,15 +259,16 @@ const Online = (() => {
   }
 
   // ── 클라우드 세이브: users/{uid}.save (JSON 문자열), savedAt (저장한 시각) ──
-  async function fetchCloud() {
+  async function fetchCloud(force) {
     if (!user) return null;
-    if (!freshProfile()) await loadProfile();   // 로그인하며 방금 읽었으면 다시 읽지 않는다
+    if (force || !freshProfile()) await loadProfile();   // force: 올리기를 서버가 거절했을 때 (다른 기기가 더 새 세이브를 올림)   // 로그인하며 방금 읽었으면 다시 읽지 않는다
     return profile.save ? { raw: profile.save, savedAt: profile.savedAt || 0, ver: profile.ver || '0' } : null;
   }
   // upAt: 서버 시각. 보안 규칙(firestore.rules)이 이걸로 너무 잦은 저장을 막는다 (20초에 한 번까지)
-  async function pushCloud(raw, savedAt) {
+  // base: 이 기기가 마지막으로 맞춘 클라우드 세이브의 savedAt (모르면 null: 보내지 않는다). 서버 규칙이 지금 클라우드와 다르면 거절한다
+  async function pushCloud(raw, savedAt, base) {
     if (!user) return;
-    await db.collection('users').doc(user.uid).set({ save: raw, savedAt, ver: GAME_VERSION, upAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    await db.collection('users').doc(user.uid).set({ save: raw, savedAt, ...(base != null ? { base: [base, savedAt] } : {}), ver: GAME_VERSION, upAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
     profile = { ...profile, save: raw, savedAt, ver: GAME_VERSION };
   }
   async function clearCloud() {
@@ -302,7 +321,7 @@ const Online = (() => {
     for (let i = 0; i < PAGES && list.length < BOARD_SIZE; i++) {
       let q = db.collection('sos').where('status', '==', 'open').orderBy(firebase.firestore.FieldPath.documentId());
       q = last ? q.startAfter(last) : q.startAt(since);
-      const r = await q.limit(PAGE).get();
+      const r = await q.limit(PAGE).get(); countRead('board', r.size);
       for (const d of r.docs) { const s = { id: d.id, sid: idOf(d.id), ...d.data() }; if (s.owner !== user.uid && !heldByOther(s)) list.push(s); }
       if (r.docs.length < PAGE) break;
       last = r.docs[r.docs.length - 1];
@@ -316,7 +335,7 @@ const Online = (() => {
     dropListCache();
     const ref = db.collection('sos').doc(String(docId));
     return db.runTransaction(async t => {
-      const d = await t.get(ref);
+      const d = await t.get(ref); countRead('takeSOS');
       if (!d.exists || d.data().status !== 'open' || heldByOther(d.data())) return false;
       t.update(ref, { takenBy: user.uid, takenAt: firebase.firestore.FieldValue.serverTimestamp() });
       return true;
@@ -326,28 +345,33 @@ const Online = (() => {
   async function releaseSOS(docId) {
     dropListCache();
     const ref = db.collection('sos').doc(String(docId));
-    const d = await ref.get();
+    const d = await ref.get(); countRead('releaseSOS');
     if (d.exists && d.data().status === 'open' && d.data().takenBy === user.uid) await ref.update({ takenBy: null, takenAt: null });
   }
   // 내가 올린 요청 중 요청 번호가 id인 문서 이름 (없으면 null)
   async function findMySOS(id) {
-    const q = await db.collection('sos').where('owner', '==', user.uid).limit(20).get();
+    const q = await db.collection('sos').where('owner', '==', user.uid).limit(20).get(); countRead('findMySOS', q.size);
     const d = q.docs.find(x => idOf(x.id) === +id);
     return d ? d.id : null;
   }
   // 내 구조 요청 지켜보기: 문서가 바뀔 때만 알려 준다 (처음 1번 + 바뀔 때마다 읽기 1번. 1분 30초마다 확인하는 것보다 싸고 바로 알 수 있다)
   function watchSOS(docId, cb) {
-    return db.collection('sos').doc(String(docId)).onSnapshot(d => cb(d.exists ? d.data() : null), e => { noteFail('watchSOS', e); if (DOWN_CODES.test(String((e && e.code) || ''))) downAt = Date.now(); });   // 지켜보기가 막혀도 '서버 막힘'으로 (코드를 다시 보여 준다)
+    return db.collection('sos').doc(String(docId)).onSnapshot(d => { if (!d.metadata.fromCache) countRead('watchSOS'); cb(d.exists ? d.data() : null); }, e => { noteFail('watchSOS', e); if (DOWN_CODES.test(String((e && e.code) || ''))) downAt = Date.now(); });   // 지켜보기가 막혀도 '서버 막힘'으로 (코드를 다시 보여 준다)
+  }
+  // 내가 구조한 요청 중 감사 편지가 온 것 (v1.11): 결과 수만큼 읽기 (없으면 1번). 받은 요청은 지우므로 많이 쌓이지 않는다
+  async function myThanked() {
+    const q = await db.collection('sos').where('rescuer.uid', '==', user.uid).where('status', '==', 'thanked').limit(50).get(); countRead('thanks', q.size);
+    return q.docs.map(d => ({ id: d.id, ...d.data() }));
   }
   // SOS 코드의 요청 번호로 게시판 문서 찾기 (v0.57부터 올린 요청만 sid가 있다). 없으면 null
   async function findSOSById(sid) {
-    const q = await db.collection('sos').where('sid', '==', +sid).limit(1).get();
+    const q = await db.collection('sos').where('sid', '==', +sid).limit(1).get(); countRead('findSOSById', q.size);
     return q.empty ? null : { docId: q.docs[0].id, ...q.docs[0].data() };
   }
   // 읽기가 되는지 서버에 직접 확인 (캐시 말고). 읽기 한도만 넘고 쓰기는 되는 날이 있어서 (v0.95)
-  async function probeSOS(id) { await db.collection('sos').doc(String(id)).get({ source: 'server' }); return true; }
+  async function probeSOS(id) { await db.collection('sos').doc(String(id)).get({ source: 'server' }); countRead('probeSOS'); return true; }
   async function getSOS(id) {
-    const d = await db.collection('sos').doc(String(id)).get();
+    const d = await db.collection('sos').doc(String(id)).get(); countRead('getSOS');
     return d.exists ? d.data() : null;
   }
   // 구조 완료를 알린다. 이미 누가 구조했거나 요청자가 포기했으면 false
@@ -356,7 +380,7 @@ const Online = (() => {
     await ensureName();
     const ref = db.collection('sos').doc(String(id));
     const run = ng => db.runTransaction(async t => {
-      const d = await t.get(ref);
+      const d = await t.get(ref); countRead('claimRescue');
       if (!d.exists || d.data().status !== 'open') return false;
       t.update(ref, { status: 'rescued', key: d.data().ver + '|done', rescuer: { uid: user.uid, name: name(), sp: me.sp, lv: me.lv, shiny: !!me.shiny, ...(ng ? { noGift: true } : {}) } });
       return true;
@@ -382,8 +406,9 @@ const Online = (() => {
     if (appCheckOn()) headers['X-Firebase-AppCheck'] = (await firebase.appCheck().getToken()).token;
     const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
     if (!r.ok) throw { code: r.status === 403 ? 'permission-denied' : r.status === 429 ? 'resource-exhausted' : 'http-' + r.status, message: 'count ' + r.status };
-    const j = await r.json();
-    return +((j[0] && j[0].result && j[0].result.aggregateFields.n.integerValue) || 0);
+    const j = await r.json(), n = +((j[0] && j[0].result && j[0].result.aggregateFields.n.integerValue) || 0);
+    countRead('count:' + coll, Math.ceil(n / 1000));   // 집계는 1000건마다 읽기 1번
+    return n;
   }
   async function onlineCount() {
     if (!user) return null;
@@ -396,8 +421,9 @@ const Online = (() => {
     if (appCheckOn()) headers['X-Firebase-AppCheck'] = (await firebase.appCheck().getToken()).token;   // REST 요청도 App Check 토큰을 붙인다
     const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
     if (!r.ok) throw { code: r.status === 403 ? 'permission-denied' : r.status === 429 ? 'resource-exhausted' : 'http-' + r.status, message: 'count ' + r.status };
-    const j = await r.json();
-    return +((j[0] && j[0].result && j[0].result.aggregateFields.n.integerValue) || 0);
+    const j = await r.json(), n = +((j[0] && j[0].result && j[0].result.aggregateFields.n.integerValue) || 0);
+    countRead('online', Math.ceil(n / 1000));
+    return n;
   }
 
   // ── 스타팅 순위: 계정마다 한 번, starterVotes/{uid}를 만들면서 stats/starters의 그 포켓몬 수를 1 올린다 (규칙이 한 번·1만 허용) ──
@@ -411,7 +437,7 @@ const Online = (() => {
   // ── 엔딩 통계: 계정마다 한 번, endingVotes/{uid}를 만들면서 stats/endings를 그 기록만큼 올린다 (보안 규칙이 한 번·정확한 값만 허용) ──
   async function voteEnding(rec) {
     if (!user) return;
-    const cur = await db.collection('stats').doc('endings').get();
+    const cur = await db.collection('stats').doc('endings').get(); countRead('voteEnding');
     const minDays = cur.exists && cur.data().minDays != null ? cur.data().minDays : Infinity;
     const inc = firebase.firestore.FieldValue.increment;
     const st = { n: inc(1), sum: {} };
@@ -434,7 +460,7 @@ const Online = (() => {
     if (cached && cached.day === day && cached.d && (cached.d.n > 0 || Date.now() - (cached.at || 0) < END_EMPTY_MS)) return cached;
     if (!await init()) throw new Error('offline');
     if (!user) throw { code: 'need-login' };   // v0.97: 통계는 로그인한 사람만 읽는다
-    const d = await db.collection('stats').doc('endings').get();
+    const d = await db.collection('stats').doc('endings').get(); countRead('endingStats');
     const out = { day, at: Date.now(), d: d.exists ? d.data() : { n: 0 } };
     try { localStorage.setItem(END_KEY, JSON.stringify(out)); } catch (e) { /* 무시 */ }
     return out;
@@ -465,7 +491,7 @@ const Online = (() => {
   async function isAdmin() {
     if (!user) return false;
     if (adminOf && adminOf.uid === user.uid) return adminOf.v;
-    const d = await db.collection('admins').doc(user.uid).get().catch(() => null);
+    const d = await db.collection('admins').doc(user.uid).get().catch(() => null); countRead('isAdmin');
     adminOf = { uid: user.uid, v: !!(d && d.exists) };
     return adminOf.v;
   }
@@ -474,7 +500,7 @@ const Online = (() => {
     if (rankCache && rankCache.uid === (user && user.uid) && Date.now() - rankCache.at < (force ? FORCE_GAP_MS : RANK_CACHE_MS)) return rankCache.list;
     if (!await init()) throw new Error('offline');
     if (!user) throw { code: 'need-login' };
-    const r = await db.collection('endlessRank').orderBy('floor', 'desc').limit(RANK_TOP).get();
+    const r = await db.collection('endlessRank').orderBy('floor', 'desc').limit(RANK_TOP).get(); countRead('rank', r.size);
     const list = r.docs.map(d => ({ uid: d.id, ...d.data(), at: d.data().at && d.data().at.toMillis ? d.data().at.toMillis() : 0 }));
     list.sort((a, b) => b.floor - a.floor || (a.turns || 0) - (b.turns || 0));   // 같은 층이면 턴이 적은 쪽이 위
     rankCache = { uid: user.uid, at: Date.now(), list };
@@ -487,7 +513,7 @@ const Online = (() => {
     if (cached && cached.day === day && cached.c) return cached;
     if (!await init()) throw new Error('offline');
     if (!user) throw { code: 'need-login' };   // v0.97: 순위는 로그인한 사람만 읽는다
-    const d = await db.collection('stats').doc('starters').get();
+    const d = await db.collection('stats').doc('starters').get(); countRead('starters');
     const out = { day, c: (d.exists && d.data().c) || {} };
     try { localStorage.setItem(RANK_KEY, JSON.stringify(out)); } catch (e) { /* 무시 */ }
     return out;
@@ -495,14 +521,14 @@ const Online = (() => {
 
   return {
     touchPresence: track('touchPresence', touchPresence), onlineCount: track('onlineCount', onlineCount), PRESENCE_MIN, ONLINE_WINDOW,
-    voteStarter: track('voteStarter', voteStarter), starterRanks: track('starterRanks', starterRanks), flushDiag,
+    voteStarter: track('voteStarter', voteStarter), starterRanks: track('starterRanks', starterRanks), flushDiag, noteMinute,
     voteEnding: track('voteEnding', voteEnding), endingStats: track('endingStats', endingStats),
     submitEndless: track('submitEndless', submitEndless), endlessRanks: track('endlessRanks', endlessRanks), endlessMyRank: track('endlessMyRank', endlessMyRank), RANK_TOP, isAdmin, deleteEndlessRank: track('deleteEndlessRank', deleteEndlessRank),
     enabled, init, onChange, loggedIn, name, userId, why, nameTaken: () => !!(profile && profile.nameTaken),
     serverDown, signUp, signIn, signOut, setName: track('setName', setName), deleteAccount, cleanName, uid: () => user && user.uid,
     fetchCloud: track('fetchCloud', fetchCloud), pushCloud: track('pushCloud', pushCloud), clearCloud: track('clearCloud', clearCloud),
     postSOS: track('postSOS', postSOS), listSOS: track('listSOS', listSOS), takeSOS: track('takeSOS', takeSOS), releaseSOS: track('releaseSOS', releaseSOS),
-    getSOS: track('getSOS', getSOS), probeSOS: track('probeSOS', probeSOS), findMySOS: track('findMySOS', findMySOS), findSOSById: track('findSOSById', findSOSById), watchSOS,
+    getSOS: track('getSOS', getSOS), myThanked: track('myThanked', myThanked), probeSOS: track('probeSOS', probeSOS), findMySOS: track('findMySOS', findMySOS), findSOSById: track('findSOSById', findSOSById), watchSOS,
     claimRescue: track('claimRescue', claimRescue), thankSOS: track('thankSOS', thankSOS), deleteSOS: track('deleteSOS', deleteSOS), idOf,
   };
 })();

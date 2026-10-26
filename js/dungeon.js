@@ -3846,6 +3846,7 @@ const Dungeon = (() => {
   function onKeyDown(e) {
     if (!D) return;
     // 키로 연 창은 같은 키를 다시 누르면 닫는다 (v1.10). 그 창에서 더 연 창(가방의 아이템 메뉴 등)도 함께
+    if (winKey && winKey.m && !winKey.m.el.isConnected) winKey = null;   // 그 키로 연 창이 이미 닫혔다 (Esc·✕ 등)
     if (winKey && UI.isOpen() && UI.top() !== winKey.before && keyAct(e.code) === winKey.a && !e.ctrlKey && !e.metaKey && !e.altKey) {
       while (UI.isOpen() && UI.top() !== winKey.before) UI.close(UI.top());
       winKey = null; e.preventDefault(); return;
@@ -3894,7 +3895,10 @@ const Dungeon = (() => {
   function handleKey(k) {
     if (!D || D.dead) return false;
     const a = k.dir != null ? null : keyAct(k.code);
-    if (WIN_KEY_ACTS.has(a)) winKey = { a, before: UI.top() };
+    if (WIN_KEY_ACTS.has(a)) {   // m: 그 키로 열린 창 (열리고 나서 적어 둔다)
+      const w = winKey = { a, before: UI.top() };
+      setTimeout(() => { if (winKey === w && UI.top() !== w.before) w.m = UI.top(); }, 0);
+    }
     const dir = k.dir != null ? k.dir : MOVE_ACTION_DIR[a];
     if (dir != null) {
       // 방향만 바꾸기 키(기본 Shift)+방향: 제자리에서 방향만 바꾼다

@@ -91,11 +91,14 @@ const Game = (() => {
   const STAMP_KEY = 'pmdweb_save_stamp', WIN_ID = Math.random().toString(36).slice(2, 8);
   let myStamp = '', stampNo = 0, staleWin = false;
   const readStamp = () => { try { return localStorage.getItem(STAMP_KEY) || ''; } catch (e) { return ''; } };
-  const writeStamp = () => { myStamp = WIN_ID + ':' + (++stampNo) + ':' + ((save && save.savedAt) || 0); try { localStorage.setItem(STAMP_KEY, myStamp); } catch (e) { /* 무시 */ } };
-  // 남의 표시를 봤을 때: 그쪽 세이브가 더 나중이면 멈추고, 아니면 (같거나 옛것) 그 표시를 받아들인다
+  const writeStamp = () => { myStamp = WIN_ID + ':' + (++stampNo) + ':' + ((save && save.savedAt) || 0); try { localStorage.setItem(STAMP_KEY, myStamp); } catch (e) { myStamp = readStamp(); } };   // 못 썼으면 (저장 공간 부족) 남아 있는 표시를 내 것으로 (혼자인데 멈추지 않게)
+  // 남의 표시를 봤을 때: 저장 시각이 같으면 (같은 내용) 그 표시를 받아들이고, 다르면 멈춘다
+  //  더 나중이면 그쪽이 진행한 것, 더 옛것이면 그쪽에서 세이브를 불러오기·백업 복원한 것이라 어느 쪽이든 이 창이 덮으면 안 된다
+  //  저장 시각이 없는 표시(v1.09)는 받아들인다
   function seeStamp(st) {
     if (staleWin || st === myStamp) return;
-    if ((+String(st).split(':')[2] || 0) > ((save && save.savedAt) || 0)) markStale(); else myStamp = st;
+    const parts = String(st).split(':');
+    if (parts.length >= 3 && +parts[2] !== ((save && save.savedAt) || 0)) markStale(); else myStamp = st;
   }
   function isStale() { seeStamp(readStamp()); return staleWin; }
   function markStale() {
@@ -269,16 +272,22 @@ const Game = (() => {
     if (raw.length > CLOUD_SAVE_MAX) { cloudErr = '세이브가 너무 커서 클라우드에 올릴 수 없어요. 이 브라우저에는 그대로 저장됩니다.'; upPending = false; return false; }
     // 올리는 동안 세이브가 또 바뀔 수 있다: 올린 그 시점의 값으로 기록해야 바뀐 부분이 다음에 다시 올라간다
     // (예전에는 올린 뒤의 savedAt을 적어서, 그 사이 바뀐 내용이 클라우드에 안 올라가고 다음 접속 때 옛 클라우드 세이브로 덮였다)
-    const at = save.savedAt || 0;
+    const at = save.savedAt || 0, base = m && m.uid === Online.uid() ? m.at : null;
     try {
-      const push = Online.pushCloud(raw, at);
+      const push = Online.pushCloud(raw, at, base);
       upFlight = push; push.then(() => {}, () => {}).finally(() => { if (upFlight === push) upFlight = null; });
       await withTimeout(push, CLOUD_WAIT); setSyncMeta({ uid: Online.uid(), at }); cloudErr = null;
       upPending = (save.savedAt || 0) !== at; if (upPending) scheduleUpload();
       return true;
     }
-    catch (e) { cloudErr = Online.why(e); console.warn(e); scheduleUpload(); return false; }   // 실패하면 다음 주기에 다시
+    catch (e) {
+      cloudErr = Online.why(e); console.warn(e);
+      // 거절 (v1.11): 다른 기기가 그 사이 더 새 세이브를 올렸다 (아니면 20초 제한). 덮어쓰지 않고 다시 맞춘다: 고르는 창 또는 클라우드 불러오기
+      if (base != null && /permission/.test(String((e && e.code) || '')) && Date.now() - cloudClashAt > 5 * 60 * 1000) { cloudClashAt = Date.now(); syncSave(true); return false; }
+      scheduleUpload(); return false;   // 실패하면 다음 주기에 다시
+    }
   }
+  let cloudClashAt = 0;
   // 올릴 게 남아 있으면 바로 올린다 (창을 닫거나 숨길 때, 던전에서 돌아왔을 때)
   // gap: 지난 저장 뒤 이만큼 지났으면 바로 올린다. 안 지났으면 (던전에서 돌아왔을 때) 그 시각에 올리도록 예약
   function flushUpload(gap = FLUSH_GAP) {
@@ -310,7 +319,7 @@ const Game = (() => {
       try { await Online.touchPresence(); } catch (e) { console.warn(e); }   // 방금 남겼으면 서버가 거절한다 (괜찮음)
     }
     renewSOSHolds();
-    Online.flushDiag().catch(() => {});
+    Online.noteMinute(); Online.flushDiag().catch(() => {});
     if (inTown() && Date.now() - countAt >= PRESENCE_MS()) {
       countAt = Date.now(); presSave();
       try { onlineN = await Online.onlineCount(); presSave(); } catch (e) { console.warn(e); }
@@ -400,13 +409,13 @@ const Game = (() => {
     return true;
   }
   // 로그인 직후 / 게임을 열 때: 클라우드와 이 브라우저의 세이브를 맞춘다
-  function syncSave() {
+  function syncSave(fresh) {
     if (syncing) return syncing;
     syncing = (async () => {
       bound = false;
       if (!Online.loggedIn() || newerSave) return;   // 옛 화면에서는 세이브를 건드리지 않는다
       let c;
-      try { c = await withTimeout(Online.fetchCloud(), CLOUD_WAIT); } catch (e) { cloudErr = Online.why(e); UI.toast('클라우드 세이브를 확인하지 못했어요. 이 브라우저의 세이브로 계속합니다.'); return; }
+      try { c = await withTimeout(Online.fetchCloud(fresh), CLOUD_WAIT); } catch (e) { cloudErr = Online.why(e); UI.toast('클라우드 세이브를 확인하지 못했어요. 이 브라우저의 세이브로 계속합니다.'); return; }
       const uid = Online.uid(), m = syncMeta();
       if (c && cmpVer(c.ver, GAME_VERSION) > 0) {
         await new Promise(res => UI.open({ title: '새 버전이 필요해요', cancel: false,
@@ -415,7 +424,7 @@ const Game = (() => {
         return;
       }
       let changed = false;
-      if (!c) { bound = true; if (save && !newerSave) await uploadNow(); return; }
+      if (!c) { bound = true; setSyncMeta(null); if (save && !newerSave) await uploadNow(); return; }   // 클라우드에 세이브 없음: 맞출 base 없이 올린다
       if (!save) changed = useCloud(c);
       else if ((save.savedAt || 0) === c.savedAt) setSyncMeta({ uid, at: c.savedAt });
       else if (m && m.uid === uid && m.at === c.savedAt) { bound = true; await uploadNow(); }   // 클라우드는 그대로이고 여기서만 진행
@@ -685,6 +694,7 @@ const Game = (() => {
           UI.alert('🆘 구조 요청', '<p>구조 게시판에서 내 구조 요청을 찾을 수 없어요. 임무 탭에서 SOS 코드를 친구에게 보내거나, 포기하고 돌아갈 수 있어요.</p>');
         }
       }
+      const thxDue = [];
       for (const [id, r] of Object.entries(save.rescued || {})) {
         if (!r.online || r.thanked) continue;
         const doc = r.docId || id;
@@ -700,8 +710,14 @@ const Game = (() => {
         }
         if (Date.now() - (thxChecked.get(doc) || 0) < THX_CHECK_MS) continue;   // 감사 편지 확인: 접속마다 한 번, 그 뒤 15분마다 (v0.96)
         thxChecked.set(doc, Date.now());
-        const d = await Online.getSOS(doc);
-        if (!d) { r.thanked = true; persist(); continue; }
+        thxDue.push([doc, r]);
+      }
+      // 감사 편지 (v1.11): 감사 편지가 온 내 구조를 한 번에 묻는다 (예전에는 구조한 요청마다 읽기 1번). 묻지 못하면 예전처럼 하나씩
+      let thx = null;
+      if (thxDue.length) try { thx = new Map((await Online.myThanked()).map(d => [d.id, d])); } catch (e) { console.warn(e); }
+      for (const [doc, r] of thxDue) {
+        const d = thx ? thx.get(doc) || (+String(doc).split('_')[0] + SOS_TTL_MS < Date.now() ? null : { status: 'rescued' }) : await Online.getSOS(doc);
+        if (!d) { r.thanked = true; persist(); continue; }   // 서버에서 지워진 (7일이 지난) 요청
         if (d.status === 'thanked') {
           await gotThanks(r, hasKey(ITEMS, d.thx) && d.thx !== 'quest' ? d.thx : null, Online.cleanName(d.name));
           Online.deleteSOS(doc).catch(() => {});   // 다 쓴 요청은 지운다
