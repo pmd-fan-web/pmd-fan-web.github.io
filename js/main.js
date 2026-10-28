@@ -106,7 +106,8 @@ const Game = (() => {
     staleWin = true;
     clearTimeout(upTimer); upTimer = null;
     if (sosWatch) { sosWatch(); sosWatch = null; sosWatchId = null; }
-    UI.open({ title: '다른 창에서 진행 중', cancel: false,
+    // 닫히지 않는 창 (v1.11): 다른 창이 이 창을 덮으며 닫아서 (구조받고 다시 들어갈 때 등) 저장되지 않는 채로 계속 진행하던 문제
+    UI.open({ title: '다른 창에서 진행 중', cancel: false, sticky: true,
       html: '<p>이 게임이 다른 창(탭)에서 더 나중에 저장됐습니다. 세이브가 덮이지 않도록 이 창은 저장을 멈췄습니다.</p>',
       choices: [{ label: '새로고침', fn: () => location.reload() }] });
   }
@@ -463,7 +464,7 @@ const Game = (() => {
   }
   // 처음 고른 포켓몬을 스타팅 순위에 한 번 넣는다 (로그인한 사람만, 계정마다 한 번)
   async function voteStarter() {
-    if (!Online.loggedIn() || !save || !save.starter || save.starterVoted) return;
+    if (!Online.loggedIn() || !save || !save.starter || save.starterVoted || !starterIds().includes(+save.starter)) return;   // 고를 수 없는 포켓몬 (세이브를 고친 경우)은 넣지 않는다
     try { await Online.voteStarter(save.starter); }
     catch (e) { if (!/permission/.test(e.code || '')) { console.warn(e); return; } }   // 거절 = 이미 넣었음
     save.starterVoted = true; persist();
@@ -740,7 +741,8 @@ const Game = (() => {
   async function starterRank() {
     let r;
     try { r = await Online.starterRanks(); } catch (e) { UI.alert('🏆 스타팅 순위', `<p>${esc(Online.why(e))}</p>`); return; }
-    const list = Object.entries(r.c).map(([sp, n]) => [+sp, +n || 0]).filter(([sp, n]) => n > 0 && hasKey(DATA.species, sp)).sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+    // 처음에 고를 수 없는 포켓몬 (세이브를 고쳐 넣은 표)은 빼고 보여 준다 (v1.11)
+    const list = Object.entries(r.c).map(([sp, n]) => [+sp, +n || 0]).filter(([sp, n]) => n > 0 && starterIds().includes(sp)).sort((a, b) => b[1] - a[1] || a[0] - b[0]);
     const total = list.reduce((t, [, n]) => t + n, 0);
     let rank = 0, prev = -1;
     const rows = list.map(([sp, n], i) => { if (n !== prev) { rank = i + 1; prev = n; }
@@ -2905,7 +2907,7 @@ const Game = (() => {
     if (c === 'sound') return `${soundSettings(s)}<p class="dim tiny">브라우저 정책상 화면을 한 번 눌러야 소리가 나기 시작합니다.</p>`;
     if (c === 'control') return `<div class="btns"><button class="btn ghost" data-sact="keys">⌨ 키 설정 (PC)</button> <button class="btn ghost" data-sact="help">📖 조작법</button></div>
       <h3>📱 터치 (휴대폰·태블릿)</h3>
-      <div class="row"><span class="grow">📱 화면 방향 고정 <span class="dim">(휴대폰을 돌려도 화면이 돌아가지 않게. 홈 화면에 추가한 앱(안드로이드)에서 됩니다. 아이폰은 기기의 화면 회전 잠금을 쓰세요)</span></span>${sel('orient', [['auto', '고정하지 않음'], ['portrait', '세로로 고정'], ['landscape', '가로로 고정']], s.orient || 'auto')}</div>
+      <div class="row"><span class="grow">📱 화면 방향 고정 <span class="dim">(안드로이드. 바로 고정되지 않으면 전체 화면으로 바꿔 고정합니다. 아이폰은 기기의 화면 회전 잠금을 쓰세요)</span></span>${sel('orient', [['auto', '고정하지 않음'], ['portrait', '세로로 고정'], ['landscape', '가로로 고정']], s.orient || 'auto')}</div>
       <div class="row"><span class="grow">터치 조작 방식</span>${sel('padMode', [['stick', '조이스틱 + ABXY'], ['dpad', '방향 버튼 + 아래 버튼 (예전 방식)']], s.padMode || 'stick')}</div>
       <div class="row"><span class="grow">터치 조작 <span class="dim">(조작 버튼이 안 보이면 '항상 켜기', 키보드로만 하려면 '끄기')</span></span>${sel('touchCtl', [['auto', '터치 기기에서만 켜기'], ['on', '항상 켜기'], ['off', '끄기']], touchCtl())}</div>
       <div class="btns"><button class="btn ghost" data-sact="pad">⚙ 조작 패드 크기·버튼 할당·배치</button></div>
@@ -3158,7 +3160,7 @@ const Game = (() => {
     const top = o => { const e = Object.entries(o || {}).sort((a, b) => b[1] - a[1])[0]; return e ? e[0] : null; };
     const spv = x => (x != null && DATA.species[x] ? +x : null), int = x => Math.max(0, Math.round(+x || 0));
     return {
-      starter: spv(s.starter), shiny: spv(f.shiny && f.shiny.sp), ultra: spv(f.ultra && f.ultra.sp), legend: spv(f.legend && f.legend.sp),
+      starter: starterIds().includes(+s.starter) ? +s.starter : null, shiny: spv(f.shiny && f.shiny.sp), ultra: spv(f.ultra && f.ultra.sp), legend: spv(f.legend && f.legend.sp),
       lead: spv(top(s.usage && s.usage.lead)), faint: (f.faint && f.faint.dungeon) || null, most: top(s.usage && s.usage.dungeon),
       days: int(s.day), sec: int(s.playSec), kills: int(st.kills), floors: int(st.floors), bosses: int(st.bosses),
       clears: Object.keys(s.cleared || {}).length, missions: int(st.missions), rescues: int(st.rescues), faints: int(st.faints),
@@ -3177,8 +3179,9 @@ const Game = (() => {
     try { r = await Online.endingStats(); } catch (e) { UI.alert('🌍 엔딩 통계', `<p>${esc(Online.why(e))}</p>`); return; }
     const d = r.d || {}, n = d.n || 0, me = save.endingRec || null, sum = d.sum || {};
     if (!n) { UI.alert('🌍 엔딩 통계', '<p>아직 엔딩을 본 탐험대가 없어요. 에리어 제로 최심부를 처음 완주한 탐험대가 첫 기록을 남겨요.</p><p class="dim">로그인한 탐험대만 집계돼요.</p>'); return; }
-    const rank = (cat, name, mine) => {
-      const list = Object.entries(d[cat] || {}).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
+    // ok: 보여 줄 값만 (첫 파트너는 처음에 고를 수 있는 포켓몬만, v1.11)
+    const rank = (cat, name, mine, ok = () => true) => {
+      const list = Object.entries(d[cat] || {}).filter(([k, c]) => c > 0 && ok(k)).sort((a, b) => b[1] - a[1]);
       const tot = list.reduce((t, [, c]) => t + c, 0);
       if (!tot) return '<p class="dim">아직 기록이 없어요</p>';
       const row = ([k, c], i) => `<div class="row${String(mine) === k ? ' end-mine' : ''}"><b class="num">${i + 1}</b> ${name(k)}<span class="grow"></span><span>${c}명 <span class="dim">(${Math.round(c * 100 / tot)}%)</span></span></div>`;
@@ -3195,7 +3198,7 @@ const Game = (() => {
         ${cmp('엔딩까지 걸린 날', 'days', x => `${Math.round(x)}일`)}${cmp('플레이 시간', 'sec', playText)}
         ${cmp('쓰러뜨린 적', 'kills')}${cmp('내려간 계단', 'floors')}${cmp('쓰러뜨린 보스', 'bosses')}${cmp('클리어한 던전', 'clears')}
         ${cmp('완료한 임무', 'missions')}${cmp('친구 구조', 'rescues')}${cmp('쓰러진 횟수', 'faints')}</div>
-      <h3>🌱 가장 많이 고른 첫 파트너</h3>${rank('starter', pk, me && me.starter)}
+      <h3>🌱 가장 많이 고른 첫 파트너</h3>${rank('starter', pk, me && me.starter, k => starterIds().includes(+k))}
       <h3>🤝 가장 오래 함께한 리더</h3>${rank('lead', pk, me && me.lead)}
       <h3>✨ 처음 만난 이로치</h3>${rank('shiny', pk, me && me.shiny)}
       <h3>👑 처음 함께한 초전설</h3>${rank('ultra', pk, me && me.ultra)}
@@ -4076,13 +4079,31 @@ const Game = (() => {
     });
   }
 
-  // 화면 방향 고정 (v0.102 보강): screen.orientation.lock은 설치한 앱(전체 화면)에서만 된다. 안 되면 조용히 넘어간다
-  function applyOrient() {
+  // 화면 방향 고정 (v0.102 보강): screen.orientation.lock은 설치한 앱이나 전체 화면에서만 된다
+  //  v1.11: 홈 화면에 추가했는데도 거절되는 기기·브라우저가 있어서, 거절되면 전체 화면으로 바꿔 다시 고정한다
+  //  전체 화면은 누를 때만 바꿀 수 있어서: 설정에서 고를 때는 그 자리에서, 앱을 열거나 돌아왔을 때는 다음 터치 때. tell: 결과를 알려 준다 (설정에서 고를 때)
+  let orientRetry = false;
+  // 전체 화면에서도 고정이 거절되면 전체 화면을 다시 푼다
+  const fullscreenLock = o => document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => screen.orientation.lock(o).catch(e => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); throw e; }));
+  async function applyOrient(tell) {
     const o = save?.settings?.orient || 'auto', so = screen.orientation;
-    if (!so) return;
-    try { if (o === 'auto') { so.unlock && so.unlock(); } else so.lock && so.lock(o).catch(() => {}); } catch (e) {}
+    orientRetry = false;
+    if (o === 'auto') { try { so && so.unlock && so.unlock(); } catch (e) { /* 무시 */ } return; }
+    if (!so || !so.lock) { if (tell) UI.toast('이 브라우저는 화면 방향 고정을 지원하지 않아요.'); return; }
+    let err;
+    try { await so.lock(o); if (tell) UI.toast('화면 방향을 고정했어요.'); return; } catch (e) { err = e; }
+    const canFull = !!document.documentElement.requestFullscreen && !document.fullscreenElement && touchDevice();   // PC에서는 전체 화면으로 바꾸지 않는다
+    if (tell && canFull) { try { await fullscreenLock(o); UI.toast('전체 화면으로 바꿔 화면 방향을 고정했어요.'); return; } catch (e) { err = e; } }
+    orientRetry = canFull;
+    if (tell) UI.toast(`이 기기·브라우저에서는 화면 방향을 고정하지 못했어요 (${(err && err.name) || '알 수 없음'}).`);
   }
-  function setSetting(k, v) { save.settings[k] = v; if (k === 'autoShiny' && v) for (const id of Object.keys(save.roster).map(Number)) if (shinyOk(id)) autoShiny(id); persist(); if (k === 'townBg') TownScene.setTheme(townTheme()); if (k === 'townBgm' && !Dungeon.floor) Sound.town(); if (k === 'orient') { applyOrient(); if (v !== 'auto' && !matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches) UI.toast('화면 방향 고정은 홈 화면에 추가한 앱으로 실행했을 때 적용돼요.'); } Sound.refresh(); applyPad(); if (k === 'origTiles' || k === 'useTileset') Dungeon.rebuildMap(); }   // 던전 그림을 바꾸면 지금 층도 바로 다시 그린다
+  document.addEventListener('pointerdown', () => {
+    if (!orientRetry || !save) return;
+    orientRetry = false;
+    fullscreenLock(save.settings.orient).catch(() => {});
+  }, { capture: true, passive: true });
+  function setSetting(k, v) { save.settings[k] = v; if (k === 'autoShiny' && v) for (const id of Object.keys(save.roster).map(Number)) if (shinyOk(id)) autoShiny(id); persist(); if (k === 'townBg') TownScene.setTheme(townTheme()); if (k === 'townBgm' && !Dungeon.floor) Sound.town(); if (k === 'orient') applyOrient(true); Sound.refresh(); applyPad(); if (k === 'origTiles' || k === 'useTileset') Dungeon.rebuildMap(); }   // 던전 그림을 바꾸면 지금 층도 바로 다시 그린다
   // 휴대폰 조작: 터치가 되는 기기면 방향 버튼을 보인다. 펜·마우스가 함께 있는 기기는 브라우저가 터치 기기로 알려주지 않기도 해서 넓게 본다
   // (설정에서 '방향 버튼 항상 표시'를 켜면 어떤 기기에서든 보인다)
   const touchDevice = () => (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window || matchMedia('(any-pointer: coarse)').matches;

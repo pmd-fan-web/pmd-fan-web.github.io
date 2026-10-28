@@ -150,7 +150,7 @@ const Dex = (() => {
       html: `<div class="dex-poke">
         <div class="cc-top">${portraitImg(id, 'portrait big')}<div><div class="cc-name">${esc(d.n)}</div><div class="dim">${esc(d.e)} · ${d.g}세대${d.lg ? ' · 전설/환상' : ''}</div>
           <div>${typeBadges(d.t)}</div><div class="dim">📖 ${rec} · 레벨업 ${expDiv(id) > 1.01 ? `느림 (필요 경험치 ${+expDiv(id).toFixed(2)}배)` : expDiv(id) < 0.99 ? `빠름 (필요 경험치 ${+expDiv(id).toFixed(2)}배)` : '보통'}</div>${played ? `<div class="note ms">플레이 기록 Lv${played.lv}</div>` : ''}
-          <div>${!d.sh ? '<span class="dim">이로치: 그림이 없어요</span>' : Game.save && Game.shinyOk(id) ? '✨ 이로치: <b>얻었어요</b> <span class="dim">(캐릭터 탭에서 고를 수 있어요)</span>' : '이로치: 있어요 · <span class="dim">🔒 아직 못 얻었어요 (이 포켓몬이나 진화 계열의 이로치를 쓰러뜨리거나 영입하면 열려요)</span>'}</div></div>
+          <div>${!d.sh ? '<span class="dim">이로치: 그림이 없어요</span>' : Game.save && Game.shinyOk(id) ? '✨ 이로치: <b>얻었어요</b> <span class="dim">(캐릭터 탭에서 고를 수 있어요)</span>' : '이로치: 있어요 · <span class="dim">🔒 아직 못 얻었어요 (이 포켓몬이나 진화 계열의 이로치를 쓰러뜨리거나 영입하면 열려요)</span>'}</div>${LOCAL_SPRITES[id]?.idleOnly ? '<div class="dim">던전 동작: 대기만 있어요 (공격·피격·잠자기 동작 없음)</div>' : ''}</div>
           ${d.sh ? `<div class="dex-shiny-pic" title="이로치 모습">${portraitImg(id, 'portrait big', 'Normal', true)}<div class="dim tiny center">이로치</div></div>` : ''}</div>
         ${borrowNote(id) ? `<p class="note">${esc(borrowNote(id))}</p>` : ''}
         ${Game.save && Game.hasClears(id) ? `<h3>🏅 메달 <span class="dim">(이 포켓몬으로 클리어한 던전)</span></h3>${Game.medalSection(id)}` : ''}

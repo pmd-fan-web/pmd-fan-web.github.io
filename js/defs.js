@@ -3,15 +3,16 @@
 
 // 게임 버전: 업데이트할 때 올리고, index.html의 ?v= 숫자도 같이 올린다
 // (친구와 구조 코드·오늘의 도전을 주고받으려면 버전이 같아야 한다)
-const GAME_VERSION = '1.10';   // 0.102(=1.02) 다음부터 1.xx (cmpVer로 비교하면 1.07 > 0.102)
+const GAME_VERSION = '1.11';   // 0.102(=1.02) 다음부터 1.xx (cmpVer로 비교하면 1.07 > 0.102)
 // 버전 비교: '0.25' > '0.9' 처럼 숫자로 비교한다
 function cmpVer(a, b) {
   const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
   for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return Math.sign(d); }
   return 0;
 }
-const GAME_DATE = '2026-10-27';
+const GAME_DATE = '2026-10-28';
 const VERSION_NOTES = [
+  ["1.11", ["중간 보스의 이야기 대사가 실제로 나온 포켓몬과 맞지 않던 문제를 고쳤습니다", "화면 방향 고정이 되지 않으면 전체 화면으로 바꿔 고정합니다", "'다른 창에서 진행 중' 창이 다른 창에 가려 닫히던 문제를 고쳤습니다. 이 창에서는 새로고침만 할 수 있습니다", "스타팅 순위와 엔딩 통계에 처음에 고를 수 없는 포켓몬이 집계되던 문제를 고쳤습니다"]],
   ["1.10", ["던전에서 창을 연 키를 다시 누르면 창이 닫힙니다", "구멍파기·다이빙 등으로 숨은 포켓몬이 흐리게 보입니다", "새로고침한 뒤 혼자 열린 창이 '다른 창에서 진행 중'으로 멈추던 문제를 고쳤습니다", "던전 가방에서 여러 아이템을 골라 한 번에 내려놓을 수 있습니다", "다른 기기에서 더 새 세이브를 클라우드에 올렸으면, 옛 세이브로 덮어쓰지 않고 어느 세이브를 쓸지 묻습니다", "창을 연 키를 다시 누를 때 다른 창이 닫히던 문제를 고쳤습니다", "감사 편지 확인에 쓰는 서버 읽기를 줄였습니다"]],
   ["1.09", ["게임을 여러 창(탭·설치형 앱)에 열어 두었을 때 옛 창이 다른 창의 진행을 덮어쓰던 문제를 고쳤습니다. 다른 창에서 저장하면 옛 창은 저장을 멈춥니다"]],
   ["1.08", ["던전에서 Y 키나 행동 메뉴로 던전 정보를 바로 볼 수 있습니다", "쓰러졌을 때 구조 게시판에 올릴지, 친구에게만 SOS 코드로 부탁할지 고를 수 있습니다", "친구에게만 부탁한 구조 요청은 임무 탭에서 나중에 게시판에 올릴 수 있습니다"]],
@@ -131,6 +132,8 @@ const VERSION_NOTES = [
 const SPRITE_RAW = 'https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master';
 const SPRITE_BASE = 'https://cdn.jsdelivr.net/gh/PMDCollab/SpriteCollab@master';
 const spriteFallback = url => url.replace(SPRITE_BASE, SPRITE_RAW);
+// 저장소에 둔 던전 그림 (SpriteCollab에 없는 모습): 번호 → { path: 폴더, dy: 그리는 높이 보정 (프레임 위아래 여백을 잘라 낸 만큼), idleOnly: 대기 동작만 있음 }
+const LOCAL_SPRITES = {};
 const TILE = 24;
 const BAG_BASE = 16, BAG_STEP = 4, BAG_LIMIT = 48;
 const STORAGE_BASE = 300, STORAGE_STEP = 40, STORAGE_LIMIT = 5000;

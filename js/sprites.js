@@ -13,7 +13,9 @@ const Sprites = (() => {
     // 걷는 모습이 아직 없는 포켓몬은 진화 전 포켓몬의 그림을 빌려 쓴다 (species.sb)
     // species.ss: 걷는 그림이 하위 폴더에만 있는 포켓몬 (딩루: 1003/0001, 초상화는 1003)
     const ss = DATA.species[id]?.ss;
-    let base = `${SPRITE_BASE}/sprite/${ss ? `${pad4(id)}/${ss}/` : spritePath(DATA.species[id]?.sb || id, shiny)}`;
+    const local = !shiny && LOCAL_SPRITES[id];
+    if (local) s.dy = local.dy || 0;
+    let base = local ? local.path : `${SPRITE_BASE}/sprite/${ss ? `${pad4(id)}/${ss}/` : spritePath(DATA.species[id]?.sb || id, shiny)}`;
     // CDN에서 못 받으면 GitHub 원래 주소로 한 번 더 (그 뒤 그림도 같은 곳에서)
     const get = u => fetch(u).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
     get(base + 'AnimData.xml').catch(() => { base = spriteFallback(base); return get(base + 'AnimData.xml'); }).then(txt => {
@@ -75,11 +77,11 @@ const Sprites = (() => {
     f = Math.min(f, a.dur.length - 1);
     const row = Math.min(dir, a.rows - 1);
     ctx.globalAlpha = alpha;
-    ctx.drawImage(a.img, f * a.fw, row * a.fh, a.fw, a.fh, Math.round(cx - a.fw / 2), Math.round(cy - a.fh / 2 - 2), a.fw, a.fh);
+    ctx.drawImage(a.img, f * a.fw, row * a.fh, a.fw, a.fh, Math.round(cx - a.fw / 2), Math.round(cy - a.fh / 2 - 2 + (s.dy || 0)), a.fw, a.fh);
     if (flash) {
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.5 * alpha;
-      ctx.drawImage(a.img, f * a.fw, row * a.fh, a.fw, a.fh, Math.round(cx - a.fw / 2), Math.round(cy - a.fh / 2 - 2), a.fw, a.fh);
+      ctx.drawImage(a.img, f * a.fw, row * a.fh, a.fw, a.fh, Math.round(cx - a.fw / 2), Math.round(cy - a.fh / 2 - 2 + (s.dy || 0)), a.fw, a.fh);
       ctx.globalCompositeOperation = 'source-over';
     }
     ctx.globalAlpha = 1;

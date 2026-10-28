@@ -411,7 +411,7 @@ const Dungeon = (() => {
     stopAuto();
     // 이야기 (js/scenes.js): 아직 클리어하지 않은 던전이면 보스가 나타날 때의 대사를 먼저
     const part = run.floor === D.dg.floors ? 'intro' : 'mid';
-    if (!run.hard && Story.hasPart(D.dg.id, part)) { Story.inDungeon(D.dg.id, part).then(() => { if (D && D.boss === b) bossIntroWindow(b); }); return; }
+    if (!run.hard && Story.hasPart(D.dg.id, part)) { Story.inDungeon(D.dg.id, part, { sp: b.sp, shiny: b.shiny }).then(() => { if (D && D.boss === b) bossIntroWindow(b); }); return; }
     bossIntroWindow(b);
   }
   function bossIntroWindow(b) {
@@ -3848,7 +3848,7 @@ const Dungeon = (() => {
     // 키로 연 창은 같은 키를 다시 누르면 닫는다 (v1.10). 그 창에서 더 연 창(가방의 아이템 메뉴 등)도 함께
     if (winKey && winKey.m && !winKey.m.el.isConnected) winKey = null;   // 그 키로 연 창이 이미 닫혔다 (Esc·✕ 등)
     if (winKey && UI.isOpen() && UI.top() !== winKey.before && keyAct(e.code) === winKey.a && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      while (UI.isOpen() && UI.top() !== winKey.before) UI.close(UI.top());
+      while (UI.isOpen() && UI.top() !== winKey.before && !UI.top().opts.sticky) UI.close(UI.top());
       winKey = null; e.preventDefault(); return;
     }
     if (UI.key(e)) return;

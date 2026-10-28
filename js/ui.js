@@ -5,7 +5,8 @@ const UI = (() => {
   const root = () => document.getElementById('modal-root');
   const stack = [];
 
-  // opts: { title, html, choices:[{label, fn, disabled, sub}], cancel:fn|false, wide }
+  // opts: { title, html, choices:[{label, fn, disabled, sub}], cancel:fn|false, wide, sticky }
+  //  sticky (v1.11): 닫히지 않고 늘 맨 위에 있는 창 ('다른 창에서 진행 중'). 나중에 연 창은 그 아래에 들어가고, close·closeAll로도 닫히지 않는다
   function open(opts) {
     const el = document.createElement('div');
     el.className = 'modal-back';
@@ -41,8 +42,9 @@ const UI = (() => {
     }
     el.appendChild(box);
     el.addEventListener('mousedown', e => { if (e.target === el && opts.cancel !== false) cancel(m); });
-    root().appendChild(el);
-    stack.push(m);
+    const si = opts.sticky ? -1 : stack.findIndex(x => x.opts.sticky);
+    if (si >= 0) { root().insertBefore(el, stack[si].el); stack.splice(si, 0, m); }
+    else { root().appendChild(el); stack.push(m); }
     if (opts.onOpen) opts.onOpen(box, m);
     return m;
   }
@@ -52,6 +54,7 @@ const UI = (() => {
     m.items[i]?.scrollIntoView({ block: 'nearest' });
   }
   function close(m) {
+    if (m.opts.sticky) return;
     const i = stack.indexOf(m);
     if (i >= 0) stack.splice(i, 1);
     m.el.remove();
@@ -94,7 +97,7 @@ const UI = (() => {
     return true;
   }
   const isOpen = () => stack.length > 0;
-  const closeAll = () => { while (stack.length) close(stack[stack.length - 1]); };
+  const closeAll = () => { for (const m of stack.slice().reverse()) close(m); };
 
   // extra: 예/아니요 사이에 넣을 선택지 [{ label, value }] (고르면 그 value로 끝난다)
   function confirm(title, html, yesLabel = '예', noLabel = '아니요', extra = [], onOpen) {

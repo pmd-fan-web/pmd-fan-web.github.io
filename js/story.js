@@ -1,6 +1,7 @@
 // 이야기 대화 장면 (v0.91): 원작처럼 초상화 + 이름 + 대사를 한 줄씩. 탭·클릭·Enter로 넘기고, 건너뛰기(Esc)로 끝낸다
 // 대사 한 줄: [말하는 포켓몬, 표정, 대사]
-//   말하는 포켓몬: 도감 번호 / 'L' (리더: 지금 캐릭터) / null (해설: 초상화 없이)
+//   말하는 포켓몬: 도감 번호 / 'L' (리더: 지금 캐릭터) / 'B' (지금 나타난 보스: 후보가 여럿인 중간 보스 등) / null (해설: 초상화 없이)
+//   대사는 { 도감 번호: 대사, default: 대사 }로 쓰면 'B'가 누구냐에 따라 고른다. {보스}는 그 보스 이름
 //   표정: EMOTIONS의 이름 (Normal, Happy, Joyous, Surprised, Worried, Sad, Angry, Determined, Pain, Dizzy, Crying). 그 포켓몬에 없으면 Normal
 //   대사 안의 {리더}는 리더 이름, {리더|은}처럼 쓰면 조사까지 맞춘다. {값}은 play(…, { vars: { 값: … } })로 넘긴 것
 'use strict';
@@ -21,8 +22,9 @@ const Story = (() => {
       return p ? particle(String(v), p) : String(v);
     });
   }
-  function who(sp) {
+  function who(sp, boss) {
     if (sp === null) return { name: '', pt: '' };
+    if (sp === 'B' && boss) return { name: spName(boss.sp), id: boss.sp, shiny: !!boss.shiny };
     if (sp === 'L') { const s = leaderSp(), ch = Game.save.roster[s]; return { name: spName(s), id: s, shiny: !!(ch && ch.shiny) }; }
     return { name: spName(sp), id: sp, shiny: false };
   }
@@ -37,7 +39,8 @@ const Story = (() => {
       const end = () => { if (done) return; done = true; ended = true; clearInterval(timer); clearInterval(watch); if (m) UI.close(m); if (restore) restore(); res(); };
       const finishTyping = () => { clearInterval(timer); timer = null; shown = full.length; m.box.querySelector('.story-say').textContent = full; m.box.classList.add('typed'); };
       const show = () => {
-        const [sp, emo, text] = lines[i], w = who(sp), box = m.box;
+        const [sp, emo, raw] = lines[i], w = who(sp, opts.boss), box = m.box;
+        const text = typeof raw === 'string' ? raw : (opts.boss && raw[opts.boss.sp]) || raw.default;
         box.classList.toggle('narration', sp === null);
         box.querySelector('.story-pt').innerHTML = w.id ? portraitImg(w.id, 'portrait story-portrait', emo || 'Normal', w.shiny) : '';
         box.querySelector('.story-name').textContent = w.name;
@@ -96,8 +99,13 @@ const Story = (() => {
   // 장면 곡: 마을·출발 전은 길드 곡, 보스 앞은 전설 곡 (장면마다 bgm·departBgm·introBgm으로 바꿀 수 있다)
   const BGM = { town: 'guild', depart: 'guild', mid: 'legend', intro: 'legend', won: null };
   const bgmOf = (sc, part) => (part === 'depart' ? sc.departBgm : part === 'intro' || part === 'mid' ? sc.introBgm : part === 'town' ? sc.bgm : null) || BGM[part];
+  // 'B' 대사의 보스: 던전에서는 실제로 나타난 보스, 다시 보기에서는 그 던전의 첫 중간 보스 후보
+  const bossOpts = (boss, sc) => {
+    const dg = !boss && sc && sc.dg && dungeonById(sc.dg), sp = boss ? boss.sp : dg && midPool(dg)[0];
+    return sp ? { boss: { sp, shiny: !!(boss && boss.shiny) }, vars: { ...baseVars(), 보스: spName(sp) } } : { vars: baseVars() };
+  };
   async function runScene(sc, { again = false, full = false } = {}) {
-    const api = { play: lines => play(lines, { vars: baseVars(), bgm: bgmOf(sc, 'town') }), askTeamName: again && Game.save.teamName ? async () => {} : askTeamName };   // 다시 보기에서는 이름을 다시 묻지 않는다
+    const api = { play: lines => play(lines, { ...bossOpts(null, sc), bgm: bgmOf(sc, 'town') }), askTeamName: again && Game.save.teamName ? async () => {} : askTeamName };   // 다시 보기에서는 이름을 다시 묻지 않는다
     if (sc.run) await sc.run(api); else await api.play(full ? fullLines(sc) : sc.lines);
   }
   // 던전 안: 아직 클리어하지 않은 던전의 다음 장면 조각 (출발 전 depart · 중간 보스 mid · 보스 intro · 쓰러뜨린 뒤 won)
@@ -107,11 +115,11 @@ const Story = (() => {
     return SCENES.find(sc => sc.dg === dgId && !st.seen[sc.id] && (!sc.after || st.seen[sc.after])) || null;
   }
   const hasPart = (dgId, part) => { const sc = pendingIn(dgId); return !!(sc && sc[part] && sc[part].length); };
-  async function inDungeon(dgId, part) {
+  async function inDungeon(dgId, part, boss) {
     const sc = pendingIn(dgId); if (!sc || !sc[part] || !sc[part].length || running) return;
     if (part === 'won') { const st = state(); st.shownIn = st.shownIn || {}; st.shownIn[sc.id] = true; Game.persist(); }   // 쓰러뜨린 뒤까지 던전에서 봤으면 마을에서는 마을 부분만
     running = true;
-    try { await play(sc[part], { vars: baseVars(), bgm: bgmOf(sc, part) }); } finally { running = false; }
+    try { await play(sc[part], { ...bossOpts(boss, sc), bgm: bgmOf(sc, part) }); } finally { running = false; }
   }
   // 마을에서: 볼 장면이 있으면 차례로 (창이 열려 있으면 닫힌 뒤)
   // 마을에서 아직 볼 이야기가 남았는지 (승급식은 이야기가 모두 끝난 뒤에, v0.95)
