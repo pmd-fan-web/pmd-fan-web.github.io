@@ -954,3 +954,7 @@ body.phone-land #auto-ind, body.phone-land #wind-ind { left: 50%; transform: tra
 .rank-d > summary { list-style: none; cursor: pointer; }
 .rank-d > summary::-webkit-details-marker { display: none; }
 .rank-sum { padding: 4px 10px 8px 40px; font-size: 12px; }
+/* 단색 배경 (v1.11 보강, 설정 → 화면): 넓은 그라데이션이 세로 줄무늬로 깨지는 기기용. 화면 배경과 창·카드 바탕만 단색으로 */
+body.flat-bg #town-screen, body.flat-bg #title-screen, body.flat-bg #dungeon-screen { background: #142a66; }
+body.flat-bg .pmd-box, body.flat-bg :is(#town-screen, #modal-root, #title-screen) .pmd-box, body.flat-bg #dungeon-screen .pmd-box, body.flat-bg #dungeon-screen #vpad { background: #122767; }
+body.flat-bg .card { background: #13234f; }

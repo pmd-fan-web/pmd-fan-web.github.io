@@ -812,7 +812,7 @@ const Game = (() => {
     if (save) fitFloors(save);
     if (Tiles.CUSTOM && save && save.settings.useTileset === true) Tiles.probe();   // 타일셋을 켠 경우만 미리 확인 (끄면 tiles/ 요청도 하지 않는다)
     if (save && !newerSave) persist();
-    if (save) { applyPad(); applyOrient(); }   // 마을을 거치지 않고 이어하던 던전으로 바로 들어가도 터치 조작이 켜지게
+    if (save) { applyPad(); applyOrient(); applyFlatBg(); }   // 마을을 거치지 않고 이어하던 던전으로 바로 들어가도 터치 조작이 켜지게
     setTimeout(checkUpdate, 3000); setInterval(checkUpdate, 10 * 60 * 1000);
     // 플레이 시간 (v0.69부터): 창이 보이는 동안만 센다. 메모리에서 늘리고 다른 저장 때·창을 닫을 때 함께 저장된다
     let playTick = performance.now();
@@ -900,7 +900,7 @@ const Game = (() => {
     });
   }
   function enterTown() {
-    applyPad();
+    applyPad(); applyFlatBg();
     if (save) sweepAutoSell();
     if (save) setTimeout(claimGlobalGifts, 400);
     if (save) setTimeout(() => Story.check(), 1000);   // 이야기 (js/story.js, js/scenes.js)
@@ -2923,7 +2923,8 @@ const Game = (() => {
     return `<label class="chk"><input type="checkbox" data-set="origTiles" ${s.origTiles !== false ? 'checked' : ''}> 🗺 원작 던전 그림 (끄면 게임이 직접 그린 단순한 타일)</label>
       <div class="row"><span class="grow">🔍 던전 화면 크기 <span class="dim">(작을수록 넓게 보여요. 자동: 넓은 화면 3배, 그 밖 2배)</span></span>${sel('viewScale', VIEW_SCALES, String(s.viewScale || ''))}</div>
       <label class="chk"><input type="checkbox" data-set="hideUnexplored" ${s.hideUnexplored ? 'checked' : ''}> 🌑 안 가 본 곳 완전히 가리기 <span class="dim">(끄면 지형만 어둡게 비쳐 보여요. 적·아이템·계단은 가 보기 전에는 안 보여요)</span></label>
-      <label class="chk"><input type="checkbox" data-set="fast" ${s.fast ? 'checked' : ''}> 빠른 연출</label>`;
+      <label class="chk"><input type="checkbox" data-set="fast" ${s.fast ? 'checked' : ''}> 빠른 연출</label>
+      <label class="chk"><input type="checkbox" data-set="flatBg" ${s.flatBg ? 'checked' : ''}> 🎨 단색 배경 <span class="dim">(배경·창에 세로 줄무늬가 보이는 기기용)</span></label>`;
   }
   const townTheme = () => { const d = save && save.settings.townBg && dungeonById(save.settings.townBg); return d && d.pal ? d.pal : null; };
   function openSettings(cat, back) {
@@ -4079,6 +4080,8 @@ const Game = (() => {
     });
   }
 
+  // 단색 배경 (v1.11 보강): 일부 갤럭시에서 업데이트 뒤 넓은 그라데이션 배경이 세로 줄무늬로 깨져 보인다 (화면 배경·창 바탕만 단색으로)
+  function applyFlatBg() { document.body.classList.toggle('flat-bg', !!save?.settings?.flatBg); }
   // 화면 방향 고정 (v0.102 보강): screen.orientation.lock은 설치한 앱이나 전체 화면에서만 된다
   //  v1.11: 홈 화면에 추가했는데도 거절되는 기기·브라우저가 있어서, 거절되면 전체 화면으로 바꿔 다시 고정한다
   //  전체 화면은 누를 때만 바꿀 수 있어서: 설정에서 고를 때는 그 자리에서, 앱을 열거나 돌아왔을 때는 다음 터치 때. tell: 결과를 알려 준다 (설정에서 고를 때)
@@ -4103,7 +4106,7 @@ const Game = (() => {
     orientRetry = false;
     fullscreenLock(save.settings.orient).catch(() => {});
   }, { capture: true, passive: true });
-  function setSetting(k, v) { save.settings[k] = v; if (k === 'autoShiny' && v) for (const id of Object.keys(save.roster).map(Number)) if (shinyOk(id)) autoShiny(id); persist(); if (k === 'townBg') TownScene.setTheme(townTheme()); if (k === 'townBgm' && !Dungeon.floor) Sound.town(); if (k === 'orient') applyOrient(true); Sound.refresh(); applyPad(); if (k === 'origTiles' || k === 'useTileset') Dungeon.rebuildMap(); }   // 던전 그림을 바꾸면 지금 층도 바로 다시 그린다
+  function setSetting(k, v) { save.settings[k] = v; if (k === 'autoShiny' && v) for (const id of Object.keys(save.roster).map(Number)) if (shinyOk(id)) autoShiny(id); persist(); if (k === 'townBg') TownScene.setTheme(townTheme()); if (k === 'townBgm' && !Dungeon.floor) Sound.town(); if (k === 'orient') applyOrient(true); Sound.refresh(); applyPad(); if (k === 'origTiles' || k === 'useTileset') Dungeon.rebuildMap(); if (k === 'flatBg') applyFlatBg(); }   // 던전 그림을 바꾸면 지금 층도 바로 다시 그린다
   // 휴대폰 조작: 터치가 되는 기기면 방향 버튼을 보인다. 펜·마우스가 함께 있는 기기는 브라우저가 터치 기기로 알려주지 않기도 해서 넓게 본다
   // (설정에서 '방향 버튼 항상 표시'를 켜면 어떤 기기에서든 보인다)
   const touchDevice = () => (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window || matchMedia('(any-pointer: coarse)').matches;
