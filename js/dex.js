@@ -45,13 +45,13 @@ const Dex = (() => {
   const RANGE_ORDER = ['앞', '앞 2칸', '원거리', '주변', '자신'];   // 범위 고르기 순서 (없는 값은 맨 앞)
   function renderMoves() {
     const ids = Object.keys(DATA.moves).map(Number).sort((a, b) => DATA.moves[a].t - DATA.moves[b].t || DATA.moves[a].n.localeCompare(DATA.moves[b].n, 'ko'));
-    return `<div class="picker-bar"><input class="dex-q" placeholder="기술 이름 검색" autocomplete="off">
+    return `<div class="picker-bar"><input class="dex-q" placeholder="기술 이름·효과 검색" autocomplete="off">
       <select class="dex-t"><option value="">전체 타입</option>${DATA.types.map((t, i) => `<option value="${i + 1}">${t}</option>`).join('')}</select>
       <select class="dex-c"><option value="">전체 분류</option><option value="2">물리</option><option value="3">특수</option><option value="1">변화</option></select>
       <select class="dex-k"><option value="">전체 범위</option>${[...new Set(ids.map(rangeShort))].sort((a, b) => RANGE_ORDER.indexOf(a) - RANGE_ORDER.indexOf(b)).map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}</select>
       <span class="dim dex-count"></span></div>
       <table class="dex-table"><thead><tr><th>타입</th><th>이름</th><th>분류</th><th>위력</th><th>명중</th><th>PP</th><th>범위</th></tr></thead><tbody>
-      ${ids.map(id => { const m = DATA.moves[id]; return `<tr class="dex-item" data-dexmove="${id}" data-s="${esc(m.n.toLowerCase())}" data-t="${m.t}" data-c="${m.c}" data-k="${esc(rangeShort(id))}">
+      ${ids.map(id => { const m = DATA.moves[id]; return `<tr class="dex-item" data-dexmove="${id}" data-s="${esc((m.n + ' ' + (m.d || '') + ' ' + moveRuleText(id)).toLowerCase())}" data-t="${m.t}" data-c="${m.c}" data-k="${esc(rangeShort(id))}">
         <td><span class="type" style="background:${TYPE_COLORS[m.t - 1]}">${typeName(m.t)}</span></td><td><b>${esc(m.n)}</b></td><td>${CLS[m.c]}</td>
         <td>${m.p || '—'}</td><td>${m.a || '—'}</td><td>${m.pp}</td><td>${rangeShort(id)}</td></tr>`; }).join('')}
       </tbody></table>`;
@@ -59,18 +59,18 @@ const Dex = (() => {
 
   function renderAbilities() {
     const ids = Object.keys(DATA.abilities).map(Number).sort((a, b) => DATA.abilities[a].n.localeCompare(DATA.abilities[b].n, 'ko'));
-    return `<div class="picker-bar"><input class="dex-q" placeholder="특성 이름 검색" autocomplete="off">
+    return `<div class="picker-bar"><input class="dex-q" placeholder="특성 이름·효과 검색" autocomplete="off">
       <select class="dex-c"><option value="">전체</option><option value="1">원작 그대로</option><option value="2">던전용으로 변경</option><option value="3">효과 없음</option></select>
       <span class="dim dex-count"></span></div>
-      ${ids.map(id => { const x = abilityDesc(id), kind = x.none ? 3 : x.dungeon ? 2 : 1; return `<div class="row dex-item clickable" data-dexability="${id}" data-s="${esc(x.n.toLowerCase())}" data-c="${kind}">
+      ${ids.map(id => { const x = abilityDesc(id), kind = x.none ? 3 : x.dungeon ? 2 : 1; return `<div class="row dex-item clickable" data-dexability="${id}" data-s="${esc((x.n + ' ' + (x.dungeon || '') + ' ' + (x.exact || '') + ' ' + (x.d || '')).toLowerCase())}" data-c="${kind}">
         <div class="grow"><b>${esc(x.n)}</b> ${kind === 2 ? '<span class="tag">던전 규칙</span>' : kind === 3 ? '<span class="tag">효과 없음</span>' : ''}<div class="dim">${esc(x.dungeon || x.exact || x.d)}</div></div></div>`; }).join('')}`;
   }
 
   function renderItems() {
     const ids = Object.keys(ITEMS).filter(id => id !== 'quest');
-    return `<div class="picker-bar"><input class="dex-q" placeholder="아이템 이름 검색" autocomplete="off">
+    return `<div class="picker-bar"><input class="dex-q" placeholder="아이템 이름·효과 검색" autocomplete="off">
       <select class="dex-c"><option value="">전체</option><option value="1">도구</option><option value="2,4,5">지닌 물건</option><option value="4">전용 도구 (녹슨검·금강옥 등)</option><option value="5">메가스톤</option><option value="3">기술머신</option></select><span class="dim dex-count"></span></div>
-      ${ids.map(id => { const it = ITEMS[id]; return `<div class="row dex-item clickable" data-dexitem="${id}" data-s="${esc(it.n.toLowerCase())}" data-c="${it.tm ? 3 : it.mega ? 5 : it.sig ? 4 : it.held ? 2 : 1}">
+      ${ids.map(id => { const it = ITEMS[id]; return `<div class="row dex-item clickable" data-dexitem="${id}" data-s="${esc((it.n + ' ' + (it.d || '')).toLowerCase())}" data-c="${it.tm ? 3 : it.mega ? 5 : it.sig ? 4 : it.held ? 2 : 1}">
         ${Gfx.iconHtml(id, true)}<div class="grow"><b>${esc(it.n)}</b><div class="dim">${esc(it.d)}</div></div>
         <div class="dex-tags">${it.held ? '<span class="tag">지닌 물건</span>' : ''}${shopSet.has(id) ? `<span class="tag">상점 ₽${it.price}</span>` : ''}${dropSet.has(id) ? '<span class="tag">던전</span>' : ''}${it.sig ? '<span class="tag">전용</span>' : ''}${it.mega ? '<span class="tag">메가스톤</span>' : ''}</div></div>`; }).join('')}`;
   }

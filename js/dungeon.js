@@ -1261,8 +1261,8 @@ const Dungeon = (() => {
         if (move.ail && Math.random() * 100 < move.ac * serene) inflict(tgt, move.ailPick ? pick(move.ailPick) : AILMENT_MAP[move.ail], at, false, user);
         if (move.fl && Math.random() * 100 < move.fl * serene) setFlinch(tgt, at);
       }
-      // 가두는 기술 (v0.102 보강): 4~5턴 동안 걷지 못하고 턴마다 최대 HP의 1/16 데미지 (보스는 절반 턴)
-      if (tgt.hp > 0 && R.bind && !(tgt.boundT > 0)) {
+      // 가두는 기술 (v0.102 보강): 4~5턴 동안 걷지 못하고 턴마다 최대 HP의 1/16 데미지 (보스는 절반 턴). 바로 옆 칸에서 맞을 때만 (원거리로 쏴도 멀리서는 갇히지 않는다)
+      if (tgt.hp > 0 && R.bind && !(tgt.boundT > 0) && Math.max(Math.abs(user.x - tgt.x), Math.abs(user.y - tgt.y)) <= 1) {
         tgt.boundT = tgt.boss ? 2 : rint(4, 5); tgt.boundBy = user;
         if (tgt.player || seen(tgt)) log(`${jo(nm(tgt), '은')} ${move.n}에 갇혔다! (${tgt.boundT}턴)`, at);
       }
@@ -1517,9 +1517,9 @@ const Dungeon = (() => {
     if (c.reflectT && --c.reflectT <= 0) { c.reflectT = 0; if (show) log(`${nm(c)}의 리플렉터가 사라졌다.`, at); }
     if (c.screenT && --c.screenT <= 0) { c.screenT = 0; if (show) log(`${nm(c)}의 빛의장막이 사라졌다.`, at); }
     if (c.tauntT && --c.tauntT <= 0) { c.tauntT = 0; if (show) log(`${nm(c)}의 도발이 풀렸다.`, at); }
-    if (c.boundT > 0) {   // 가두는 기술: 턴마다 1/16, 가둔 쪽이 쓰러지거나 멀어지면 풀린다
+    if (c.boundT > 0) {   // 가두는 기술: 턴마다 1/16, 가둔 쪽이 쓰러지거나 바로 옆 칸에서 멀어지면 풀린다
       const by = c.boundBy;
-      if (!by || by.hp <= 0 || Math.max(Math.abs(by.x - c.x), Math.abs(by.y - c.y)) > 6) c.boundT = 0;
+      if (!by || by.hp <= 0 || Math.max(Math.abs(by.x - c.x), Math.abs(by.y - c.y)) > 1) c.boundT = 0;
       else { damage(c, Math.max(1, Math.floor(c.maxhp / 16)), by, at); if (show) log(`${jo(nm(c), '은')} 갇혀서 데미지를 입고 있다.`, at); if (--c.boundT <= 0 && c.hp > 0 && show) log(`${jo(nm(c), '은')} 풀려났다!`, at); }
       if (c.boundT <= 0) c.boundBy = null;
     }

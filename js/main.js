@@ -1997,6 +1997,7 @@ const Game = (() => {
         <button class="btn sm${cur ? '' : ' ghost'}" data-act="set-ability" data-arg="${aid}" ${cur || !ownedCount(hid ? 'abpatch' : 'abcapsule') ? 'disabled' : ''}>${cur ? '사용 중' : `${ITEMS[hid ? 'abpatch' : 'abcapsule'].icon} 바꾸기`}</button></div>`; }).join('')}
       <h3>기술머신 <span class="dim">(한 번 쓰면 사라지고, 배운 기술은 기술 설정에서 언제든 넣고 뺄 수 있습니다)</span></h3>
       ${tmSection(w, wc)}
+      ${sketchSection(w)}
       <h3>🥚 교배기술 <span class="dim">(${ITEMS.eggtm.icon}교배기술머신 ×${ownedCount('eggtm')}. 하나 쓰면 교배기술 하나를 배웁니다)</span></h3>
       ${eggSection(w, wc)}
       <h3>${ITEMS.masterbook.icon} 숙련맥스 <span class="dim">(×${ownedCount('masterbook')}. 기술 하나의 숙련도를 바로 ★${MASTERY_MAX}으로. 상점에서 늘 판매)</span></h3>
@@ -2529,6 +2530,7 @@ const Game = (() => {
       case 'unhold': { const ch = save.roster[arg ? +arg : save.current]; if (ch && ch.held) { storeKeep(ch.held); ch.held = null; UI.toast('지닌 물건을 창고에 넣었습니다.'); } break; }
       case 'hold': return chooseHeld(arg && save.roster[+arg] ? +arg : save.current);
       case 'use-tm': return useTM(arg);
+      case 'forget-sketch': return forgetSketch(+arg);
       case 'tm-target': tmTarget = +arg; break;
       case 'learn-egg': return learnEgg(+arg);
       case 'set-ability': return changeAbility(+arg);
@@ -2592,6 +2594,25 @@ const Game = (() => {
         <span class="${r.ok ? 'dim' : 'warn'}">${r.known ? '이미 배움 (기술 설정에서 고를 수 있음)' : r.ok ? '' : '배울 수 없음'}</span></span>
         <button class="btn sm" data-act="use-tm" data-arg="${r.id}" ${r.usable ? '' : 'disabled'}>사용</button></div>`).join('')}
         <p class="dim tm-empty"${usable ? ' style="display:none"' : ''}>조건에 맞는 기술머신이 없습니다.</p></div>`;
+  }
+  // 루브도 스케치로 배운 기술 지우기: 지우면 스케치 횟수가 하나 돌아온다
+  function sketchSection(sp) {
+    const list = ((save.sketched || {})[sp] || []).filter(m => DATA.moves[m]);
+    if (!list.length) return '';
+    return `<h3>✏️ 스케치한 기술 <span class="dim">(지우면 스케치 횟수가 하나 돌아옵니다)</span></h3>
+      ${list.map(m => `<div class="row"><span class="grow"><span class="ab-link" data-move="${m}">${esc(DATA.moves[m].n)}</span></span>
+        <button class="btn sm ghost" data-act="forget-sketch" data-arg="${m}">지우기</button></div>`).join('')}`;
+  }
+  async function forgetSketch(mid) {
+    const sp = tmWho(), ch = save.roster[sp], list = (save.sketched || {})[sp] || [];
+    if (!list.includes(mid) || !DATA.moves[mid]) return;
+    if (!(await UI.confirm('스케치한 기술 지우기', `<p>${esc(monName(sp))}의 ${esc(jo(DATA.moves[mid].n, '을'))} 지웁니다.</p><p class="dim">스케치 횟수가 하나 돌아옵니다.</p>`, '지운다', '그만둔다'))) return;
+    save.sketched[sp] = list.filter(m => m !== mid);
+    if (!save.sketched[sp].length) delete save.sketched[sp];
+    ch.tms = (ch.tms || []).filter(m => m !== mid);
+    const i = ch.moves.indexOf(mid);
+    if (i >= 0) { if (ch.moves.includes(SKETCH)) ch.moves.splice(i, 1); else ch.moves[i] = SKETCH; }
+    persist(); renderTown(); UI.toast(`${jo(DATA.moves[mid].n, '을')} 지웠습니다.`);
   }
   async function useTM(id) {
     const sp = tmWho(), ch = save.roster[sp], it = ITEMS[id], mv = DATA.moves[it.mv];
