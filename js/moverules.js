@@ -360,11 +360,12 @@ if (DATA.species[421] && !DATA.species[1246]) {
   DATA.species[1246] = { ...DATA.species[421], n: '체리꼬 (포지폼)', e: 'Cherrim (Sunshine Form)', v: [], f: [421, '0001'], fc: 'battle', fi: 'cherrim-sunshine',
     cr: ['CHUNSOFT, Caitemis', 'CHUNSOFT, Emmuffin'], em: 'NACDZHJPSUW', sem: 'NACDZHJPSUW' };
 }
-// 테라파고스 스텔라폼 (v0.100): 스텔라결정을 지니면. 걷는 그림이 아직 없어 테라스탈폼(1243)의 그림을 빌려 쓴다 (초상화는 스텔라폼). 번호는 tools/form_ids.json
+// 테라파고스 스텔라폼 (v0.100): 스텔라결정을 지니면. 번호는 tools/form_ids.json
+//  던전 그림 (v1.12): GitHub 익명 제보로 받은 대기 동작만 저장소에 있다 (sprites/1249/, LOCAL_SPRITES, 테라스탈폼 도트를 바탕으로). 이로치 그림은 없다
 if (!DATA.abilities[306]) DATA.abilities[306] = { n: '제로포밍', d: '테라파고스가 스텔라폼이 되었을 때 숨겨진 힘으로 날씨와 필드의 영향을 모두 없앤다.' };
 if (DATA.species[1024] && !DATA.species[1249]) {
   DATA.species[1249] = { ...DATA.species[1024], n: '테라파고스 (스텔라폼)', e: 'Terapagos (Stellar Form)', t: [1], b: [160, 105, 110, 130, 110, 85], ab: [[306, 0]], v: [],
-    f: [1024, '0002'], fc: 'item', fi: 'terapagos-stellar', sb: 1243, cr: ['G〜, JFain', '?'], em: 'N', sem: '' };
+    f: [1024, '0002'], fc: 'item', fi: 'terapagos-stellar', sh: 0, cr: ['익명 제보 (AI 보조, 원본: G〜, JFain)', 'G〜'], em: 'N', sem: '' };
 }
 rule([462], { pow: 'crush', text: '위력 = 120 × 상대의 남은 HP 비율 (HP가 가득이면 120).' });
 rule([717], { text: '던전에서는 상대 HP를 절반으로 줄이는 대신 위력 90으로 공격한다.' });

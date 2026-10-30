@@ -1,0 +1,5 @@
+테라파고스 (스텔라폼) 던전 그림 — 대기 동작(Idle)만, 8방향 48프레임, 이로치 없음
+크레딧: 익명 제보 (AI 보조, 원본: G〜, JFain)
+원본: PMD SpriteCollab 테라파고스 테라스탈폼 sprite/1024/0001 (G〜, JFain)
+https://github.com/PMDCollab/SpriteCollab/tree/master/sprite/1024/0001/
+라이선스: CC BY-NC 4.0 https://creativecommons.org/licenses/by-nc/4.0/
