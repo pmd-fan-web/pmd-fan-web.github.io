@@ -53,7 +53,12 @@ function defaultMoves(sp, lv) {
 const learnableUpTo = (sp, lv) => [...new Set(DATA.species[sp].l.filter(([l]) => l <= lv).map(x => x[1]))];
 const learnedAt = (sp, lv) => DATA.species[sp].l.filter(([l]) => l === lv).map(x => x[1]);
 // 레벨업 알림용: 진화 전 모습이 그 레벨에 배우는 기술도 (예: 버섯꼬의 Lv40 버섯포자를 먼저 진화한 버섯모도)
-const learnedAtAll = (sp, lv) => [...new Set([...learnedAt(sp, lv), ...preEvos(sp).flatMap(p => learnedAt(p, lv))])];
+//  더 낮은 레벨에서 이미 나온 기술은 빼서 다시 묻지 않는다 (v1.13: 진화 뒤 진화 전 모습의 레벨에서 같은 기술을 또 물었다)
+const learnedAtAll = (sp, lv) => {
+  const line = [sp, ...preEvos(sp)];
+  const earlier = new Set(line.flatMap(s => DATA.species[s].l.filter(([l]) => l > 1 && l < lv).map(x => x[1])));
+  return [...new Set(line.flatMap(s => learnedAt(s, lv)))].filter(m => !earlier.has(m));
+};
 
 // 던전 안에서 쓰는 개체
 // ── 기술 숙련도: 포켓몬마다·기술마다 쓴 횟수 (save.mastery[sp][mid], 기술을 빼도 남고 로그라이크에서도 쌓인다) ──

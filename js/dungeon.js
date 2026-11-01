@@ -571,7 +571,7 @@ const Dungeon = (() => {
     for (let h = houseN(); h > 0 && freeRooms.length; h--) {
       const room = freeRooms.splice(rand(freeRooms.length), 1)[0];
       D.houses.push({ room, triggered: false });
-      for (let i = rint(3, 6); i > 0; i--) { const t = randomRoomTile({ room, noItem: true }); if (t) { const id = rollMega('floor', lvl, D.dg) || pickDrop(D.dropLv, D.dg); D.items.push(id ? { ...t, id, n: 1 } : { ...t, money: moneyPile(lvl) }); } }
+      for (let i = rint(3, 6); i > 0; i--) { const t = randomRoomTile({ room, noItem: true }); if (t) { const id = floorDrop(lvl); D.items.push(id ? { ...t, id, n: 1 } : { ...t, money: moneyPile(lvl) }); } }   // 몬스터 하우스도 청정의 탑·오늘의 도전에서는 돈 대신 아이템 (v1.13)
     }
     if (lvl >= FEATURE_LV.trap) {
       const kinds = Object.keys(TRAPS);
@@ -3400,7 +3400,13 @@ const Dungeon = (() => {
     return openAt(mx, my) && (!mid || (party(p) && party(mid))) && diagOK(p.x, p.y, sx, sy) && diagOK(mx, my, sx, sy);
   }
   // 지금 실제로 쓰일 기술 (자동 전투·AI가 사거리를 판단할 때, v1.06): 와이드포스는 사이코필드에서 땅에 있으면 주변 범위
-  const liveMove = (c, id) => { const m = DATA.moves[id]; return m && id === EXPANDING_FORCE && CUR_TERRAIN === 'psychic' && grounded(c) ? { ...m, r: 'r' } : m; };
+  // 자동 전투·AI가 고를 때 보는 기술: 와이드포스(사이코필드), 웨더볼(날씨에 따른 타입·위력 100, v1.13)
+  const liveMove = (c, id) => {
+    const m = DATA.moves[id]; if (!m) return m;
+    if (id === EXPANDING_FORCE && CUR_TERRAIN === 'psychic' && grounded(c)) return { ...m, r: 'r' };
+    const wbT = MOVE_RULES[id]?.weatherBall && { sun: 10, rain: 11, sand: 6, snow: 15 }[weatherNow()];
+    return wbT ? { ...m, t: wbT, p: 100 } : m;
+  };
   function canHitNow(p, f) {
     const dx = f.x - p.x, dy = f.y - p.y, dist = Math.max(Math.abs(dx), Math.abs(dy)), dir = dist ? dirIndex(dx, dy) : 0;
     if (dist <= 2 && reachSlots(p).length && reachHit(p, f)) return true;
