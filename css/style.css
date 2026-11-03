@@ -375,6 +375,8 @@ i.clear { font-style: normal; font-size: 11px; background: #3a9d4d; padding: 1px
 .rcard.unseen img { filter: grayscale(1) brightness(.45); }
 .mons-row .portrait { flex: none; }
 .mons-row .grow { min-width: 0; }
+/* 넓은 화면: 영입 목록을 여러 줄로 (한 줄이면 이름과 버튼 사이가 너무 멀었다) */
+@media (min-width: 900px) { .mons-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 4px 8px; align-content: start; } .mons-list .row { margin-bottom: 0; } }
 .rcard.here { border: 3px solid #ffe14a; box-shadow: 0 0 8px #ffe14acc; background: #ffe14a22; }   /* 던전 정보: 지금 층에 나오는 포켓몬 */
 .rcard.unseen span { color: var(--dim); }
 .dg-items { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0; font-size: 13px; }

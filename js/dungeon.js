@@ -524,7 +524,7 @@ const Dungeon = (() => {
     Progress.seedFloor(run);   // 오늘의 도전: 날짜+층으로 맵 고정
     const m = bossFloor ? genBossMap() : genMap();
     D = { ...m, explored: new Uint8Array(m.w * m.h), visible: new Uint8Array(m.w * m.h), items: [], mons: [], corpses: [], popups: [], fx: [],
-      prompts: [], learnQueue: [], delayed: [], traps: [], shop: null, houses: [], seq: 0, turn: 0, spawnT: run.hard ? 20 : 40, auto: null, ignore: new Set(), regen: 0, dg };
+      prompts: [], learnQueue: [], delayed: [], traps: [], shop: null, houses: [], seq: 0, turn: 0, spawnT: run.hard ? 20 : 40, auto: null, ignore: new Set(), regen: 0, dg, learnFrom: (run.learnFrom = run.learnFrom ?? Math.min(START_LEVEL, run.p.lv)) };   // 처음 층의 레벨 (끝없는 던전은 Lv1부터)
     const { pool, lvl } = makePool(dg, run.floor);
     D.pool = pool; D.lvl = lvl + (run.hard ? HARD_DROP_LV : 0);   // 하드모드: 아이템·돈은 한 등급 위 (적 레벨은 run.hardLv)
     D.dropLv = dropLvFor(dg, run.floor, D.lvl);   // 아이템 단계를 정하는 레벨 (로그라이크는 층 진행으로)
@@ -1649,7 +1649,7 @@ const Dungeon = (() => {
       a.lv++; recalc(a);
       log(L(`${jo(nm(a), '은')} 레벨 ${jo(a.lv, '으로')} 올랐다!`, `${nm(a)} grew to level ${a.lv}!`), at);
       popup(a, 'LEVEL UP', '#ffe066', at + 200);
-      for (const mid of learnedAtAll(a.sp, a.lv)) if (!a.moves.some(m => m.id === mid) && a.moves.length < 4) { a.moves.push(newMove(a, mid)); log(L(`${jo(nm(a), '은')} ${jo(DATA.moves[mid].n, '을')} 배웠다!`, `${nm(a)} learned ${DATA.moves[mid].n}!`), at); }
+      for (const mid of learnedAtAll(a.sp, a.lv, a.selForm, D.learnFrom)) if (!a.moves.some(m => m.id === mid) && a.moves.length < 4) { a.moves.push(newMove(a, mid)); log(L(`${jo(nm(a), '은')} ${jo(DATA.moves[mid].n, '을')} 배웠다!`, `${nm(a)} learned ${DATA.moves[mid].n}!`), at); }
     }
   }
   // raw: 이상한사탕처럼 정해진 만큼 (전설 보정 없이)
@@ -1665,7 +1665,7 @@ const Dungeon = (() => {
       popup(p, 'LEVEL UP', '#ffe066', at + 200);
       Sound.play('levelup', at + 200); Progress.max('maxLv', p.lv); checkLater();
       setFace('Joyous', 2500);
-      for (const mid of learnedAtAll(p.sp, p.lv)) {
+      for (const mid of learnedAtAll(p.sp, p.lv, p.selForm, D.learnFrom)) {
         if (p.moves.some(m => m.id === mid)) continue;
         if (p.moves.length < 4) { p.moves.push(newMove(p, mid)); log(L(`${jo(DATA.moves[mid].n, '을')} 배웠다!`, `Learned ${DATA.moves[mid].n}!`), at); }
         else D.learnQueue.push(mid);

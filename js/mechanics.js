@@ -54,9 +54,11 @@ const learnableUpTo = (sp, lv) => [...new Set(DATA.species[sp].l.filter(([l]) =>
 const learnedAt = (sp, lv) => DATA.species[sp].l.filter(([l]) => l === lv).map(x => x[1]);
 // 레벨업 알림용: 진화 전 모습이 그 레벨에 배우는 기술도 (예: 버섯꼬의 Lv40 버섯포자를 먼저 진화한 버섯모도)
 //  더 낮은 레벨에서 이미 나온 기술은 빼서 다시 묻지 않는다 (v1.13: 진화 뒤 진화 전 모습의 레벨에서 같은 기술을 또 물었다)
-const learnedAtAll = (sp, lv) => {
-  const line = [sp, ...preEvos(sp)];
-  const earlier = new Set(line.flatMap(s => DATA.species[s].l.filter(([l]) => l > 1 && l < lv).map(x => x[1])));
+//  form: 캐릭터 탭에서 골라 둔 모습 (버드렉스 백마 탄 모습 등은 기술 목록이 따로다)
+//  from: 이 포켓몬이 시작한 레벨. 그보다 낮은 레벨은 지나온 적이 없어서 물어본 적도 없다 (v1.14 보강: 진화형으로 시작하는 로그라이크에서 기술을 못 배웠다)
+const learnedAtAll = (sp, lv, form, from = START_LEVEL) => {
+  const line = [sp, ...(form && form !== sp && DATA.species[form] ? [form] : []), ...preEvos(sp)];
+  const earlier = new Set(line.flatMap(s => DATA.species[s].l.filter(([l]) => l > from && l < lv).map(x => x[1])));
   return [...new Set(line.flatMap(s => learnedAt(s, lv)))].filter(m => !earlier.has(m));
 };
 

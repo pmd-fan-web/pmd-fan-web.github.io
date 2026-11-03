@@ -1996,7 +1996,7 @@ const Game = (() => {
     return `<h3>${L('🤝 영입한 포켓몬', '🤝 Recruited Pokémon')} <span class="dim">${L(`${ids.length}마리 · 지닌 물건 ${held}개`, `${ids.length} · ${held} held items`)}</span></h3>
       <p class="dim">${L("리더를 바꾸지 않고 지닌 물건을 바꿀 수 있어요. '바꾸기'에서 다른 포켓몬이 지닌 물건을 고르면 바로 옮겨 와요.", "Change held items without switching leaders. Picking an item another Pokémon holds in 'Change' moves it over right away.")}</p>
       <input class="sig-q" placeholder="${L('포켓몬·도구 이름으로 찾기', 'Search by Pokémon or item name')}" autocomplete="off" style="width:100%;margin:6px 0" oninput="const v=this.value.trim().toLowerCase();this.nextElementSibling.querySelectorAll('[data-s]').forEach(r=>r.hidden=!!v&&!r.dataset.s.includes(v))">
-      <div class="store-list">${ids.map(id => { const c = save.roster[id], h = c.held && ITEMS[c.held] ? c.held : null, lead = id === save.current, mate = party.includes(id);
+      <div class="store-list mons-list">${ids.map(id => { const c = save.roster[id], h = c.held && ITEMS[c.held] ? c.held : null, lead = id === save.current, mate = party.includes(id);
         return `<div class="row mons-row" data-s="${esc((monName(id) + ' ' + spName(id) + ' ' + (h ? ITEMS[h].n : '')).toLowerCase())}">${portraitImg(id, 'portrait sm', 'Normal', c.shiny)}
           <div class="grow"><b>${lead ? '👑 ' : mate ? '🤝 ' : ''}${esc(monName(id))}</b> <span class="dim">Lv${c.lv}</span><div class="dim tiny">${h ? `${ITEMS[h].icon} ${esc(ITEMS[h].n)}${sigTag(h)}` : L('지닌 물건 없음', 'No held item')}${sosHeldNote(id)}</div></div>
           <button class="btn sm" data-act="hold" data-arg="${id}">${h ? L('바꾸기', 'Change') : L('지니게 하기', 'Hold')}</button>${h ? ` <button class="btn sm ghost" data-act="unhold" data-arg="${id}">${L('빼기', 'Remove')}</button>` : ''}
@@ -2220,7 +2220,7 @@ const Game = (() => {
       choices: [{ label: L('먹인다', 'Feed'), fn: () => res(clamp(Math.floor(+m0.value) || 1, 1, most)) }, { label: L('그만둔다', 'Cancel'), fn: () => res(0) }], cancel: () => res(0) }));
     if (!n) return;
     const learned = [];
-    for (let i = 0; i < n; i++) { takeItem('candy'); ch.lv++; learned.push(...learnedAtAll(sp, ch.lv).filter(mid => !ch.moves.includes(mid) && !learned.includes(mid))); }
+    for (let i = 0; i < n; i++) { takeItem('candy'); ch.lv++; learned.push(...learnedAtAll(sp, ch.lv, ch.form).filter(mid => !ch.moves.includes(mid) && !learned.includes(mid))); }
     ch.exp = Math.pow(ch.lv, 3);   // 그 레벨의 시작 경험치 (expFor는 최고 레벨에서 Infinity)
     const added = learned.filter(mid => ch.moves.length < 4 && ch.moves.push(mid));
     Progress.max('maxLv', ch.lv); Progress.check();
