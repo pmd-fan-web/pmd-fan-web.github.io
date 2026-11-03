@@ -157,7 +157,7 @@ rule([63, 416, 439, 459, 711, 794, 307, 308, 338, 795], { recharge: true, text: 
 // 관통 (v1.03): 위력이 아주 세고 패널티가 큰 원거리 기술은 앞 직선 사거리 안의 모든 적에게 맞는다 (같은 편은 지나간다, 패널티는 한 번만)
 const PIERCE_MOVES = [63, 307, 308, 338, 459, 711, 795, 315, 437, 354, 705, 796];   // 용성군(434)은 범위기 (아래)
 rule(PIERCE_MOVES, { pierce: true });
-for (const id of PIERCE_MOVES) if (MOVE_RULES[id]) MOVE_RULES[id].text = (MOVE_RULES[id].text ? MOVE_RULES[id].text + ' ' : '') + `앞 직선 ${PROJ_RANGE}칸 안의 모든 적에게 맞는다 (관통).`;
+for (const id of PIERCE_MOVES) if (MOVE_RULES[id]) MOVE_RULES[id].text = (MOVE_RULES[id].text ? MOVE_RULES[id].text + ' ' : '') + L(`앞 직선 ${PROJ_RANGE}칸 안의 모든 적에게 맞는다 (관통).`, `Hits all foes within ${PROJ_RANGE} tiles in a straight line (piercing).`);
 // 모으기 기술 (1턴째 준비, 다음 행동 때 발사)
 rule([76, 669], { charge: '빛을 모으고 있다!', sunNoCharge: true });
 rule([311], { weatherBall: true, text: '날씨에 따라 타입이 바뀌고 위력이 100이 된다 (쾌청 불꽃, 비 물, 모래바람 바위, 설경 얼음).' });
@@ -224,6 +224,7 @@ rule([575], { text: '던전에서는 교체 효과 없이 능력만 떨어뜨린
 function moveRuleText(mid) {
   const r = MOVE_RULES[mid]; if (!r) return '';
   if (r.text) return r.text;
+  if (r.charge && LANG === 'en') return `Prepares on turn 1 and fires on the next action.${r.invuln ? " Can't be hit while preparing." : ''}${r.chargeSc ? ' Defense rises while preparing.' : ''}${r.sunNoCharge ? ' Fires at once in harsh sunlight.' : ''} (press any key to fire)`;
   if (r.charge) return `1턴째에 준비하고 다음 행동 때 발사한다.${r.invuln ? ' 준비하는 동안에는 공격을 받지 않는다.' : ''}${r.chargeSc ? ' 준비할 때 방어가 오른다.' : ''}${r.sunNoCharge ? ' 쾌청일 때는 바로 발사한다.' : ''} (아무 키나 누르면 발사)`;
   return '';
 }
@@ -389,8 +390,8 @@ for (const id of [318, 466]) if (DATA.moves[id]) DATA.moves[id].r = 'r';
 // 물리 범위기가 지진 말고는 쓸 만한 것이 적어서 (v0.92): 눈사태·고속스핀·아이스스피너·휠스핀·암석액스·비검천중파를 주변(3칸 안) 범위로
 for (const id of [419, 229, 861, 859, 830, 845]) if (DATA.moves[id]) DATA.moves[id].r = 'r';
 // 범위 이름 (선공기는 '앞 2칸')
-const RANGE_SHORT_N = { f: '앞', p: '원거리', r: '주변', s: '자신' };
-const rangeShort = id => (MOVE_RULES[id] && MOVE_RULES[id].reach ? `앞 ${MOVE_RULES[id].reach}칸` : RANGE_SHORT_N[DATA.moves[id].r]);
+const RANGE_SHORT_N = L({ f: '앞', p: '원거리', r: '주변', s: '자신' }, { f: 'Front', p: 'Ranged', r: 'Around', s: 'Self' });
+const rangeShort = id => (MOVE_RULES[id] && MOVE_RULES[id].reach ? L(`앞 ${MOVE_RULES[id].reach}칸`, `Front ${MOVE_RULES[id].reach}`) : RANGE_SHORT_N[DATA.moves[id].r]);
 // 기본 PP가 5인 공격 기술은 10으로 (v1.03): 전용기·대기술을 PP가 모자라 거의 못 쓰던 문제. 회복·날씨·잠자기 같은 변화 기술은 5 그대로
 const PP5_UP = 10;
 for (const m of Object.values(DATA.moves)) if (m.pp === 5 && m.c !== 1) m.pp = PP5_UP;

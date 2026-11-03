@@ -48,21 +48,21 @@ const Codes = (() => {
   // 입력 문자열 → { type, ...필드 } 또는 { error }
   function decode(str) {
     const clean = String(str).toUpperCase().replace(/[\s-]/g, '');
-    if (!clean) return { error: '코드를 입력해 주세요.' };
-    if ([...clean].some(ch => !ALPH.includes(ch))) return { error: '코드에 쓸 수 없는 글자가 들어 있습니다.' };
+    if (!clean) return { error: L('코드를 입력해 주세요.', 'Enter a code.') };
+    if ([...clean].some(ch => !ALPH.includes(ch))) return { error: L('코드에 쓸 수 없는 글자가 들어 있습니다.', 'The code has characters that are not allowed.') };
     const type = Object.keys(LAYOUT).find(t => codeLen(t) === clean.length);
-    if (!type) return { error: '코드 길이가 맞지 않습니다. 빠진 글자가 없는지 확인해 주세요.' };
+    if (!type) return { error: L('코드 길이가 맞지 않습니다. 빠진 글자가 없는지 확인해 주세요.', 'Wrong code length. Check for missing characters.') };
     let all = 0n;
     for (const ch of clean) all = (all << 5n) | BigInt(ALPH.indexOf(ch));
     const n = payloadBits(type);
     all &= (1n << BigInt(n + 16)) - 1n;
     const c = Number(all & 0xffffn);
     const v = (all >> 16n) ^ keystream(c, n);
-    if (hash16(v, n) !== c) return { error: '잘못된 코드입니다. 한 글자라도 틀리면 쓸 수 없어요.' };
+    if (hash16(v, n) !== c) return { error: L('잘못된 코드입니다. 한 글자라도 틀리면 쓸 수 없어요.', 'Invalid code. Every character must match.') };
     let rest = v, out = {};
     for (const [k, w] of [...LAYOUT[type]].reverse()) { out[k] = Number(rest & ((1n << BigInt(w)) - 1n)); rest >>= BigInt(w); }
     const t = Number(rest & 3n), ver = Number(rest >> 2n);
-    if (ver !== VER || t !== TYPES[type]) return { error: '다른 버전의 코드이거나 잘못된 코드입니다.' };
+    if (ver !== VER || t !== TYPES[type]) return { error: L('다른 버전의 코드이거나 잘못된 코드입니다.', 'This code is from another version or invalid.') };
     return { type, ...out };
   }
 

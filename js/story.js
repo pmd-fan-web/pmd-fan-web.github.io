@@ -16,6 +16,7 @@ const Story = (() => {
     return JO[p] ? jo(w, JO[p]) : w + p;
   }
   function fill(text, vars) {
+    if (typeof SCENE_EN !== 'undefined' && SCENE_EN[text]) text = SCENE_EN[text];
     return text.replace(/\{([^}|]+)(?:\|([^}]+))?\}/g, (all, k, p) => {
       const v = k === '리더' ? spName(leaderSp()) : vars[k];
       if (v === undefined) return all;
@@ -58,7 +59,7 @@ const Story = (() => {
       };
       m = UI.open({
         html: `<div class="story-line"><div class="story-pt"></div><div class="story-txt"><div class="story-name"></div><div class="story-say"></div><span class="story-more">▼</span></div></div>`,
-        choices: [{ label: '다음', keep: true, fn: next }, { label: '⏭ 스킵', fn: end }],
+        choices: [{ label: L('다음', 'Next'), keep: true, fn: next }, { label: L('⏭ 스킵', '⏭ Skip'), fn: end }],
         cancel: false,   // ✕·바깥 클릭으로 사라지지 않게 (끝내기는 스킵 버튼으로만)
         onOpen: (box, mm) => {
           mm.el.classList.add('story-back'); box.classList.add('story-box');
@@ -72,8 +73,8 @@ const Story = (() => {
   }
   // ── 이야기 진행 (장면 목록: js/scenes.js) ──
   // save.story = { seen: { 장면 id: true }, offer: 처음 한 번 '지난 이야기를 볼까요?' }
-  const TEAM_DEFAULT = '새내기';
-  const teamLabel = () => `${(Game.save && Game.save.teamName) || TEAM_DEFAULT} 탐험대`;
+  const TEAM_DEFAULT = L('새내기', 'Rookie');
+  const teamLabel = () => L(`${(Game.save && Game.save.teamName) || TEAM_DEFAULT} 탐험대`, `Team ${(Game.save && Game.save.teamName) || TEAM_DEFAULT}`);
   const baseVars = () => ({ 탐험대: teamLabel() });
   let running = false;
   const busy = () => running;
@@ -93,7 +94,7 @@ const Story = (() => {
   // 처음부터 끝까지 (다시 보기·한꺼번에 볼 때): 출발 전 → 중간 보스 → 보스 → 쓰러뜨린 뒤 → 길드로 돌아와서
   const fullLines = sc => {
     const inDg = DUNGEON_PARTS.flatMap(k => sc[k] || []);
-    return [...(sc.depart || []), ...inDg, ...(inDg.length ? [[null, '', '— 길드로 돌아와서 —']] : []), ...(sc.lines || [])];
+    return [...(sc.depart || []), ...inDg, ...(inDg.length ? [[null, '', L('— 길드로 돌아와서 —', '— Back at the guild —')]] : []), ...(sc.lines || [])];
   };
   // full: 던전 안 대사까지 이어서 / 아니면 마을 부분만
   // 장면 곡: 마을·출발 전은 길드 곡, 보스 앞은 전설 곡 (장면마다 bgm·departBgm·introBgm으로 바꿀 수 있다)
@@ -136,8 +137,9 @@ const Story = (() => {
     if (st.offer) {
       st.offer = false; Game.persist();
       const seen = SCENES.filter(sc => st.seen[sc.id]);
-      const ok = await UI.confirm('📖 이야기가 생겼어요!', `<p>푸크린 길드의 신입 탐험대 이야기가 추가됐어요. 지금까지 진행한 곳까지의 이야기 <b>${seen.length}편</b>을 처음부터 볼까요?</p>
-        <p class="dim">나중에 정보 탭의 '📖 이야기 다시 보기'에서 언제든 볼 수 있어요. 탐험대 이름도 거기서 정할 수 있어요.</p>`, '처음부터 본다', '나중에 볼게요');
+      const ok = await UI.confirm(L('📖 이야기가 생겼어요!', '📖 A story is here!'), L(`<p>푸크린 길드의 신입 탐험대 이야기가 추가됐어요. 지금까지 진행한 곳까지의 이야기 <b>${seen.length}편</b>을 처음부터 볼까요?</p>
+      <p class="dim">나중에 정보 탭의 '📖 이야기 다시 보기'에서 언제든 볼 수 있어요. 탐험대 이름도 거기서 정할 수 있어요.</p>`, `<p>The story of a rookie team at Wigglytuff's Guild has been added. Watch the <b>${seen.length}</b> chapters up to your progress from the start?</p>
+      <p class="dim">You can watch them any time from '📖 Story replay' on the Info tab. You can name your team there too.</p>`), L('처음부터 본다', 'Watch from the start'), L('나중에 볼게요', 'Later'));
       if (ok) { running = true; try { for (const sc of seen) await runScene(sc, { full: true }); } finally { running = false; } }
     }
     // 볼 장면을 차례대로 모은다 (새 장이 추가되면 이미 깬 던전의 장면이 여럿 한꺼번에 생길 수 있다)
@@ -150,8 +152,9 @@ const Story = (() => {
     if (!queue.length) return;
     for (const sc of queue) st.seen[sc.id] = true;   // 먼저 기록 (보는 도중 새로고침해도 다시 나오지 않게, 다시 보기는 언제든)
     Game.persist();
-    if (queue.length > 1 && !await UI.confirm('📖 새 이야기', `<p>새 이야기 <b>${queue.length}편</b>이 생겼어요. (${esc(queue[0].title)} ~ ${esc(queue[queue.length - 1].title)})</p><p>지금 이어서 볼까요?</p>
-      <p class="dim">나중에 정보 탭의 '📖 이야기'에서 언제든 볼 수 있어요.</p>`, '이어서 본다', '나중에 볼게요')) return;
+    if (queue.length > 1 && !await UI.confirm(L('📖 새 이야기', '📖 New story'), L(`<p>새 이야기 <b>${queue.length}편</b>이 생겼어요. (${esc(queue[0].title)} ~ ${esc(queue[queue.length - 1].title)})</p><p>지금 이어서 볼까요?</p>
+      <p class="dim">나중에 정보 탭의 '📖 이야기'에서 언제든 볼 수 있어요.</p>`, `<p><b>${queue.length}</b> new chapters are here. (${esc(queue[0].title)} ~ ${esc(queue[queue.length - 1].title)})</p><p>Watch them now?</p>
+      <p class="dim">You can watch them any time from '📖 Story' on the Info tab.</p>`), L('이어서 본다', 'Watch now'), L('나중에 볼게요', 'Later'))) return;
     running = true;
     try {
       for (const sc of queue) {
@@ -168,14 +171,14 @@ const Story = (() => {
       let inp = null, done = false;
       const finish = () => {
         if (done) return; done = true;
-        const v = (inp && inp.value || '').replace(/\s+/g, ' ').trim().replace(/\s*탐험대$/, '').slice(0, 8);
+        const v = (inp && inp.value || '').replace(/\s+/g, ' ').trim().replace(/\s*탐험대$/, '').replace(/^Team\s+/i, '').slice(0, 8);
         Game.save.teamName = v || Game.save.teamName || TEAM_DEFAULT; Game.persist(); res();
       };
       const m = UI.open({
-        title: '🏷 탐험대 이름', cancel: false,
-        html: `<p>탐험대 이름을 정해 주세요. <span class="dim">(8글자까지 · 뒤에 '탐험대'가 붙어요)</span></p>
-          <p><input class="team-name-input" maxlength="8" value="${esc((Game.save && Game.save.teamName) || '')}" placeholder="${TEAM_DEFAULT}"> 탐험대</p>`,
-        choices: [{ label: '이 이름으로 정한다', fn: finish }],
+        title: L('🏷 탐험대 이름', '🏷 Team name'), cancel: false,
+        html: `<p>${L("탐험대 이름을 정해 주세요. <span class=\"dim\">(8글자까지 · 뒤에 '탐험대'가 붙어요)</span>", "Name your team. <span class=\"dim\">(up to 8 characters · 'Team' is added in front)</span>")}</p>
+        <p>${L('', 'Team ')}<input class="team-name-input" maxlength="8" value="${esc((Game.save && Game.save.teamName) || '')}" placeholder="${TEAM_DEFAULT}">${L(' 탐험대', '')}</p>`,
+        choices: [{ label: L('이 이름으로 정한다', 'Use this name'), fn: finish }],
         onOpen: box => {
           inp = box.querySelector('input');
           setTimeout(() => inp.focus(), 50);
@@ -190,8 +193,8 @@ const Story = (() => {
   function replayHtml() {
     const st = state(), seen = SCENES.filter(sc => st.seen[sc.id]);
     const main = seen.filter(sc => !sc.side).length, side = seen.filter(sc => sc.side).length;
-    return `<h3>📖 이야기</h3><div class="row"><span class="grow">🏷 <b>${esc(teamLabel())}</b> <span class="dim">· 본편 ${main}/${SCENES.filter(sc => !sc.side).length}편 · 외전 ${side}/${SCENES.filter(sc => sc.side).length}편</span></span>
-      <button class="btn sm" data-act="story-list">이야기 다시 보기</button> <button class="btn sm ghost" data-act="team-name">이름 바꾸기</button></div>`;
+    return `<h3>${L('📖 이야기', '📖 Story')}</h3><div class="row"><span class="grow">🏷 <b>${esc(teamLabel())}</b> <span class="dim">· ${L('본편', 'Main')} ${main}/${SCENES.filter(sc => !sc.side).length}${L('편', '')} · ${L('외전', 'Side')} ${side}/${SCENES.filter(sc => sc.side).length}${L('편', '')}</span></span>
+      <button class="btn sm" data-act="story-list">${L('이야기 다시 보기', 'Story replay')}</button> <button class="btn sm ghost" data-act="team-name">${L('이름 바꾸기', 'Rename')}</button></div>`;
   }
   function openList() {
     const st = state(), seen = SCENES.filter(sc => st.seen[sc.id]);
@@ -199,13 +202,13 @@ const Story = (() => {
     const main = seen.filter(sc => !sc.side), side = seen.filter(sc => sc.side), sideAll = SCENES.filter(sc => sc.side).length;
     const ev = typeof Game !== 'undefined' && Game.eventList ? Game.eventList() : [];   // 짧은 이벤트 (v0.99): 승급식·구린내 탐험대 등
     const m = UI.open({
-      title: '📖 이야기 다시 보기', wide: true,
-      html: `<h3>본편 <span class="dim">(${main.length}/${SCENES.length - sideAll})</span></h3>${main.length ? list(main) : '<p class="dim">아직 본 이야기가 없어요.</p>'}
-        <h3>외전 <span class="dim">(${side.length}/${sideAll})</span></h3>${side.length ? list(side) : '<p class="dim">아직 본 외전이 없어요.</p>'}
-        <h3>짧은 이벤트 <span class="dim">(${ev.filter(e => e.open).length}/${ev.length})</span></h3><div class="btns">${ev.map(e => e.open
+      title: L('📖 이야기 다시 보기', '📖 Story replay'), wide: true,
+      html: `<h3>${L('본편', 'Main story')} <span class="dim">(${main.length}/${SCENES.length - sideAll})</span></h3>${main.length ? list(main) : `<p class="dim">${L('아직 본 이야기가 없어요.', 'No chapters watched yet.')}</p>`}
+        <h3>${L('외전', 'Side stories')} <span class="dim">(${side.length}/${sideAll})</span></h3>${side.length ? list(side) : `<p class="dim">${L('아직 본 외전이 없어요.', 'No side stories watched yet.')}</p>`}
+        <h3>${L('짧은 이벤트', 'Short events')} <span class="dim">(${ev.filter(e => e.open).length}/${ev.length})</span></h3><div class="btns">${ev.map(e => e.open
           ? `<button class="btn sm ghost" data-event="${e.id}">${esc(e.title)}</button>` : '<button class="btn sm ghost" disabled>🔒 ???</button>').join(' ')}</div>
-        <p class="dim">일반 던전을 처음 클리어하고 마을에 돌아오면 본편이, 테마 던전을 처음 클리어하면 그 던전의 외전이 나와요. 짧은 이벤트는 본 것만 열리고, 본편 엔딩을 보면 모두 열려요.</p>`,
-      choices: [{ label: '닫기', fn: () => {} }],
+        <p class="dim">${L('일반 던전을 처음 클리어하고 마을에 돌아오면 본편이, 테마 던전을 처음 클리어하면 그 던전의 외전이 나와요. 짧은 이벤트는 본 것만 열리고, 본편 엔딩을 보면 모두 열려요.', "Main chapters play when you return to town after first clearing a normal dungeon; a themed dungeon's side story plays on its first clear. Short events unlock once seen, and all unlock after the main ending.")}</p>`,
+      choices: [{ label: L('닫기', 'Close'), fn: () => {} }],
       onOpen: box => box.addEventListener('click', e => {
         const v = e.target.closest('[data-event]');
         if (v && !running) { UI.close(m); running = true; Promise.resolve(Game.playEvent(v.dataset.event)).finally(() => { running = false; openList(); }); return; }

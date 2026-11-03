@@ -76,7 +76,7 @@ const Online = (() => {
     if (profile && profile.nameOk) return;
     const n = name();
     try { await claimName(n); profile = { ...(profile || {}), nameOk: true }; setNameOk(n); }
-    catch (e) { if (e.taken) { profile = { ...(profile || {}), nameTaken: true }; throw { code: 'name-taken', msg: '닉네임을 다른 사람이 쓰고 있어요. 계정 → 닉네임 바꾸기에서 새 닉네임을 정해 주세요.' }; } throw e; }
+    catch (e) { if (e.taken) { profile = { ...(profile || {}), nameTaken: true }; throw { code: 'name-taken', msg: L('닉네임을 다른 사람이 쓰고 있어요. 계정 → 닉네임 바꾸기에서 새 닉네임을 정해 주세요.', 'Someone else is using your nickname. Pick a new one in Account → Change nickname.') }; } throw e; }
   }
 
   // ── 진단: 서버가 거절한 요청을 동작별로 세어 두었다가 DIAG_GAP마다 diag/{uid}에 남긴다 (원인 찾기용, 콘솔에서만 본다) ──
@@ -139,17 +139,17 @@ const Online = (() => {
   // Firebase 오류 → 한국어 안내
   function why(e) {
     const c = (e && e.code) || '';
-    if (/email-already-in-use/.test(c)) return '이미 있는 아이디입니다. 다른 아이디를 골라 주세요.';
-    if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return '아이디나 비밀번호가 맞지 않습니다.';
-    if (/weak-password/.test(c)) return '비밀번호는 6자 이상이어야 합니다.';
-    if (/invalid-email/.test(c)) return '아이디에 쓸 수 없는 글자가 있습니다.';
-    if (/too-many-requests/.test(c)) return '시도가 너무 많아 잠시 막혔습니다. 조금 뒤에 다시 해 주세요.';
-    if (/network|unavailable/.test(c)) return '서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.';
-    if (/deadline-exceeded/.test(c)) return '서버가 대답하지 않습니다. 오늘 서버 사용량 한도를 넘었을 수 있어요. (브라우저 세이브로는 계속 플레이할 수 있습니다)';
-    if (/quota|resource-exhausted/.test(c)) return '오늘 서버 사용량 한도를 넘었습니다. 내일 다시 이용할 수 있어요. (브라우저 세이브로는 계속 플레이할 수 있습니다)';
-    if (c === 'need-login') return '로그인하면 볼 수 있어요.';
-    if (/permission-denied/.test(c)) return '권한이 없습니다. 다시 로그인해 보세요.';
-    return '알 수 없는 오류가 났습니다. (' + (c || (e && e.message) || e) + ')';
+    if (/email-already-in-use/.test(c)) return L('이미 있는 아이디입니다. 다른 아이디를 골라 주세요.', 'That ID is taken. Choose another.');
+    if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return L('아이디나 비밀번호가 맞지 않습니다.', 'Wrong ID or password.');
+    if (/weak-password/.test(c)) return L('비밀번호는 6자 이상이어야 합니다.', 'Password must be at least 6 characters.');
+    if (/invalid-email/.test(c)) return L('아이디에 쓸 수 없는 글자가 있습니다.', 'The ID has characters that are not allowed.');
+    if (/too-many-requests/.test(c)) return L('시도가 너무 많아 잠시 막혔습니다. 조금 뒤에 다시 해 주세요.', 'Too many attempts. Try again in a little while.');
+    if (/network|unavailable/.test(c)) return L('서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.', "Can't reach the server. Check your internet connection.");
+    if (/deadline-exceeded/.test(c)) return L('서버가 대답하지 않습니다. 오늘 서버 사용량 한도를 넘었을 수 있어요. (브라우저 세이브로는 계속 플레이할 수 있습니다)', "The server isn't responding. Today's server quota may be used up. (You can keep playing on your browser save)");
+    if (/quota|resource-exhausted/.test(c)) return L('오늘 서버 사용량 한도를 넘었습니다. 내일 다시 이용할 수 있어요. (브라우저 세이브로는 계속 플레이할 수 있습니다)', "Today's server quota is used up. Try again tomorrow. (You can keep playing on your browser save)");
+    if (c === 'need-login') return L('로그인하면 볼 수 있어요.', 'Log in to see this.');
+    if (/permission-denied/.test(c)) return L('권한이 없습니다. 다시 로그인해 보세요.', 'No permission. Try logging in again.');
+    return L('알 수 없는 오류가 났습니다. (', 'Unknown error. (') + (c || (e && e.message) || e) + ')';
   }
 
   const ID_RE = /^[a-z0-9_]{3,16}$/;
@@ -165,13 +165,13 @@ const Online = (() => {
   const OK_WORDS = ['시바견', '시바이누', '보지마', '바보지', '자지러', '공식적'];
   const badName = n => { let s = squash(n); for (const w of OK_WORDS) s = s.split(w).join(''); return BAD_WORDS.some(w => s.includes(w)); };
   // 다른 사람의 닉네임을 보여줄 때 (예전에 만든 닉네임이나 조작된 값도 가린다)
-  const cleanName = n => { n = String(n || '').slice(0, 16); return !n || badName(n) ? '익명의 탐험대' : n; };
+  const cleanName = n => { n = String(n || '').slice(0, 16); return !n || badName(n) ? L('익명의 탐험대', 'Anonymous Team') : n; };
   function checkName(n, max = 10) {
     n = String(n || '').trim();
-    if (!n) return '닉네임을 입력해 주세요.';
-    if (n.length > max) return `닉네임은 ${max}자까지입니다.`;
-    if (!/^[\p{L}\p{N} _.\-]+$/u.test(n) || /^\.+$/.test(n) || /^__.*__$/.test(n)) return '닉네임에는 글자, 숫자, 띄어쓰기, _ . - 만 쓸 수 있습니다.';
-    if (badName(n)) return '쓸 수 없는 말이 들어 있어요. 다른 닉네임을 골라 주세요.';
+    if (!n) return L('닉네임을 입력해 주세요.', 'Enter a nickname.');
+    if (n.length > max) return L(`닉네임은 ${max}자까지입니다.`, `Nicknames can be up to ${max} characters.`);
+    if (!/^[\p{L}\p{N} _.\-]+$/u.test(n) || /^\.+$/.test(n) || /^__.*__$/.test(n)) return L('닉네임에는 글자, 숫자, 띄어쓰기, _ . - 만 쓸 수 있습니다.', 'Nicknames may only use letters, numbers, spaces, _ . -');
+    if (badName(n)) return L('쓸 수 없는 말이 들어 있어요. 다른 닉네임을 골라 주세요.', 'It contains a word that is not allowed. Choose another nickname.');
     return null;
   }
   // ── 닉네임은 겹치지 않게: names/{소문자 닉네임} = { uid } 로 먼저 차지한다 (아이디는 로그인 기능이 알아서 겹치지 않게 한다)
@@ -189,13 +189,13 @@ const Online = (() => {
     });
     if (old && nameKey(old) !== nameKey(n)) await db.collection('names').doc(nameKey(old)).delete().catch(() => {});
   }
-  const TAKEN = '이미 누가 쓰고 있는 닉네임입니다. 다른 닉네임을 골라 주세요.';
+  const TAKEN = L('이미 누가 쓰고 있는 닉네임입니다. 다른 닉네임을 골라 주세요.', 'That nickname is taken. Choose another.');
   async function signUp(id, pw, nick) {
     id = String(id || '').trim().toLowerCase(); nick = String(nick || '').trim();
-    if (!ID_RE.test(id)) throw { msg: '아이디는 영어 소문자, 숫자, _ 로 3~16자입니다.' };
-    if (String(pw).length < 6) throw { msg: '비밀번호는 6자 이상이어야 합니다.' };
+    if (!ID_RE.test(id)) throw { msg: L('아이디는 영어 소문자, 숫자, _ 로 3~16자입니다.', 'IDs are 3–16 characters: lowercase letters, numbers and _.') };
+    if (String(pw).length < 6) throw { msg: L('비밀번호는 6자 이상이어야 합니다.', 'Password must be at least 6 characters.') };
     nick = nick || id;   // 닉네임을 비우면 아이디를 닉네임으로 (그래서 아이디도 금칙어 검사)
-    const bad = checkName(nick, nick === id ? 16 : 10); if (bad) throw { msg: nick === id ? '아이디를 닉네임으로 쓸 수 없어요. ' + bad : bad };
+    const bad = checkName(nick, nick === id ? 16 : 10); if (bad) throw { msg: nick === id ? L('아이디를 닉네임으로 쓸 수 없어요. ', "Your ID can't be used as a nickname. ") + bad : bad };
     await init();
     // 닉네임 목록은 로그인한 사람만 읽을 수 있다 (v0.97): 계정을 먼저 만들고 확인한 뒤, 겹치면 방금 만든 계정을 지운다
     try { user = (await auth.createUserWithEmailAndPassword(id + MAIL, pw)).user; }
@@ -205,13 +205,13 @@ const Online = (() => {
     if (free === false) {
       await user.delete().catch(() => auth.signOut());
       user = null; profile = null;
-      throw { msg: nick === id ? '아이디와 같은 닉네임을 이미 누가 쓰고 있어요. 닉네임을 따로 정해 주세요.' : TAKEN };
+      throw { msg: nick === id ? L('아이디와 같은 닉네임을 이미 누가 쓰고 있어요. 닉네임을 따로 정해 주세요.', 'Someone already uses a nickname matching your ID. Choose a separate nickname.') : TAKEN };
     }
     profile = { id };
     try { await claimName(nick); }
     catch (e) {   // 그 사이에 누가 먼저 가져감: 가입은 됐으니 닉네임만 다시 정하게 한다
       await db.collection('users').doc(user.uid).set({ id, created: Date.now() }, { merge: true }).catch(() => {});
-      throw { msg: e.taken ? '가입은 됐지만 그 닉네임을 방금 다른 사람이 가져갔어요. 계정 → 닉네임 바꾸기에서 정해 주세요.' : why(e), joined: true };
+      throw { msg: e.taken ? L('가입은 됐지만 그 닉네임을 방금 다른 사람이 가져갔어요. 계정 → 닉네임 바꾸기에서 정해 주세요.', 'You signed up, but someone just took that nickname. Set one in Account → Change nickname.') : why(e), joined: true };
     }
     profile = { name: nick, id, nameOk: true }; profileAt = Date.now(); setNameOk(nick);
     try { await db.collection('users').doc(user.uid).set({ name: nick, id, created: Date.now() }, { merge: true }); }
@@ -219,7 +219,7 @@ const Online = (() => {
   }
   async function signIn(id, pw) {
     id = String(id || '').trim().toLowerCase();
-    if (!id || !pw) throw { msg: '아이디와 비밀번호를 입력해 주세요.' };
+    if (!id || !pw) throw { msg: L('아이디와 비밀번호를 입력해 주세요.', 'Enter your ID and password.') };
     await init();
     try { const cred = await auth.signInWithEmailAndPassword(id + MAIL, pw); user = cred.user; if (!freshProfile()) await loadProfile(); }
     catch (e) { throw { msg: why(e) }; }
@@ -227,7 +227,7 @@ const Online = (() => {
   async function signOut() { if (auth) await auth.signOut(); user = null; profile = null; }
   // 계정 삭제: 비밀번호를 한 번 더 확인하고, 서버에 남은 내 기록(세이브, 닉네임, 접속 표시, 아직 아무도 구조하지 않은 요청)을 지운 뒤 계정을 없앤다
   async function deleteAccount(pw) {
-    if (!user) throw { msg: '로그인되어 있지 않아요.' };
+    if (!user) throw { msg: L('로그인되어 있지 않아요.', 'Not logged in.') };
     try { await user.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(user.email, pw)); }
     catch (e) { throw { msg: why(e) }; }
     const uid = user.uid;

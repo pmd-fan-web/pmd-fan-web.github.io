@@ -3,15 +3,16 @@
 
 // 게임 버전: 업데이트할 때 올리고, index.html의 ?v= 숫자도 같이 올린다
 // (친구와 구조 코드·오늘의 도전을 주고받으려면 버전이 같아야 한다)
-const GAME_VERSION = '1.13';   // 0.102(=1.02) 다음부터 1.xx (cmpVer로 비교하면 1.07 > 0.102)
+const GAME_VERSION = '1.14';   // 0.102(=1.02) 다음부터 1.xx (cmpVer로 비교하면 1.07 > 0.102)
 // 버전 비교: '0.25' > '0.9' 처럼 숫자로 비교한다
 function cmpVer(a, b) {
   const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
   for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return Math.sign(d); }
   return 0;
 }
-const GAME_DATE = '2026-11-02';
+const GAME_DATE = '2026-11-04';
 const VERSION_NOTES = [
+  ["1.14", ["설정의 화면 항목에서 한국어와 영어 중 언어를 고를 수 있습니다", "처음 방문하면 브라우저 언어에 맞춰 언어가 정해집니다"]],
   ["1.13", ["진화한 포켓몬이 레벨업할 때 이미 물어본 기술을 다시 묻지 않습니다", "청정의 탑·오늘의 도전의 몬스터 하우스에 돈 대신 아이템이 놓입니다", "자동 전투와 동료가 웨더볼을 고를 때 날씨에 따른 타입과 위력을 반영합니다"]],
   ["1.12", ["속박 기술은 바로 옆 칸에서 맞을 때만 갇히고, 가둔 쪽이 옆 칸에서 멀어지면 풀립니다", "도감의 기술·특성·아이템을 효과로도 검색할 수 있습니다", "루브도가 스케치한 기술을 캐릭터 관리에서 지울 수 있습니다. 지우면 스케치 횟수가 하나 돌아옵니다", "테라파고스 스텔라폼의 던전 그림이 생겼습니다. 대기 동작만 있고 이로치 그림은 없습니다"]],
   ["1.11", ["중간 보스의 이야기 대사가 실제로 나온 포켓몬과 맞지 않던 문제를 고쳤습니다", "화면 방향 고정이 되지 않으면 전체 화면으로 바꿔 고정합니다", "'다른 창에서 진행 중' 창이 다른 창에 가려 닫히던 문제를 고쳤습니다. 이 창에서는 새로고침만 할 수 있습니다", "스타팅 순위와 엔딩 통계에 처음에 고를 수 없는 포켓몬이 집계되던 문제를 고쳤습니다", "설정(화면)에 단색 배경을 추가했습니다. 배경이나 창에 세로 줄무늬가 보이면 켜세요"]],
@@ -233,7 +234,7 @@ const GUMMIES = {
   pinkgummy:   { n: '분홍구미', stats: ['spe'], icon: '🩷' },
   rainbowgummy:{ n: '무지개구미', stats: ['maxhp', 'atk', 'def', 'spa', 'spd', 'spe'], icon: '🌈' },
 };
-const STAT_KO = { maxhp: 'HP', atk: '공격', def: '방어', spa: '특수공격', spd: '특수방어', spe: '스피드' };
+const STAT_KO = L({ maxhp: 'HP', atk: '공격', def: '방어', spa: '특수공격', spd: '특수방어', spe: '스피드' }, { maxhp: 'HP', atk: 'Attack', def: 'Defense', spa: 'Sp. Atk', spd: 'Sp. Def', spe: 'Speed' });
 const gummyAmt = k => (k === 'maxhp' ? 2 : 1);
 for (const [id, g] of Object.entries(GUMMIES)) {
   const rainbow = g.stats.length > 1;
@@ -252,8 +253,10 @@ Object.assign(ITEMS, {
 
 // ── 영양제: 캐릭터의 능력치를 영구히 올린다 (마을의 캐릭터 탭이나 던전에서 사용, v1.06) ──
 const VITAMIN_MAX = 10;   // 능력치 하나에 먹일 수 있는 횟수
-const VITAMINS = { hpup: ['맥스업', 'maxhp', 'HP', 4], protein: ['타우린', 'atk', '공격', 2], iron: ['사포닌', 'def', '방어', 2],
-  calcium: ['리보플라빈', 'spa', '특수공격', 2], zinc: ['키토산', 'spd', '특수방어', 2], carbos: ['알칼로이드', 'spe', '스피드', 2] };
+const VITAMINS = L({ hpup: ['맥스업', 'maxhp', 'HP', 4], protein: ['타우린', 'atk', '공격', 2], iron: ['사포닌', 'def', '방어', 2],
+  calcium: ['리보플라빈', 'spa', '특수공격', 2], zinc: ['키토산', 'spd', '특수방어', 2], carbos: ['알칼로이드', 'spe', '스피드', 2] },
+  { hpup: ['HP Up', 'maxhp', 'HP', 4], protein: ['Protein', 'atk', 'Attack', 2], iron: ['Iron', 'def', 'Defense', 2],
+  calcium: ['Calcium', 'spa', 'Sp. Atk', 2], zinc: ['Zinc', 'spd', 'Sp. Def', 2], carbos: ['Carbos', 'spe', 'Speed', 2] });
 for (const [id, [n, st, sn, v]] of Object.entries(VITAMINS)) {
   ITEMS[id] = { n, d: `${jo(sn, "이")} 영구히 ${v} 오른다. 포켓몬마다 능력치당 ${VITAMIN_MAX}번까지.`, price: 3000, use: 'vit', vit: st, v, icon: '🥤' };
 }
@@ -478,7 +481,7 @@ const HELD_PRICE_MUL = 2;
 for (const [id, it] of Object.entries(HELD_ITEMS)) ITEMS[id] = { ...it, price: it.price * HELD_PRICE_MUL, use: 'none', held: true };
 // 지닐 수 없는 조합: 울퉁불퉁멧 + 접촉 반격 특성(까칠한피부·철가시 등). 지닐 수 없으면 그 이유
 const heldBlockReason = (ability, id) => ITEMS[id]?.hold?.helmet && typeof ABIL !== 'undefined' && ABIL[ability]?.contact?.dmg
-  ? `${abilityName(ability)} 특성이 있어서 ${jo(ITEMS[id].n, '을')} 지닐 수 없다.` : '';
+  ? L(`${abilityName(ability)} 특성이 있어서 ${jo(ITEMS[id].n, '을')} 지닐 수 없다.`, `Can't hold ${ITEMS[id].n} with the Ability ${abilityName(ability)}.`) : '';
 const adaptCache = {};
 // 지닌 물건 하나의 효과 (전용 도구 강화 단계, 모습에 따른 증표 타입)
 function holdEffect(c, id) {
@@ -637,7 +640,7 @@ function pokeClass(id) {
   if (PARADOX_PAST.includes(id) || PARADOX_FUTURE.includes(id)) out.push('paradox');
   return out.length ? out.join(',') : 'plain';
 }
-const pokeClassSelect = cls => `<select class="${cls}" title="분류"><option value="">전체 분류</option>${POKE_CLASSES.map(([v, n]) => `<option value="${v}">${n}</option>`).join('')}</select>`;
+const pokeClassSelect = cls => `<select class="${cls}" title="${L('분류', 'Class')}"><option value="">${L('전체 분류', 'All classes')}</option>${POKE_CLASSES.map(([v, n]) => `<option value="${v}">${n}</option>`).join('')}</select>`;
 const PARADOX_RATE = 0.2;   // 일반 던전에서 패러독스 포켓몬이 뽑혔을 때 실제로 나올 확률 (테마 던전은 그대로)
 DUNGEONS.push(
   { id: 'burned',   n: '불탄 탑',       floors: 25, lv: [30, 52], types: [10, 13, 11, 8, 1], mode: 'normal', req: 'storm', theme: '전설의 세 마리 개',
@@ -945,14 +948,14 @@ const TRAP_VISIBLE = ['reset'];   // 처음부터 보이는 함정 (능력 리�
 const BERRY_BELLY = 5;
 // 흡수 기술(흡수·기가드레인·드레인펀치 등)은 실제로 깎은 HP의 이만큼(%)을 회복한다
 const DRAIN_PCT = 30;
-const isEdible = it => /(열매|씨)$/.test(it.n) && !!it.use && it.use !== 'none';
+const isEdible = it => /(열매|씨)$/.test(it.nKo || it.n) && !!it.use && it.use !== 'none';   // nKo: 영어로 바꾸기 전 이름 (js/lang.js)
 // 영입: 내가 쓰러뜨린 적이 동료가 되고 싶어 할 확률 (내 레벨 기준)
 // Lv1 1.1% · Lv30 4% · Lv50 12.6% · Lv70 21.2% · Lv90 29.8% · 최대 35%. 전설·환상은 절반 (보스라고 줄지 않는다, v0.74)
 function recruitRate(lv) { return lv < 30 ? 0.01 + lv * 0.001 : Math.min(0.35, 0.04 + (lv - 30) * 0.0043); }
 // 탐험대 등급 보너스 (v0.99): 등급마다 +1%p (브론즈 +1 ~ 마스터 +8, 마스터 별은 무관). 레벨 확률에 더한 뒤 전설 절반·친구리본 1.5배를 곱한다
 const RECRUIT_RANK_BONUS = 0.01;
 const recruitRateFor = (lv, rankPts) => recruitRate(lv) + rankOf(rankPts || 0) * RECRUIT_RANK_BONUS;
-const RECRUIT_HALF = '전설·환상 포켓몬은 절반';
+const RECRUIT_HALF = L('전설·환상 포켓몬은 절반', 'half for Legendary/Mythical');
 // 모든 탐험대에게 주는 선물 (운영 보상): 서버 없이 게임 코드에 넣어 두고, 마을에 들어올 때 탐험대마다 한 번 창고로
 // id: 한 번만 받게 하는 이름 (바꾸지 않는다) / until: 이 날(포함)까지만 / items: [아이템, 개수] / money: 돈
 // 한 번이라도 탐험을 다녀온(2일째 이상) 탐험대만 받는다
@@ -1000,8 +1003,8 @@ function keysOf(action, custom = {}) {
   const map = keyActionMap(custom);
   return Object.keys(map).filter(c => map[c] === action && c !== 'Escape');
 }
-const KEY_NAMES = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Space: 'Space', Enter: 'Enter', NumpadEnter: '숫자패드 Enter', Semicolon: ';', Slash: '/', Period: '.', Comma: ',', Tab: 'Tab', Home: 'Home', End: 'End', PageUp: 'PgUp', PageDown: 'PgDn', Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Quote: "'", Backslash: '\\', ShiftLeft: 'Shift', ShiftRight: 'Shift' };
-const keyLabel = code => KEY_NAMES[code] || code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, '숫자패드 ');
+const KEY_NAMES = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Space: 'Space', Enter: 'Enter', NumpadEnter: L('숫자패드 Enter', 'Numpad Enter'), Semicolon: ';', Slash: '/', Period: '.', Comma: ',', Tab: 'Tab', Home: 'Home', End: 'End', PageUp: 'PgUp', PageDown: 'PgDn', Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Quote: "'", Backslash: '\\', ShiftLeft: 'Shift', ShiftRight: 'Shift' };
+const keyLabel = code => KEY_NAMES[code] || code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, L('숫자패드 ', 'Numpad '));
 // 교배기술: 그 포켓몬과 진화 전 모습들의 교배기술 (js/eggmoves.js). 모습(폼)은 원래 포켓몬 기준
 function eggMovesOf(sp) {
   const base = DATA.species[sp]?.f ? DATA.species[sp].f[0] : sp;
@@ -1054,7 +1057,7 @@ const SOS_POST_WAIT = 8000;
 // 구조하러 그 던전에 들어가 있는 동안은 SOS_RENEW_MS마다 다시 맡아서 연장한다 (게임을 끄면 연장이 멈춰 30분 뒤 다시 게시판으로)
 const SOS_HOLD_MS = 30 * 60 * 1000, SOS_RENEW_MS = 20 * 60 * 1000;
 // 구조 요청 뒤 이 시간 동안 아무도 구조하지 않으면 구린내 탐험대(스컹탱크·주뱃)가 대신 구조한다 (v0.92)
-const SOS_AUTO_MS = 30 * 60 * 1000, SOS_AUTO_NAME = '구린내 탐험대', SOS_AUTO_TEAM = [435, 41];
+const SOS_AUTO_MS = 30 * 60 * 1000, SOS_AUTO_NAME = L('구린내 탐험대', 'Team Stench'), SOS_AUTO_TEAM = [435, 41];
 // 달성 선물: 친구 구조 3번마다 (v0.94, 전에는 5번), 임무 완료 20번마다 영양제·구미(무지개구미 포함)·특성패치 중 하나 (두 횟수는 따로 센다)
 const MILESTONE_GIFT = { rescues: 3, missions: 20 };
 const milestoneGiftPool = () => [...Object.keys(VITAMINS), ...Object.keys(GUMMIES), 'abpatch'];
@@ -1097,8 +1100,8 @@ const byDex = (a, b) => dexKey(a) - dexKey(b);
 // SpriteCollab 폴더: 0026/ (이로치 0026/0000/0001/), 리전폼 0026/0001/ (이로치 0026/0001/0001/)
 // 던전 그림이 없어 진화 전 포켓몬의 그림을 빌려 쓰는 포켓몬 안내 (species.sb)
 // 초상화: 다른 모습(메가진화 등)은 Normal 초상화가 없으면 원래 모습의 것을 쓴다 (js/sprites.js portrait와 같은 조건)
-const portraitNote = id => { const d = DATA.species[id] || {}; return d.fc && !(d.em || '').includes('N') && d.f ? `(초상화도 아직 없어서 ${spName(d.f[0])}의 것을 써요)` : `(초상화는 ${spName(id)}의 것)`; };
-const borrowNote = id => { const b = DATA.species[id]?.sb, d = DATA.species[id] || {}, rel = b && d.fc && d.f?.[0] === b ? '원래 모습인' : b && d.f && DATA.species[b]?.f?.[0] === d.f[0] ? '다른 모습인' : '진화 전 모습인'; return b ? `🖼 아직 ${spName(id)}의 던전 그림이 없어서, 던전에서는 ${rel} ${spName(b)}의 그림으로 보여요. 종족값·타입·특성·기술은 ${spName(id)}의 것이 그대로 적용돼요. ${portraitNote(id)}` : ''; };
+const portraitNote = id => { const d = DATA.species[id] || {}; return d.fc && !(d.em || '').includes('N') && d.f ? L(`(초상화도 아직 없어서 ${spName(d.f[0])}의 것을 써요)`, `(No portrait yet either, so it uses ${spName(d.f[0])}'s)`) : L(`(초상화는 ${spName(id)}의 것)`, `(The portrait is ${spName(id)}'s own)`); };
+const borrowNote = id => { const b = DATA.species[id]?.sb, d = DATA.species[id] || {}, rel = b && d.fc && d.f?.[0] === b ? L('원래 모습인', 'its base form') : b && d.f && DATA.species[b]?.f?.[0] === d.f[0] ? L('다른 모습인', 'its other form') : L('진화 전 모습인', 'its pre-evolution'); return b ? L(`🖼 아직 ${spName(id)}의 던전 그림이 없어서, 던전에서는 ${rel} ${spName(b)}의 그림으로 보여요. 종족값·타입·특성·기술은 ${spName(id)}의 것이 그대로 적용돼요. ${portraitNote(id)}`, `🖼 ${spName(id)} has no dungeon sprite yet, so in dungeons it looks like ${rel}, ${spName(b)}. Its own base stats, types, Abilities and moves still apply. ${portraitNote(id)}`) : ''; };
 const spritePath = (id, shiny) => { const f = formOf(id); return f ? `${pad4(f[0])}/${f[1]}/${shiny ? '0001/' : ''}` : `${pad4(id)}/${shiny ? '0000/0001/' : ''}`; };
 const spName = id => DATA.species[id]?.n || ('#' + id);
 // 폼체인지·메가진화 모습(species.fc)은 따로 나오는 포켓몬이 아니다: 목록을 돌 때는 원래 포켓몬만 (js/forms.js)
@@ -1109,7 +1112,7 @@ const looksOf = c => (c && c.fsp) || (c && c.sp);
 const ownMoves = c => (c.tf ? c.tf.moves : c.moves);
 // 변신(괴짜·변신 기술): 따라 한 능력치(HP 제외)에 이 배율, 빌린 기술의 PP는 TF_PP
 const TF_STAT_MUL = 1.1, TF_PP = 10;
-const typeName = t => (t ? DATA.types[t - 1] : '무속성');   // 0: 무속성 (수평베기·진공베기)
+const typeName = t => (t ? DATA.types[t - 1] : L('무속성', 'Typeless'));   // 0: 무속성 (수평베기·진공베기)
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // 한국어 조사
 function josa(word, a, b) {
@@ -1257,25 +1260,27 @@ function sigHoldAt(id, lv) {
   return (sigHoldCache[k] = u);
 }
 // 강화한 효과를 글로 (교환 탭)
+const SIG_UP_NAMES = L({ stabMul: '자기 타입 기술', atkMul: '공격', defMul: '방어', spaMul: '특수공격', spdMul: '특수방어', speedMul: '스피드', evaMul: '회피율', accMul: '명중률', physMul: '물리 위력', specMul: '특수 위력' },
+  { stabMul: 'Own-type moves', atkMul: 'Attack', defMul: 'Defense', spaMul: 'Sp. Atk', spdMul: 'Sp. Def', speedMul: 'Speed', evaMul: 'Evasion', accMul: 'Accuracy', physMul: 'Physical power', specMul: 'Special power' });
 function sigUpText(id, lv) {
-  const h = sigHoldAt(id, lv), N = { stabMul: '자기 타입 기술', atkMul: '공격', defMul: '방어', spaMul: '특수공격', spdMul: '특수방어', speedMul: '스피드', evaMul: '회피율', accMul: '명중률', physMul: '물리 위력', specMul: '특수 위력' };
-  return [...(h.typeMul ? [`${sigTypes(id).map(ty => typeName(ty)).join('·')} 기술 ${Object.values(h.typeMul)[0]}배`] : []),
-    ...SIG_UP_MULS.filter(m => h[m]).map(m => `${N[m]} ${h[m]}배`), ...(h.regen ? [`자연 회복 ${h.regen}배`] : []),
-    ...(h.speedy ? [`한 턴 더 ${Math.round(h.speedy * 100)}%`] : []), ...(h.critStage ? [`급소율 +${h.critStage}단계`] : []), ...(h.ppFree ? [`PP를 안 쓸 확률 ${Math.round(h.ppFree * 100)}%`] : [])].join(' · ');
+  const h = sigHoldAt(id, lv), N = SIG_UP_NAMES;
+  return [...(h.typeMul ? [L(`${sigTypes(id).map(ty => typeName(ty)).join('·')} 기술 ${Object.values(h.typeMul)[0]}배`, `${sigTypes(id).map(ty => typeName(ty)).join('/')} moves ×${Object.values(h.typeMul)[0]}`)] : []),
+    ...SIG_UP_MULS.filter(m => h[m]).map(m => L(`${N[m]} ${h[m]}배`, `${N[m]} ×${h[m]}`)), ...(h.regen ? [L(`자연 회복 ${h.regen}배`, `Natural HP recovery ×${h.regen}`)] : []),
+    ...(h.speedy ? [L(`한 턴 더 ${Math.round(h.speedy * 100)}%`, `Extra turn ${Math.round(h.speedy * 100)}%`)] : []), ...(h.critStage ? [L(`급소율 +${h.critStage}단계`, `Crit ratio +${h.critStage}`)] : []), ...(h.ppFree ? [L(`PP를 안 쓸 확률 ${Math.round(h.ppFree * 100)}%`, `${Math.round(h.ppFree * 100)}% chance to use no PP`)] : [])].join(' · ');
 }
 // 강화 전 → 강화 후 수치와 새로 붙은 효과 (설명 끝에 붙인다). 예) [+4: 물·땅 기술 1.2→1.4배 · 자연 회복 2→3배 / 추가: 공격·방어·특수공격·특수방어·스피드 1.1배 · PP를 안 쓸 확률 40%]
 function sigUpDiff(id, lv) {
   const b = HELD_ITEMS[id].hold, h = sigHoldAt(id, lv);
-  const N = { stabMul: '자기 타입 기술', atkMul: '공격', defMul: '방어', spaMul: '특수공격', spdMul: '특수방어', speedMul: '스피드', evaMul: '회피율', accMul: '명중률', physMul: '물리 위력', specMul: '특수 위력' };
+  const N = SIG_UP_NAMES;
   const up = [], add = [], newMul = {};
-  if (h.typeMul) up.push(`${sigTypes(id).map(t => typeName(t)).join('·')} 기술 ${Object.values(b.typeMul || {})[0] || 1}→${Object.values(h.typeMul)[0]}배`);
-  for (const m of SIG_UP_MULS) if (h[m]) { if (b[m]) up.push(`${N[m]} ${b[m]}→${h[m]}배`); else (newMul[h[m]] = newMul[h[m]] || []).push(N[m]); }
-  for (const [v, names] of Object.entries(newMul)) add.push(`${names.join('·')} ${v}배`);
-  if (h.regen) up.push(`자연 회복 ${b.regen || 1}→${h.regen}배`);
-  if (h.speedy) up.push(`한 턴 더 ${Math.round((b.speedy || 0) * 100)}→${Math.round(h.speedy * 100)}%`);
-  if (h.critStage && h.critStage !== b.critStage) (b.critStage ? up : add).push(b.critStage ? `급소율 +${b.critStage}→+${h.critStage}단계` : `급소율 +${h.critStage}단계`);
-  if (h.ppFree) add.push(`PP를 안 쓸 확률 ${Math.round(h.ppFree * 100)}%`);
-  return `[+${lv}: ${[up.join(' · '), add.length ? `추가: ${add.join(' · ')}` : ''].filter(Boolean).join(' / ')}]`;
+  if (h.typeMul) up.push(L(`${sigTypes(id).map(t => typeName(t)).join('·')} 기술 ${Object.values(b.typeMul || {})[0] || 1}→${Object.values(h.typeMul)[0]}배`, `${sigTypes(id).map(t => typeName(t)).join('/')} moves ×${Object.values(b.typeMul || {})[0] || 1}→${Object.values(h.typeMul)[0]}`));
+  for (const m of SIG_UP_MULS) if (h[m]) { if (b[m]) up.push(L(`${N[m]} ${b[m]}→${h[m]}배`, `${N[m]} ×${b[m]}→${h[m]}`)); else (newMul[h[m]] = newMul[h[m]] || []).push(N[m]); }
+  for (const [v, names] of Object.entries(newMul)) add.push(L(`${names.join('·')} ${v}배`, `${names.join('/')} ×${v}`));
+  if (h.regen) up.push(L(`자연 회복 ${b.regen || 1}→${h.regen}배`, `Natural HP recovery ×${b.regen || 1}→${h.regen}`));
+  if (h.speedy) up.push(L(`한 턴 더 ${Math.round((b.speedy || 0) * 100)}→${Math.round(h.speedy * 100)}%`, `Extra turn ${Math.round((b.speedy || 0) * 100)}→${Math.round(h.speedy * 100)}%`));
+  if (h.critStage && h.critStage !== b.critStage) (b.critStage ? up : add).push(b.critStage ? L(`급소율 +${b.critStage}→+${h.critStage}단계`, `Crit ratio +${b.critStage}→+${h.critStage}`) : L(`급소율 +${h.critStage}단계`, `Crit ratio +${h.critStage}`));
+  if (h.ppFree) add.push(L(`PP를 안 쓸 확률 ${Math.round(h.ppFree * 100)}%`, `${Math.round(h.ppFree * 100)}% chance to use no PP`));
+  return `[+${lv}: ${[up.join(' · '), add.length ? `${L('추가', 'New')}: ${add.join(' · ')}` : ''].filter(Boolean).join(' / ')}]`;
 }
 // 강화한 전용 도구의 설명: 어디서 보든(가방·창고·지닌 물건) 지금 강화 단계의 효과를 붙인다 (v0.102 보강: 지닌 물건을 빼면 가방에서 강화 전 효과로 보였다)
 // 자동으로 만든 증표: 던전에서 타입이 다른 모습이 되면 그 모습의 타입을 따른다는 설명 (버드렉스 백마·흑마 등. 모습은 나중 파일에서도 더해지므로 처음 볼 때 계산)

@@ -774,6 +774,8 @@ button img, .rcard img, .pk img, #face { -webkit-user-drag: none; user-drag: non
   font-family: 'Jua', 'Galmuri11', sans-serif; letter-spacing: .3px; }
 #town-screen #tab-content h3 { font-size: 16px; font-weight: normal; }
 #town-screen #town-tabs button { font-weight: normal; font-size: 15px; }
+/* 영어: 휴대폰 두 줄 탭에서 긴 이름(Character 등)이 잘리지 않게 */
+@media (max-width: 800px) { html[lang="en"] #town-screen #town-tabs button { font-size: 10.5px; letter-spacing: -0.3px; } }
 #town-screen .town-name { font-size: 17px; }
 #town-screen .dg-head b { font-size: 17px; font-weight: normal; }
 

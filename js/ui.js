@@ -17,7 +17,7 @@ const UI = (() => {
     // 닫을 수 있는 창에는 ✕ 버튼 (휴대폰에는 Esc 키가 없다)
     if (opts.cancel !== false) {
       const x = document.createElement('button');
-      x.className = 'modal-x'; x.textContent = '✕'; x.title = '닫기 (Esc)';
+      x.className = 'modal-x'; x.textContent = '✕'; x.title = L('닫기 (Esc)', 'Close (Esc)');
       x.onclick = () => { if (performance.now() - m.t0 > 300) cancel(m); };
       box.prepend(x);
     }
@@ -100,10 +100,10 @@ const UI = (() => {
   const closeAll = () => { for (const m of stack.slice().reverse()) close(m); };
 
   // extra: 예/아니요 사이에 넣을 선택지 [{ label, value }] (고르면 그 value로 끝난다)
-  function confirm(title, html, yesLabel = '예', noLabel = '아니요', extra = [], onOpen) {
+  function confirm(title, html, yesLabel = L('예', 'Yes'), noLabel = L('아니요', 'No'), extra = [], onOpen) {
     return new Promise(res => open({ title, html, onOpen, choices: [{ label: yesLabel, fn: () => res(true) }, ...extra.map(x => ({ label: x.label, fn: () => res(x.value) })), { label: noLabel, fn: () => res(false) }], cancel: () => res(false) }));
   }
-  function alert(title, html, label = '확인') {
+  function alert(title, html, label = L('확인', 'OK')) {
     return new Promise(res => open({ title, html, choices: [{ label, fn: () => res() }], cancel: () => res() }));
   }
   function toast(text) {
@@ -126,49 +126,54 @@ function portraitImg(sp, cls = 'portrait', emotion = 'Normal', shiny = false) {
   return `<img class="${cls}" loading="lazy" src="${Sprites.portrait(sp, emotion, shiny)}" alt="" onerror="if(!this.dataset.r){this.dataset.r=1;this.src=spriteFallback(this.src)}else this.style.visibility='hidden'">`;
 }
 // 기술 상세 설명 (게임 내 실제 효과 기준)
-const RANGE_DESC = { f: '바로 앞 1칸의 적', p: '바라보는 방향 직선 N칸 안의 첫 번째 적', r: '주변 3칸 안의 모든 적', s: '자기 자신' };
+const MOVE_CLS = L(['', '변화', '물리', '특수'], ['', 'Status', 'Physical', 'Special']);
+const RANGE_DESC = L({ f: '바로 앞 1칸의 적', p: '바라보는 방향 직선 N칸 안의 첫 번째 적', r: '주변 3칸 안의 모든 적', s: '자기 자신' },
+  { f: 'The foe on the tile in front', p: 'The first foe within N tiles in a straight line ahead', r: 'All foes within 3 tiles', s: 'Self' });
 function moveEffects(mid) {
   const m = DATA.moves[mid], out = [];
-  if (m.hits) out.push(`${m.hits[0]}~${m.hits[1]}회 연속으로 공격한다.`);
-  if (m.ail) out.push(`${m.c === 1 || m.ac >= 100 ? '' : m.ac + '% 확률로 '}상대를 ${m.ailPick ? m.ailPick.map(k => STATUS_NAMES[k]).join('·') + ' 중 하나의' : STATUS_NAMES[AILMENT_MAP[m.ail]]} 상태로 만든다.`);
+  if (m.hits) out.push(L(`${m.hits[0]}~${m.hits[1]}회 연속으로 공격한다.`, `Hits ${m.hits[0]}–${m.hits[1]} times in a row.`));
+  if (m.ail) out.push(L(`${m.c === 1 || m.ac >= 100 ? '' : m.ac + '% 확률로 '}상대를 ${m.ailPick ? m.ailPick.map(k => STATUS_NAMES[k]).join('·') + ' 중 하나의' : STATUS_NAMES[AILMENT_MAP[m.ail]]} 상태로 만든다.`,
+    `${m.c === 1 || m.ac >= 100 ? 'Inflicts' : m.ac + '% chance to inflict'} ${m.ailPick ? 'one of ' + m.ailPick.map(k => STATUS_NAMES[k]).join('/') : STATUS_NAMES[AILMENT_MAP[m.ail]]} on the foe.`));
   if (m.sc) for (const [st, ch] of m.sc) {
-    const who = m.ss || ch > 0 ? '자신' : '상대';
-    out.push(`${m.scc < 100 ? m.scc + '% 확률로 ' : ''}${who}의 ${jo(STAT_NAMES[st], '을')} ${Math.abs(ch)}단계 ${ch > 0 ? '올린다' : '내린다'}.`);
+    const self = m.ss || ch > 0, who = self ? '자신' : '상대';
+    out.push(L(`${m.scc < 100 ? m.scc + '% 확률로 ' : ''}${who}의 ${jo(STAT_NAMES[st], '을')} ${Math.abs(ch)}단계 ${ch > 0 ? '올린다' : '내린다'}.`,
+      `${m.scc < 100 ? m.scc + '% chance to ' + (ch > 0 ? 'raise' : 'lower') : (ch > 0 ? 'Raises' : 'Lowers')} ${self ? "the user's" : "the foe's"} ${STAT_NAMES[st]} by ${Math.abs(ch)} stage${Math.abs(ch) > 1 ? 's' : ''}.`));
   }
-  if (m.h > 0) out.push(`최대 HP의 ${m.h}%를 회복한다.${m.h > BOSS_HEAL_MAX ? ` (보스가 쓰면 ${BOSS_HEAL_MAX}%)` : ''}`);
-  if (m.dr > 0) out.push(`준 데미지의 ${DRAIN_PCT}%만큼 HP를 회복한다. (원작 ${m.dr}%에서 완화)`);
-  if (m.dr < 0) out.push(`준 데미지의 ${Math.round(-m.dr * RECOIL_MUL)}%만큼 반동 데미지를 받는다. (원작 ${-m.dr}%에서 완화)`);
-  if (m.fl) out.push(`${m.fl}% 확률로 상대를 풀죽게 한다 (1턴 행동 불가).`);
-  if (m.cr) out.push('급소에 맞기 쉽다.');
+  if (m.h > 0) out.push(L(`최대 HP의 ${m.h}%를 회복한다.${m.h > BOSS_HEAL_MAX ? ` (보스가 쓰면 ${BOSS_HEAL_MAX}%)` : ''}`, `Restores ${m.h}% of max HP.${m.h > BOSS_HEAL_MAX ? ` (${BOSS_HEAL_MAX}% when a boss uses it)` : ''}`));
+  if (m.dr > 0) out.push(L(`준 데미지의 ${DRAIN_PCT}%만큼 HP를 회복한다. (원작 ${m.dr}%에서 완화)`, `Restores HP equal to ${DRAIN_PCT}% of the damage dealt. (${m.dr}% in the original games)`));
+  if (m.dr < 0) out.push(L(`준 데미지의 ${Math.round(-m.dr * RECOIL_MUL)}%만큼 반동 데미지를 받는다. (원작 ${-m.dr}%에서 완화)`, `Takes recoil equal to ${Math.round(-m.dr * RECOIL_MUL)}% of the damage dealt. (${-m.dr}% in the original games)`));
+  if (m.fl) out.push(L(`${m.fl}% 확률로 상대를 풀죽게 한다 (1턴 행동 불가).`, `${m.fl}% chance to make the foe flinch (loses 1 turn).`));
+  if (m.cr) out.push(L('급소에 맞기 쉽다.', 'High critical-hit ratio.'));
   return out;
 }
 // 숙련도 표시: ★n (★0이면 비움) / 상세: 단계·효과·다음 단계까지
-const masteryStar = (sp, mid) => { const n = sp ? masteryLevel(sp, mid) : 0; return n ? ` <span class="mastery" title="숙련도 ★${n}: PP 최대 +${n * MASTERY_PP * 100}%, ${Math.round(n * MASTERY_FREE * 100)}% 확률로 PP를 쓰지 않음">★${n}</span>` : ''; };
+const masteryStar = (sp, mid) => { const n = sp ? masteryLevel(sp, mid) : 0; return n ? ` <span class="mastery" title="${L(`숙련도 ★${n}: PP 최대 +${n * MASTERY_PP * 100}%, ${Math.round(n * MASTERY_FREE * 100)}% 확률로 PP를 쓰지 않음`, `Mastery ★${n}: max PP +${n * MASTERY_PP * 100}%, ${Math.round(n * MASTERY_FREE * 100)}% chance to use no PP`)}">★${n}</span>` : ''; };
 function masteryHtml(sp, mid) {
   const n = masteryLevel(sp, mid), u = masteryUses(sp, mid);
-  const next = n < MASTERY_MAX ? `다음 ★${n + 1}까지 ${masteryNeed(mid, n + 1) - u}번` : '최고 단계';
-  return `<div class="md-mastery">⭐ ${esc(spName(sp))}의 숙련도 <b>★${n}</b> <span class="dim">(사용 ${u}번 · ${next})</span><br><span class="dim">PP 최대 ${masteryMaxPP(sp, mid)} (+${Math.round(n * MASTERY_PP * 100)}%) · ${Math.round(n * MASTERY_FREE * 100)}% 확률로 PP를 쓰지 않음</span></div>`;
+  const next = n < MASTERY_MAX ? L(`다음 ★${n + 1}까지 ${masteryNeed(mid, n + 1) - u}번`, `${masteryNeed(mid, n + 1) - u} more to ★${n + 1}`) : L('최고 단계', 'max level');
+  return L(`<div class="md-mastery">⭐ ${esc(spName(sp))}의 숙련도 <b>★${n}</b> <span class="dim">(사용 ${u}번 · ${next})</span><br><span class="dim">PP 최대 ${masteryMaxPP(sp, mid)} (+${Math.round(n * MASTERY_PP * 100)}%) · ${Math.round(n * MASTERY_FREE * 100)}% 확률로 PP를 쓰지 않음</span></div>`,
+    `<div class="md-mastery">⭐ ${esc(spName(sp))}'s mastery <b>★${n}</b> <span class="dim">(used ${u} times · ${next})</span><br><span class="dim">Max PP ${masteryMaxPP(sp, mid)} (+${Math.round(n * MASTERY_PP * 100)}%) · ${Math.round(n * MASTERY_FREE * 100)}% chance to use no PP</span></div>`);
 }
 function moveDetailHtml(mid, pp, max, sp) {
   const m = DATA.moves[mid];
-  const cls = ['', '변화', '물리', '특수'][m.c];
+  const cls = MOVE_CLS[m.c];
   return `<div class="move-detail">
     <div class="md-head"><span class="type" style="background:${TYPE_COLORS[m.t - 1]}">${typeName(m.t)}</span> <b>${esc(m.n)}</b> <span class="dim">${cls}</span></div>
-    <table class="md-tbl"><tr><td>위력</td><td>${m.p || '—'}</td><td>명중</td><td>${m.a || '반드시 명중'}</td><td>PP</td><td>${pp != null ? pp + '/' + max : m.pp}</td></tr></table>
-    <div><span class="dim">범위</span> ${MOVE_RULES[mid]?.allyHeal ? '같은 편 하나 (바로 앞, 없으면 주변 3칸에서 HP가 가장 적은 쪽)' : MOVE_RULES[mid]?.reach ? `앞 ${MOVE_RULES[mid].reach}칸 안의 첫 번째 적 (선공기)` : RANGE_DESC[m.r].replace('N', PROJ_RANGE)}</div>
+    <table class="md-tbl"><tr><td>${L('위력', 'Power')}</td><td>${m.p || '—'}</td><td>${L('명중', 'Acc.')}</td><td>${m.a || L('반드시 명중', 'Never misses')}</td><td>PP</td><td>${pp != null ? pp + '/' + max : m.pp}</td></tr></table>
+    <div><span class="dim">${L('범위', 'Range')}</span> ${MOVE_RULES[mid]?.allyHeal ? L('같은 편 하나 (바로 앞, 없으면 주변 3칸에서 HP가 가장 적은 쪽)', 'One ally (in front, or the one with the least HP within 3 tiles)') : MOVE_RULES[mid]?.reach ? L(`앞 ${MOVE_RULES[mid].reach}칸 안의 첫 번째 적 (선공기)`, `The first foe within ${MOVE_RULES[mid].reach} tiles ahead (strikes first)`) : RANGE_DESC[m.r].replace('N', PROJ_RANGE)}</div>
     ${sp ? masteryHtml(sp, mid) : ''}
-    ${moveRuleText(mid) ? `<div class="md-rule">⚑ 던전 규칙: ${esc(moveRuleText(mid))}</div>` : ''}
+    ${moveRuleText(mid) ? `<div class="md-rule">⚑ ${L('던전 규칙', 'Dungeon rule')}: ${esc(moveRuleText(mid))}</div>` : ''}
     ${m.d ? `<p class="md-flavor">${esc(m.d)}</p>` : ''}
     ${moveEffects(mid).map(e => `<div class="md-eff">• ${esc(e)}</div>`).join('')}
   </div>`;
 }
-function showMoveInfo(mid, pp, max, sp) { UI.alert('기술 정보', moveDetailHtml(mid, pp, max, sp)); }
+function showMoveInfo(mid, pp, max, sp) { UI.alert(L('기술 정보', 'Move info'), moveDetailHtml(mid, pp, max, sp)); }
 
 function moveLine(mid, pp, max) {
   const m = DATA.moves[mid];
   const rng = rangeShort(mid);
-  const cls = ['', '변화', '물리', '특수'][m.c];
+  const cls = MOVE_CLS[m.c];
   return `<span class="type" style="background:${TYPE_COLORS[m.t - 1]}">${typeName(m.t)}</span> <b>${esc(m.n)}</b>
-    <span class="dim">${cls}${m.p ? ' 위력 ' + m.p : ''}${m.a ? ' 명중 ' + m.a : ''} · ${rng}</span>
+    <span class="dim">${cls}${m.p ? L(' 위력 ', ' Pow ') + m.p : ''}${m.a ? L(' 명중 ', ' Acc ') + m.a : ''} · ${rng}</span>
     ${pp != null ? `<span class="pp">${pp}/${max}</span>` : `<span class="pp">PP ${m.pp}</span>`}`;
 }

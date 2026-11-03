@@ -48,6 +48,41 @@ const Starter = (() => {
     ['친구의 비밀을 알게 됐다.', [['절대 말하지 않는다', { calm: 1, hardy: 1 }], ['참다가 살짝 흘린다', { naive: 1, impish: 1 }], ['그걸로 친구를 놀린다', { sassy: 1, impish: 1 }], ['금방 잊어버린다', { relaxed: 1, hasty: 1 }]]],
     ['비 오는 날, 우산이 없다.', [['뛰어간다!', { hasty: 2 }], ['그칠 때까지 기다린다', { relaxed: 1, calm: 1 }], ['빗속에서 신나게 논다', { jolly: 1, naive: 1 }], ['누가 씌워 주길 기다린다', { lonely: 1, timid: 1 }]]],
   ];
+  // 영어 (v1.14): 성격·문답의 글만 바꾼다 (순서는 위와 같다)
+  if (LANG === 'en') {
+    const NE = {
+      hardy: ['The Hardworking Type', 'Once you decide on something, you see it through. You walk even the hard road without complaint, and everyone relies on you.'],
+      docile: ['The Gentle Type', 'Kind and considerate. You get along with anyone and put everyone at ease.'],
+      brave: ['The Brave Type', 'Curiosity beats fear for you. You charge ahead into danger — a born explorer!'],
+      jolly: ['The Cheerful Type', 'Always bright and full of laughter. Wherever you are, things liven up.'],
+      impish: ['The Prankster Type', 'You love a good prank, but nobody can stay mad at you. Wit and tricks get you out of any jam.'],
+      naive: ['The Carefree Type', 'Innocent and a little quirky. Your body moves before your head does, but your honesty is your charm.'],
+      timid: ['The Timid Type', 'Careful and sensitive. You scare easily, but you notice what others miss.'],
+      hasty: ['The Hasty Type', 'You act faster than you think. Waiting? No way! Nobody beats your drive.'],
+      sassy: ['The Sassy Type', 'Confident and bold. You speak your mind, and you back it up with skill.'],
+      calm: ['The Calm Type', 'Composed and thoughtful. Even in a rush you keep steady and find the best way.'],
+      relaxed: ['The Relaxed Type', 'Never in a hurry. Your steady pace puts everyone around you at ease.'],
+      lonely: ['The Lone Wolf Type', 'You treasure time alone. Deep down you are warm, and you protect those you open up to.'],
+    };
+    for (const [k, [n, d]] of Object.entries(NE)) Object.assign(NATURES[k], { n, d });
+    const QE = [
+      ['You found a wallet on the street. What do you do?', ['Find the owner', 'Hand it in nearby', 'Think it over...', 'Walk past it']],
+      ['When you hang out with friends, you...', ['Lead the way', 'Liven things up', 'Quietly follow along', 'Honestly prefer being alone']],
+      ['The night before a test, you...', ['Study step by step as planned', 'Cram!', 'Just go to sleep', 'Worry and can\'t sleep']],
+      ['Someone played a prank on you!', ['Pay them back in kind', 'Laugh it off', 'Blow up at them', 'Keep it inside']],
+      ['You stand before a cave you have never seen.', ['Go right in', 'Prepare well, then go in', 'Wait for someone else to go first', 'Come back another day']],
+      ['Only one of your favorite snacks is left.', ['Give it to a friend', 'Rock-paper-scissors for it!', 'Eat it quickly', 'Split it in half']],
+      ['You suddenly got a day off.', ['Go on an adventure', 'Lounge around all day', 'Learn something new', 'Spend time alone']],
+      ['A friend is late to meet you.', ['Wait patiently', 'Say something when they arrive', 'Leave without them', 'Worry that something happened']],
+      ['You have to give a talk in front of people.', ['Bring it on!', 'Nervous, but you do it', 'Open with a joke', 'Avoid it however you can']],
+      ['Someone praised you.', ['Of course!', 'Get shy', 'Resolve to work harder', 'Suspect they want something']],
+      ['You got lost somewhere unfamiliar!', ['Just head in any direction', 'Take out a map', 'Ask a passerby', 'Relax and look around']],
+      ['What is your dream?', ['To be the strongest in the world', 'To be friends with everyone', 'To live an easy life', 'Not sure yet']],
+      ['You learned a friend\'s secret.', ['Never tell anyone', 'Hold it in, then let it slip', 'Tease your friend about it', 'Forget it right away']],
+      ['It\'s raining and you have no umbrella.', ['Run for it!', 'Wait until it stops', 'Play happily in the rain', 'Wait for someone to share theirs']],
+    ];
+    QUESTIONS.forEach((q, i) => { q[0] = QE[i][0]; q[1].forEach((a, j) => { a[0] = QE[i][1][j]; }); });
+  }
   const nextFrame = () => new Promise(r => setTimeout(r, 30));
 
   function candidates(key) {
@@ -63,7 +98,7 @@ const Starter = (() => {
     for (let i = 0; i < qs.length; i++) {
       const [q, answers] = qs[i];
       const got = await new Promise(res => UI.open({
-        title: `성격 진단 (${i + 1}/${qs.length})`,
+        title: L(`성격 진단 (${i + 1}/${qs.length})`, `Personality quiz (${i + 1}/${qs.length})`),
         html: `<p class="quiz-q">${esc(q)}</p>`,
         choices: answers.map(([t, pts]) => ({ label: esc(t), fn: () => res(pts) })),
         cancel: false,
@@ -79,18 +114,18 @@ const Starter = (() => {
   function showResult(key, list, i, onPick, back) {
     const nat = NATURES[key], sp = list[i % list.length], d = DATA.species[sp];
     UI.open({
-      title: '진단 결과', wide: true, cancel: false,
-      html: `<div class="quiz-result"><p class="center">당신은... <b class="quiz-nature">${esc(nat.n)}</b>!</p>
+      title: L('진단 결과', 'Your result'), wide: true, cancel: false,
+      html: `<div class="quiz-result"><p class="center">${L('당신은...', 'You are...')} <b class="quiz-nature">${esc(nat.n)}</b>!</p>
         <p class="center dim">${esc(nat.d)}</p>
         <div class="center">${portraitImg(sp, 'portrait big')}</div>
-        <p class="center">이런 당신에게 어울리는 포켓몬은... <b>${esc(d.n)}</b>!</p>
+        <p class="center">${L('이런 당신에게 어울리는 포켓몬은...', 'The Pokémon that suits you is...')} <b>${esc(d.n)}</b>!</p>
         <p class="center">${typeBadges(d.t)}</p>
-        <p class="center dim">종족값 HP ${d.b[0]} / 공 ${d.b[1]} / 방 ${d.b[2]} / 특공 ${d.b[3]} / 특방 ${d.b[4]} / 스피드 ${d.b[5]}</p></div>`,
+        <p class="center dim">${L(`종족값 HP ${d.b[0]} / 공 ${d.b[1]} / 방 ${d.b[2]} / 특공 ${d.b[3]} / 특방 ${d.b[4]} / 스피드 ${d.b[5]}`, `Base stats HP ${d.b[0]} / Atk ${d.b[1]} / Def ${d.b[2]} / SpA ${d.b[3]} / SpD ${d.b[4]} / Spe ${d.b[5]}`)}</p></div>`,
       choices: [
-        { label: `${esc(jo(d.n, '과'))} 함께 모험을 시작한다`, fn: () => onPick(sp) },
-        ...(list.length > 1 ? [{ label: `같은 성격의 다른 포켓몬 보기 (${(i % list.length) + 1}/${list.length})`, fn: () => setTimeout(() => showResult(key, list, i + 1, onPick, back), 0) }] : []),
-        { label: '진단을 다시 한다', fn: () => setTimeout(() => quiz(onPick, back), 0) },
-        { label: '← 방법 다시 고르기 (직접 고르기)', fn: () => setTimeout(back, 0) },
+        { label: L(`${esc(jo(d.n, '과'))} 함께 모험을 시작한다`, `Start the adventure with ${esc(d.n)}`), fn: () => onPick(sp) },
+        ...(list.length > 1 ? [{ label: L(`같은 성격의 다른 포켓몬 보기 (${(i % list.length) + 1}/${list.length})`, `See another Pokémon for this type (${(i % list.length) + 1}/${list.length})`), fn: () => setTimeout(() => showResult(key, list, i + 1, onPick, back), 0) }] : []),
+        { label: L('진단을 다시 한다', 'Retake the quiz'), fn: () => setTimeout(() => quiz(onPick, back), 0) },
+        { label: L('← 방법 다시 고르기 (직접 고르기)', '← Choose another way (pick myself)'), fn: () => setTimeout(back, 0) },
       ],
     });
   }
@@ -98,11 +133,12 @@ const Starter = (() => {
   // 시작 방법 고르기
   function begin(onPick, direct) {
     const menu = () => UI.open({
-      title: '함께 모험할 포켓몬 정하기', cancel: false,
-      html: `<p>어떻게 정할까요?</p><p class="dim">고를 수 있는 포켓몬: 진화 전 모습 ${starterIds().length}종 (전설·환상·준전설·패러독스·울트라비스트 제외)</p>`,
+      title: L('함께 모험할 포켓몬 정하기', 'Choose your partner Pokémon'), cancel: false,
+      html: L(`<p>어떻게 정할까요?</p><p class="dim">고를 수 있는 포켓몬: 진화 전 모습 ${starterIds().length}종 (전설·환상·준전설·패러독스·울트라비스트 제외)</p>`,
+        `<p>How do you want to choose?</p><p class="dim">Available: ${starterIds().length} unevolved Pokémon (no Legendary, Mythical, Sub-Legendary, Paradox or Ultra Beast Pokémon)</p>`),
       choices: [
-        { label: '🗒 성격 진단으로 정하기', sub: '몇 가지 질문에 답하면 당신에게 어울리는 포켓몬이 정해져요', fn: () => setTimeout(() => quiz(onPick, menu), 0) },
-        { label: '🔍 직접 고르기', sub: '원하는 포켓몬을 목록에서 골라요', fn: () => setTimeout(() => direct(onPick, menu), 0) },
+        { label: L('🗒 성격 진단으로 정하기', '🗒 Take the personality quiz'), sub: L('몇 가지 질문에 답하면 당신에게 어울리는 포켓몬이 정해져요', 'Answer a few questions to find the Pokémon that suits you'), fn: () => setTimeout(() => quiz(onPick, menu), 0) },
+        { label: L('🔍 직접 고르기', '🔍 Pick myself'), sub: L('원하는 포켓몬을 목록에서 골라요', 'Choose any Pokémon from the list'), fn: () => setTimeout(() => direct(onPick, menu), 0) },
       ],
     });
     menu();

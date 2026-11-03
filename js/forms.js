@@ -140,19 +140,32 @@ function giveFormSig(c) {
   if (mv && DATA.moves[mv] && !c.moves.some(m => m.id === mv)) c.moves[0] = newMove(c, mv);
 }
 // 도감·설명용
-const FORM_KIND_NAMES = { item: '도구', mega: '메가진화', select: '모습 고르기', battle: '던전에서 변신' };
+const FORM_KIND_NAMES = L({ item: '도구', mega: '메가진화', select: '모습 고르기', battle: '던전에서 변신' }, { item: 'Item', mega: 'Mega Evolution', select: 'Form choice', battle: 'Changes in dungeons' });
 const formKindName = id => FORM_KIND_NAMES[DATA.species[id]?.fc] || '';
 function formHowText(id) {
   const s = DATA.species[id]; if (!s || !s.fc) return '';
   const base = spName(s.f[0]);
   if (s.fc === 'item' || s.fc === 'mega') {
-    if (MEGA_NO_STONE[s.f[0]]) return `${jo(base, '이')} 화룡점정을 알고 있으면 던전에서 메가진화한다.`;
+    if (MEGA_NO_STONE[s.f[0]]) return L(`${jo(base, '이')} 화룡점정을 알고 있으면 던전에서 메가진화한다.`, `${base} Mega Evolves in dungeons if it knows Dragon Ascent.`);
     const item = Object.keys(ITEMS).find(k => ITEMS[k].formTo === id);
-    return `${base}에게 ${jo(item ? ITEMS[item].n : '정해진 도구', '을')} 지니게 하면 던전에서 이 모습이 된다.${s.fc === 'mega' ? ' 메가스톤은 적 Lv35 이상 층에서 아주 드물게 떨어진다.' : ''}`;
+    return L(`${base}에게 ${jo(item ? ITEMS[item].n : '정해진 도구', '을')} 지니게 하면 던전에서 이 모습이 된다.${s.fc === 'mega' ? ' 메가스톤은 적 Lv35 이상 층에서 아주 드물게 떨어진다.' : ''}`, `${base} takes this form in dungeons while holding ${item ? ITEMS[item].n : 'its item'}.${s.fc === 'mega' ? ' Mega Stones drop very rarely on floors with enemies Lv35+.' : ''}`);
   }
-  if (s.fc === 'select') return `마을의 캐릭터 탭에서 ${base}의 모습을 고를 수 있다.`;
-  return BATTLE_FORM_TEXT[s.f[0]] || `${jo(base, '이')} 던전에서 특성으로 변신한 모습.`;
+  if (s.fc === 'select') return L(`마을의 캐릭터 탭에서 ${base}의 모습을 고를 수 있다.`, `Choose ${base}'s form on the town Character tab.`);
+  return (LANG === 'en' ? BATTLE_FORM_TEXT_EN : BATTLE_FORM_TEXT)[s.f[0]] || L(`${jo(base, '이')} 던전에서 특성으로 변신한 모습.`, `The form ${base} takes in dungeons through its Ability.`);
 }
+const BATTLE_FORM_TEXT_EN = {
+  351: 'Castform (Forecast) changes form and type with harsh sun, rain or snow.',
+  681: 'Aegislash (Stance Change) becomes Blade Forme when it uses an attack, and Shield Forme when it uses a status move or waits.',
+  555: 'Darmanitan (Zen Mode) enters Zen Mode at half HP or less.',
+  746: 'Wishiwashi (Schooling) takes School Form at Lv20+ while HP is above 1/4.',
+  774: "Minior (Shields Down) breaks its shell at half HP or less, showing its core (color varies).",
+  875: 'Eiscue (Ice Face) blocks one physical attack, then becomes Noice Face. It returns on snowy floors.',
+  877: 'Morpeko (Hunger Switch) switches between Full Belly and Hangry each turn.',
+  964: 'Palafin (Zero to Hero) becomes Hero Form for the rest of the run after going down the stairs once.',
+  648: 'Meloetta switches between Aria and Pirouette Forme each time it uses Relic Song.',
+  718: 'Zygarde becomes Complete Forme for that floor at half HP or less.',
+  1024: 'Terapagos is always in Terastal Form in dungeons.',
+};
 const BATTLE_FORM_TEXT = {
   351: '캐스퐁(날씨 특성)은 쾌청·비·설경에 따라 모습과 타입이 바뀐다.',
   681: '킬가르도(배틀스위치)는 공격 기술을 쓰면 블레이드폼, 변화 기술을 쓰거나 기다리면 실드폼이 된다.',

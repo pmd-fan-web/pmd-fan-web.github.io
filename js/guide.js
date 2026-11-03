@@ -2,7 +2,7 @@
 'use strict';
 
 const Guide = (() => {
-  const TOPICS = [
+  const TOPICS = L([
     ['types', '🔥 타입 상성표'],
     ['battle', '⚔ 전투 규칙'],
     ['status', '💫 상태이상'],
@@ -13,7 +13,10 @@ const Guide = (() => {
     ['party', '🤝 동료'],
     ['town', '🏘 마을·기타'],
     ['controls', '⌨ 조작법'],
-  ];
+  ], [
+    ['types', '🔥 Type chart'], ['battle', '⚔ Battle rules'], ['status', '💫 Status conditions'], ['weather', '🌦 Weather'], ['dungeon', '🗺 Dungeon rules'],
+    ['growth', '⭐ Growth & rewards'], ['items', '🎒 Dungeon item stages'], ['party', '🤝 Teammates'], ['town', '🏘 Town & more'], ['controls', '⌨ Controls'],
+  ]);
   const short = t => typeName(t).slice(0, 2);
   const badge = t => `<span class="type" style="background:${TYPE_COLORS[t - 1]}">${typeName(t)}</span>`;
   const mulText = m => (Math.round(m * 100) / 100).toString();
@@ -198,13 +201,163 @@ const Guide = (() => {
       </table>`;
   }
 
+  // 영어 가이드 (LANG === 'en'): 위 함수들과 같은 내용
+  const EN = {
+    types() {
+      const T = DATA.types.map((_, i) => i + 1);
+      const sh = t => typeName(t).slice(0, 3);
+      const head = `<tr><th class="corner">Atk ↓ / Def →</th>${T.map(t => `<th style="background:${TYPE_COLORS[t - 1]}" title="${typeName(t)}">${sh(t)}</th>`).join('')}</tr>`;
+      const rows = T.map(a => `<tr><th style="background:${TYPE_COLORS[a - 1]}">${typeName(a)}</th>${T.map(d => {
+        const m = typeEff(a, [d]);
+        return `<td class="${mulCls(m)}" title="${typeName(a)} → ${typeName(d)}: ×${mulText(m)}">${m === 1 ? '' : mulText(m)}</td>`;
+      }).join('')}</tr>`).join('');
+      return `<p>Like the original Mystery Dungeon games, type matchups here are gentle.</p>
+        <div class="legend"><span class="x2">1.4 super effective</span><span class="xh">0.7 not very effective</span><span class="xq">0.5 originally immune (hits weakly)</span>
+        <span class="dim">Two types multiply. e.g. 1.4×1.4=1.96, 0.7×0.7=0.49</span></div>
+        <div class="chart-wrap"><table class="type-chart">${head}${rows}</table></div>
+        <h3>Type combo calculator</h3>
+        <div class="picker-bar"><select id="gc-a">${T.map(t => `<option value="${t}">${typeName(t)}</option>`).join('')}</select>
+          <select id="gc-b"><option value="">(single type)</option>${T.map(t => `<option value="${t}">${typeName(t)}</option>`).join('')}</select></div>
+        <div id="gc-out"></div>
+        <p class="dim">Immunities from Abilities (Levitate, Water Absorb, Wonder Guard, etc.) apply separately and block completely. Weather, Ability and held item modifiers multiply on top.</p>`;
+    },
+    battle: () => `<table class="rules">
+      <tr><td>Damage</td><td>Same formula as the originals (level, power, Attack/Defense). Same-type moves deal <b>×1.5</b> (×2 with Adaptability).</td></tr>
+      <tr><td>Basic attack</td><td>Typeless physical attack with power ${NORMAL_ATTACK.p}. Uses no PP.</td></tr>
+      <tr><td>Critical hits</td><td>Base 1/16 chance, <b>×1.5</b> (×2.25 with Sniper). Crit stages: 1/16 → 1/8 → 1/2 → guaranteed.</td></tr>
+      <tr><td>Stat stages</td><td>−6 to +6. Attack, Defense, Sp. Atk and Sp. Def gain ×0.25 per +1 (×1.5 at +2, ×2 at +4, max ×2.5 at +6 / ×0.4 at −6). Speed: each stage of difference multiplies accuracy by ×1.05 (at +6, your accuracy ×1.34 and attacks on you ÷1.34). Accuracy and evasion ×1.33 per +1. Each stage wears off on its own timer: raised stages after 100 turns, lowered ones after 50, stat-boost items (X Attack, X Sp. Atk, berries, etc.) after 300. Drawbacks of your own moves (Ice Hammer, Close Combat, Draco Meteor, etc.) only lower stats down to −2 (kept between floors).</td></tr>
+      <tr><td>Speed</td><td>The faster you are than the foe, the better your accuracy and evasion. <b>+20% at twice as fast, −20% at half</b> (max ±20%). Paralysis halves Speed. Moves that never miss are unaffected.</td></tr>
+      <tr><td>Solo bonus</td><td>Exploring without teammates: damage taken ×${SOLO_DMG_MUL}, stats other than HP ×${SOLO_STAT_MUL}. No bonus if you entered with teammates (even if all have fainted).</td></tr>
+      <tr><td>🤝 Teammates</td><td>Bring up to 3 recruited Pokémon. See <b>🤝 Teammates</b> in the guide.</td></tr>
+      <tr><td>Move ranges</td><td>Front 1 tile (priority moves: front 2) / ranged (first foe within 5 tiles in a line) / all foes within 3 tiles around / self.</td></tr>
+      <tr><td>Recoil moves</td><td>Recoil damage is <b>half</b> of the originals. Self-Destruct and Explosion leave you at 1 HP instead of fainting.</td></tr>
+      <tr><td>Special moves</td><td>Charging, recoil, rampage, first-turn-only and other conditions are reworked for dungeons. See <b>⚑ Dungeon rule</b> in move descriptions.</td></tr>
+      <tr><td>Abilities</td><td>Original or dungeon effects. See <b>⚑ Dungeon rule</b> in Ability descriptions. When one activates, the log shows [Ability name].</td></tr>
+    </table>`,
+    status: () => `<table class="rules">
+      <tr><td>☠ Poison</td><td>1/14 of max HP damage every 2 turns. Lasts 15 turns. Poison and Steel types are immune.</td></tr>
+      <tr><td>🔥 Burn</td><td>1/14 of max HP damage every 2 turns + physical attacks halved. Lasts 15 turns. Fire types are immune.</td></tr>
+      <tr><td>⚡ Paralysis</td><td>25% chance to be unable to act, Speed halved. Lasts 15 turns. Electric types are immune.</td></tr>
+      <tr><td>💤 Sleep</td><td>Can't act for 3–5 turns.</td></tr>
+      <tr><td>❄ Freeze</td><td>Can't act for 2–4 turns. 30% chance to thaw when hit. Ice types are immune, and nobody freezes in harsh sun.</td></tr>
+      <tr><td>? Confusion</td><td>For 4–7 turns, 50% chance to move or attack in a random direction.</td></tr>
+      <tr><td>Flinch</td><td>Loses its next action.</td></tr>
+      <tr><td>Recovery</td><td>Heal instantly with a Heal Seed or Full Heal. Wears off over time.</td></tr>
+    </table>`,
+    weather: () => `<table class="rules">${Object.values(WEATHERS).map(w => `<tr><td>${w.icon} ${w.n}</td><td>${esc(w.d)}</td></tr>`).join('')}</table>
+      <h3>Weather by dungeon (chance per floor)</h3>
+      <table class="rules">${DUNGEONS.filter(d => !d.daily && d.wx && d.wx.length).map(d => `<tr><td>${esc(d.n)}</td><td>${d.wx.map(([w, p]) => `${WEATHERS[w].icon}${WEATHERS[w].n} ${Math.round(p * 100)}%`).join(' · ')}</td></tr>`).join('')}</table>
+      <p class="dim">Drought, Drizzle, Sand Stream and Snow Warning change the weather; Cloud Nine and Air Lock (player) cancel its effects.</p>
+      <h3>Terrain</h3>
+      <table class="rules">${Object.values(TERRAINS).map(w => `<tr><td>${w.icon} ${w.n}</td><td>${esc(w.d)}</td></tr>`).join('')}</table>
+      <p class="dim">Terrain is set by Grassy, Misty, Electric or Psychic Terrain, or by Surge Abilities like Grassy Surge, and lasts ${TERRAIN_TURNS} turns (gone when you change floors; it can coexist with weather). Flying types and Levitate float above it. Terrain Pulse takes the terrain's type and doubles in power.</p>`,
+    dungeon: () => `<table class="rules">
+      <tr><td>Belly</td><td>Drops by 0.08 each turn (×1.5 in snow unless Ice type). At 0 you lose 1 HP per turn.</td></tr>
+      <tr><td>Natural healing</td><td>With a full belly you slowly regain HP. Regenerator, Leftovers and the like speed it up.</td></tr>
+      <tr><td>Sleeping foes</td><td>Some of a floor's starting foes sleep in place. They wake when hit, and sometimes when your team comes right next to them.</td></tr>
+      <tr><td>Dungeon Pokémon</td><td>Each dungeon mostly has Pokémon that fit its theme (${CONCEPT_SHARE} of 6 species per floor). In the same evolution line, deeper floors have evolved forms. The rest match the dungeon's types. Ultra Beasts appear only in the Ultra Space Rift. Check 🗺 Where it appears in the Dex.</td></tr>
+      <tr><td>New foes</td><td>New foes appear out of sight every 30–45 turns.</td></tr>
+      <tr><td>Traps</td><td>Appear from floors with enemy Lv <b>${FEATURE_LV.trap}</b>+. Hidden until stepped on or spotted from next to them (20%). Auto-explore avoids traps you've found.
+        <div class="dim">${Object.values(TRAPS).map(t => `${t.icon} ${t.n}: ${t.d}`).join('<br>')}</div></td></tr>
+      <tr><td>Monster House</td><td>${Math.round(HOUSE_CHANCE * 100)}% from enemy Lv <b>${FEATURE_LV.house}</b>+. Entering a room full of items makes 6–9 foes appear. They don't act on the turn they appear.</td></tr>
+      <tr><td>Kecleon Shop</td><td>${Math.round(SHOP_CHANCE * 100)}% from enemy Lv <b>${FEATURE_LV.shop}</b>+. Stand on an item to buy it; talk to Kecleon to sell.</td></tr>
+      <tr><td>Stairs</td><td>Stepping on them asks whether to go to the next floor. The last floor's stairs are the exit.</td></tr>
+      <tr><td>💧 Water · 🔥 Lava</td><td>In some dungeons, pools or big lakes form in the wall space around rooms and corridors (floor paths stay, so they never block the way). Water types can enter water, Fire types lava; Flying types and Levitate can enter both. Moves, thrown items and sight pass over them. Auto-explore and auto-move don't path through them.</td></tr>
+      <tr><td>Boss floors</td><td>The last floor of normal dungeons; in roguelikes every 10th floor and the last. A boss (HP ×3.5, Lv +3) and two minions wait in a big room. The first dungeon's (Small Forest) boss comes alone with no level bonus. Defeat the boss to make the stairs appear and get money and good items. Status conditions last half as long on bosses, and they take half damage from max-HP-based sources (poison, burn, sandstorm, Rough Skin, Rocky Helmet, traps, etc.).</td></tr>
+      <tr><td>Wind</td><td>Stay on a floor over ${WIND.warn[0]} turns and the wind starts blowing; at ${WIND.limit} turns you're blown out of the dungeon (same penalty as fainting).</td></tr>
+      <tr><td>Escape</td><td>Use an Escape Orb or complete a mission to return to town at once.</td></tr>
+      <tr><td>Fainting in a normal dungeon</td><td>You keep your level. You lose <b>half</b> the items in your bag (random), your held item (50%), and the money picked up this run. With Sticky Hold, 1/4.</td></tr>
+      <tr><td>Roguelike dungeons</td><td>Enter at Lv${ROGUE_LEVEL} with a basic bag (2 Oran Berries, 1 Apple). Your held item comes along and isn't lost on fainting (Mega Stones and signature items work). Everything returns to normal when you leave. Clear or escape to bring back money and items (to storage).</td></tr>
+      <tr><td>👑 Themed dungeons</td><td>Pokémon from one series appear as bosses. Mid-boss floors have series members (no repeats in one run); the last floor has one random final boss candidate.
+      <tr><td>✨ Hidden dungeons</td><td>Dungeons that quietly open when you clear certain dungeons (6 in all). Mythical Pokémon appear as bosses. They don't show in the list until opened and don't count toward medals.</td></tr>
+      <tr><td>♾ Endless Dungeon</td><td>A roguelike that opens after clearing the Area Zero Depths. Go alone at Lv${rogueLv(dungeonById('endless'))}, with your held item and ${ENDLESS.carry} bag items. Vitamin and gummy stats scale with level. Foes go from Lv${endlessLv(1)} on floor 1 to Lv${MAX_LEVEL} on floor ${ENDLESS.maxFloor}, then +${ENDLESS.afterStep} per floor. Only here is there no level cap (max Lv${ENDLESS_MAX_LEVEL}). A Legendary boss every 10 floors (Hard Mode multipliers, floor÷10 tickets, return home from the stairs). Foes pick moves as in Hard Mode. At the end you get tickets by floor reached (from floor 10: 1 per 5 floors on 1–50, per 3 on 51–100, per 2 from 101), a teammate joins every ${ENDLESS.allyEvery}-floor boss (max ${ENDLESS.allyMax}), and special rules apply every 10 floors from floor 11. Gummies eaten here give +${ENDLESS.gummyAmt} each, up to +${ENDLESS.gummyCap} per stat, for that run only. If you faint, you lose what you picked up and only what's left of what you brought comes back.</td></tr>
+      <tr><td>♾ Endless rules</td><td>${Object.values(ENDLESS_RULES).map(r => `${r.icon} <b>${r.n}</b>: ${r.d}`).join('<br>')}</td></tr>
+      <tr><td>🗓 Daily Challenge</td><td>A ${Progress.DAILY.floors}-floor roguelike that changes every day. Play as that day's Pokémon (Lv${ROGUE_LEVEL}); everyone gets the same map on the same day. Once a day. Items drop instead of money piles. Floors reached × ₽${Progress.DAILY_REWARD.floor} (finish +₽${Progress.DAILY_REWARD.clear}). Share records from the Dungeons tab.</td></tr>
+    </table>`,
+    growth: () => `<table class="rules">
+      <tr><td>EXP</td><td>The lower the defeated foe's level is than yours, the less you get (Gen 5 style). Foes ${LOW_LV_GAP}+ levels below you give ×${LOW_LV_MUL} instead of the base ×${EXP_RATE}. Bosses and outlaws ×${BOSS_EXP_MUL}, Lucky Egg ×1.5, roguelike dungeons ×${ROGUE_EXP_MUL}. Legendary/Mythical need ×${LEGEND_EXP_DIV} EXP, Ultra Beasts and Paradox ×${STRONG_EXP_DIV} (check each Pokémon in the Dex).</td></tr>
+      <tr><td>Item stages</td><td>Items on dungeon floors and from foes come from separate tables by the floor's enemy level: ${DROP_STAGE_NAMES.map((n, i) => `${n} Lv${DROP_STAGE_LV[i]}+`).join(' · ')}. e.g. Oran Berries early; Sitrus Berries and Super Potions mid; Sitrus Berries and Max Potions late and final. Full tables under 'Dungeon item stages'.</td></tr>
+      <tr><td>Signature items</td><td>Items only certain Pokémon can use, like the Adamant Orb or Light Ball. They drop rarely only in dungeons where that Pokémon appears (${Math.round(SIG_DROP.boss * 100)}% if the boss is the owner) and are sometimes sold at the town shop.</td></tr>
+      <tr><td>Evolution</td><td>On the town Character tab. Level evolutions need only the level, item evolutions an evolution stone, trade evolutions a Linking Cord. Other conditions (friendship, etc.) become Lv25.</td></tr>
+      <tr><td>Other forms · Mega Evolution</td><td>When a form changes in a dungeon, stats, types and Ability become that form's (moves stay). Check each Pokémon in the Dex.<br>
+        <b>Form choice</b> Rotom, Deoxys, Shaymin, Kyurem and others are chosen on the Character tab. <b>Item</b> Holding the Griseous Orb, Rusted Sword, masks, Blue Orb and so on gives that form.
+        <b>Mega Evolution</b> Holding its Mega Stone makes it Mega Evolve on entering a floor (Mega Stones drop very rarely on Lv${MEGA_MIN_LV}+ floors, from bosses and shinies, matching the dungeon's types). <b>Changes in dungeons</b> Castform, Aegislash, Wishiwashi, Minior and others change through their Abilities.</td></tr>
+      <tr><td>Moves</td><td>Learned by leveling up; choose any 4 learned moves freely in town move settings. Moves learned by TM are remembered forever. After evolving you can still pick moves from before. TMs only drop for moves of the dungeon's types.</td></tr>
+      <tr><td>⭐ Move mastery</td><td>Each time your team's (you and teammates) move hits a foe (self moves: each use), that Pokémon's mastery of the move rises. Not when used on empty air or when it misses (kept when the move is removed; also builds and applies in roguelikes). ★1–★10: each ★ gives +${MASTERY_PP * 100}% max PP and a ${MASTERY_FREE * 100}% chance to use no PP (★10: PP ×2, 30%). Uses needed per ★ = half the base PP × stage, so low-PP moves rise at a similar pace. Check progress in the move info window.</td></tr>
+      <tr><td>Abilities / held items</td><td>Change Abilities on the Character tab. A normal Ability needs one ⚗Ability Capsule, a Hidden Ability one 🧩Ability Patch (sometimes at the shop, rarely in dungeons). Hold one item at a time.</td></tr>
+      <tr><td>Egg Moves</td><td>Use one 🧬Egg Move TM on the Character tab to learn one of that Pokémon's Egg Moves (including pre-evolutions). Add or remove it any time in move settings (sometimes at the shop, rarely in dungeons).</td></tr>
+      <tr><td>Missions</td><td>Rescue (talk to the client) / Outlaw (defeat a strong foe) / Search (pick up the item). Get the reward back in town after completing.</td></tr>
+      <tr><td>🆘 Friend rescue</td><td>If you faint in a normal dungeon, you can ask a friend for rescue with an SOS code (one at a time). While waiting you can explore other dungeons with no penalty.
+        When a friend enters the SOS code on the Missions tab, a rescue mission appears (that dungeon must be unlocked); talking to you on that floor succeeds → A-OK code.
+        Enter the A-OK code to continue from the floor where you fainted. The rescuer gets a rescue reward (random item and money) on the spot.</td></tr>
+      <tr><td>📋 Rescue board</td><td>If you faint while signed in, choose to post on the rescue board or ask friends only (SOS code). Friends-only requests can be posted to the board later from the Missions tab. Other players on the same version can pick one from the board on the Missions tab and go rescue,
+        the board shows the 10 requests that have waited longest, and once someone goes to rescue, that request is hidden from others for 30 minutes (extended while they're in the dungeon) (up to 2 board rescues at a time).
+        When the rescuer returns to town, the requester is revived, and the rescuer gets a rescue reward (random item + money) at once. More comes if the requester sends a thank-you letter (gift). If nobody comes within 30 minutes, Team Stench rescues you instead (no thank-you gift). Rescues never fail. Requests stay on the board for up to 48 hours.</td></tr>
+      <tr><td>🥤 Vitamins</td><td>HP Up (HP +4), Protein (Attack), Iron (Defense), Calcium (Sp. Atk), Zinc (Sp. Def), Carbos (Speed) +2 each. Feed on the Character tab or in dungeons; the effect stays with that Pokémon forever, up to ${VITAMIN_MAX} times per stat. Applies in normal dungeons; in the Endless Dungeon it scales with level. From the shop (sometimes), dungeon floors, bosses and records.</td></tr>
+      <tr><td>🍬 Gummies</td><td>Very rare snacks. Each fills your belly by 15 (Rainbow Gummi 30) and raises a stat permanently: White HP +2, Red Attack +1, Yellow Defense +1, Blue Sp. Atk +1, Green Sp. Def +1, Pink Speed +1, Rainbow all. Up to ${GUMMY_MAX} times per stat (counted separately from vitamins). In roguelikes, for that run only.</td></tr>
+      <tr><td>🎀 Signature items</td><td>Thick Club (Cubone, Marowak), Light Ball (Pikachu), Deep Sea Tooth/Scale (Clamperl), Metal/Quick Powder (Ditto), Lucky Punch (Chansey), Leek (Farfetch'd, Sirfetch'd), Soul Dew (Latias, Latios), Adamant/Lustrous/Griseous Orb (Dialga, Palkia, Giratina). Only work for their Pokémon.</td></tr>
+      <tr><td>🏆 Records / Dex</td><td>Completing records gives money and items (to storage). The Dex records Pokémon you've met and defeated.</td></tr>
+    </table>`,
+    town: () => `<table class="rules">
+      <tr><td>📖 Story</td><td>Part 1: Labyrinths appear around Treasure Town, and the team follows their power to meet Arceus on the Star Summit. Part 2: Following a meteor (Jirachi, Deoxys) drawn by the summit's power, they reach a crack in the sky and face Necrozma, which swallowed the light. Part 3: As the light returns, time twists and Area Zero opens; at its bottom they meet Terapagos. Legends across the land react to the upheaval and awaken as bosses of themed dungeons.</td></tr>
+        ${DUNGEONS.filter(d => d.theme).map(d => `${esc(d.n)}(${esc(d.theme)})`).join(', ')}.</td></tr>
+      <tr><td>☁ Account</td><td>Signing in is optional. Signed in, your save is also stored in the cloud so you can continue on other devices (auto-saved when you return from a dungeon, close the window or switch tabs, and every 30 minutes in town; this browser always saves right away).
+        No email is collected, so a forgotten password can't be recovered.</td></tr>
+      <tr><td>Bag / Storage</td><td>Start with ${BAG_BASE} bag slots and ${STORAGE_BASE} storage slots, expandable with money (bag max ${BAG_LIMIT}, storage max ${STORAGE_LIMIT}).</td></tr>
+    </table>`,
+    party: () => `<table class="rules">
+      <tr><td>🧭 Leader Ability</td><td>The leader's Ability changes which Pokémon appear (like the lead-Pokémon effects in the originals). Flash Fire draws Fire, Storm Drain Water, Static and Lightning Rod Electric, Magnet Pull Steel, and Harvest Grass types ×${LURE_W} as often (among that floor's Pokémon). Compound Eyes and Super Luck double the chance foes drop items.</td></tr>
+      <tr><td>✨ Shiny</td><td>Foes appear in a different color with a 1 in ${Math.round(1 / SHINY_CHANCE)} chance. Completing the Dex record doubles it permanently with the Shiny Charm (no need to hold it). Defeating one gives ×2 EXP and a good item. Bosses can be shiny too. Defeat or recruit a shiny of a Pokémon to unlock the shiny look for its whole evolution line (before and after) on the Character tab.</td></tr>
+      <tr><td>🤝 Recruiting</td><td>Foes your team defeats sometimes want to join. Recruited Pokémon join your character list at Lv${RECRUIT_LEVEL} and can be played from town. Only that Pokémon joins (no separate pre-evolution). Holding a Friend Ribbon gives ×1.5.
+        The chance depends on your level: Lv10 ${(recruitRate(10) * 100).toFixed(0)}% · Lv30 ${(recruitRate(30) * 100).toFixed(0)}% · Lv50 ${(recruitRate(50) * 100).toFixed(0)}% · Lv70 ${(recruitRate(70) * 100).toFixed(0)}% · Lv90 ${(recruitRate(90) * 100).toFixed(0)}% (max ${(recruitRate(MAX_LEVEL) * 100).toFixed(1)}% at Lv${MAX_LEVEL}, ${(recruitRate(MAX_LEVEL) * 1.5 * 100).toFixed(1)}% with a Friend Ribbon). +1%p for each team rank (Master +${(RANKS.length - 1) * RECRUIT_RANK_BONUS * 100}%p, added to the level chance before the Legendary and Friend Ribbon multipliers). ${RECRUIT_HALF}. Outlaws and Pokémon already recruited won't ask.</td></tr>
+      <tr><td>Choosing</td><td>Up to <b>3</b> recruited Pokémon (4 including you). Add or remove them under <b>🤝 Team</b> at the bottom of the Character tab or on the character card on the left in town.</td></tr>
+      <tr><td>Where they go</td><td>Normal and themed dungeons. Roguelikes and the Daily Challenge are solo.</td></tr>
+      <tr><td>Managing</td><td>Under the character card on the left in town, check each teammate's stats, Ability, held item and moves, and change <b>📘 Moves</b> and <b>held items</b>.</td></tr>
+      <tr><td>Growth</td><td>Each goes at its saved level. When your team defeats a foe, teammates get EXP too (same if a teammate defeats it). New moves from level-ups only fill empty slots; choose the rest in town move settings. Progress is saved every floor.</td></tr>
+      <tr><td>Following</td><td>They follow the leader in a line. Moving toward a teammate swaps places (auto-move also swaps past teammates). Teammates far behind catch up 2 tiles per turn.</td></tr>
+      <tr><td>Attacking</td><td>Teammates pick their own moves. Your team's straight-line moves and thrown items pass through teammates. Foes' area moves hit teammates too. They leave sleeping foes alone (except on Attack!).</td></tr>
+      <tr><td>🤝 Team window (V)</td><td>Open with the 🤝 Team button in dungeons, the V key, or the menu. Check teammates' HP, status, distance, Ability, held item, stat changes and move PP; change tactics, use items, revive.</td></tr>
+      <tr><td>Tactics</td><td>Each run starts with <b>Follow me</b>; change it in the team window.<br>
+        <b>Follow me</b> — follow in a line, deal with foes near you or a teammate (nearest first), then follow again<br>
+        <b>Go separately</b> — each chases and fights visible foes, gathering nearby when none are around<br>
+        <b>Wait here</b> — wait in place, only fighting back against adjacent foes<br>
+        <b>Attack!</b> — chase and attack even distant foes; bosses first when visible (useful in boss rooms)<br>
+        <b>Don't attack first</b> — only fight foes the leader attacked; otherwise just follow</td></tr>
+      <tr><td>Items</td><td>Pick an item in the bag and choose <b>Use on teammate</b>, or <b>Use item on teammate</b> in the team window. HP (Oran Berry, Sitrus Berry, Potion, Max Potion), status (Heal Seed, Lum Berry, other berries), PP (Max Elixir, Leppa Berry). Takes a turn.</td></tr>
+      <tr><td>Sight</td><td>Rooms and areas around teammates are visible and recorded on the map.</td></tr>
+      <tr><td>Healing</td><td>While the leader isn't hungry, teammates slowly regain HP at the leader's pace.</td></tr>
+      <tr><td>Fainting</td><td>Teammates drop out for that run only (level and EXP stay). Revive them with a Reviver Seed (Reviver Seed in the bag → revive a fainted teammate, or from the team window). If the leader faints, the run ends (rescue requests possible). If rescued and continuing, teammates come along again.</td></tr>
+      <tr><td>Solo bonus</td><td>Exploring without teammates: damage taken ×${SOLO_DMG_MUL}, stats other than HP ×${SOLO_STAT_MUL}. No bonus if you entered with teammates (even if all have fainted).</td></tr>
+    </table>`,
+    items() {
+      const chip = (id, w) => `<span class="dg-item" data-dexitem="${id}">${ITEMS[id].icon} ${esc(ITEMS[id].n)}${w != null ? ` <i class="dim">${w >= 1 ? w : w.toFixed(2)}%</i>` : ''}</span>`;
+      const rows = DROP_STAGE_NAMES.map((name, st) => {
+        const lv = DROP_STAGE_LV[st], t = baseTable(lv + (st === 1 ? 10 : 0), null);
+        const total = t.reduce((a, d) => a + d[1], 0), pct = w => +(w / total * 100 * (1 - MONEY_SHARE[st])).toFixed(w / total >= 0.01 ? 1 : 2);
+        const one = t.filter(([id]) => !ITEMS[id].tm && !ITEMS[id].held && !VITAMINS[id] && !GUMMIES[id]).sort((a, b) => b[1] - a[1]);
+        const sum = f => t.filter(([id]) => f(id)).reduce((a, d) => a + d[1], 0);
+        return `<tr><td><b>${name}</b><br><span class="dim">floors with enemy Lv${lv}+</span></td><td>
+          <div class="dg-items">${one.map(([id, w]) => chip(id, pct(w))).join('')}</div>
+          <div class="dim">Vitamins & gummies ${pct(sum(id => VITAMINS[id] || GUMMIES[id]))}% · 🎗 Held items ${pct(sum(id => ITEMS[id].held))}% · 💿 TMs ${pct(sum(id => ITEMS[id].tm))}% (dungeon-type moves only) · 💰 Money ${MONEY_SHARE[st] * 100}%</div></td></tr>`;
+      }).join('');
+      return `<p>Items on dungeon floors and from foes come from stage tables by the <b>floor's enemy level</b>. When the stage changes, the previous stage's common items become rarer or stop appearing.
+        Thrown spikes are ${ITEMS.thorn.n} until enemy Lv${ITEM_LV_RANGE.goldthorn[0]}, then ${ITEMS.goldthorn.n}. Strong held items (Life Orb, etc.) appear from the late stage.
+        Tap an item for its description. Each dungeon's actual items and odds are under ℹ Info on its card.</p>
+        <table class="rules">${rows}
+        <tr><td><b>Roguelike</b></td><td>Stages follow floor progress instead of enemy level: the floors are split into four, early → mid → late → final. PP runs short easily, so Leppa Berries ×${ROGUE_DROP_MUL.leppa}, Max Elixirs ×${ROGUE_DROP_MUL.elixir}, vitamins and gummies ×${ROGUE_RARE_MUL} as common. EXP ×${ROGUE_EXP_MUL} too.</td></tr>
+        <tr><td><b>♾️ Mega Stones</b></td><td>Only on Lv${MEGA_MIN_LV}+ floors, from bosses and shinies, matching the dungeon's types. Bosses and shinies ${MEGA_RATE.boss * 100}%, floors, foe drops and rescue rewards ${MEGA_RATE.floor * 100}%</td></tr>
+        <tr><td><b>🎀 Signature items</b></td><td>Only in dungeons where the owner appears: floors ${SIG_DROP.floor * 100}% · defeated owner ${SIG_DROP.defeat * 100}% · owner as boss ${SIG_DROP.boss * 100}%</td></tr>
+        </table>`;
+    },
+  };
+
   function open(topic) {
     if (topic === 'controls') { Dungeon.showHelp(); return; }
     const t = TOPICS.find(x => x[0] === topic);
-    const body = { types: typeChart, battle, status, weather, dungeon, growth, items, party, town }[topic]();
+    const body = (LANG === 'en' ? EN : { types: typeChart, battle, status, weather, dungeon, growth, items, party, town })[topic]();
     UI.open({
       title: t[1], wide: true, html: `<div class="guide">${body}</div>`,
-      choices: [{ label: '다른 항목 보기', fn: menu }, { label: '닫기', fn: () => {} }],
+      choices: [{ label: L('다른 항목 보기', 'Other topics'), fn: menu }, { label: L('닫기', 'Close'), fn: () => {} }],
       onOpen: box => {
         if (topic !== 'types') return;
         box.querySelector('#gc-a').onchange = box.querySelector('#gc-b').onchange = () => calcCombo(box);
@@ -213,7 +366,7 @@ const Guide = (() => {
     });
   }
   function menu() {
-    UI.open({ title: '📖 게임 가이드', choices: TOPICS.map(([k, n]) => ({ label: n, fn: () => open(k) })) });
+    UI.open({ title: L('📖 게임 가이드', '📖 Game guide'), choices: TOPICS.map(([k, n]) => ({ label: n, fn: () => open(k) })) });
   }
   const buttons = () => TOPICS.map(([k, n]) => `<button class="btn ghost" data-act="guide" data-arg="${k}">${n}</button>`).join(' ');
   return { open, menu, buttons };

@@ -480,22 +480,23 @@ const FIELD_ABIL = { 18: { lure: 10 }, 114: { lure: 11 }, 9: { lure: 13 }, 31: {
   // v0.102 보강: 다른 타입도 (흙먹기 땅·모래의힘 바위·독수 독·저주받은바디 고스트·불가사의부적·벌레의알림 벌레·용의턱 드래곤·페어리오라 페어리·다크오라 악·풍력발전 비행·초식 풀)
   297: { lure: 5 }, 159: { lure: 6 }, 143: { lure: 4 }, 130: { lure: 8 }, 25: { lure: 7 }, 68: { lure: 7 }, 263: { lure: 16 }, 187: { lure: 18 }, 186: { lure: 17 }, 277: { lure: 3 }, 157: { lure: 12 } };
 const leadField = c => (c && FIELD_ABIL[c.ability]) || {};
-const fieldText = id => { const f = FIELD_ABIL[id]; return !f ? '' : f.lure ? `리더일 때 ${typeName(f.lure)} 타입 포켓몬이 ${LURE_W}배 잘 나온다` : `리더일 때 적이 물건을 떨어뜨리는 확률 ${f.drop}배`; };
+const fieldText = id => { const f = FIELD_ABIL[id]; return !f ? '' : f.lure ? L(`리더일 때 ${typeName(f.lure)} 타입 포켓몬이 ${LURE_W}배 잘 나온다`, `As leader, ${typeName(f.lure)}-type Pokémon appear ×${LURE_W} as often`) : L(`리더일 때 적이 물건을 떨어뜨리는 확률 ${f.drop}배`, `As leader, foes drop items ×${f.drop} as often`); };
 function abilityDesc(id) {
   const a = DATA.abilities[id], r = ABIL[id], fx = fieldText(id);
-  const dungeon = r ? r.dungeon || '' : '', exact = dungeon ? '' : abilityExact(r);
+  const en = typeof ABIL_EN !== 'undefined';
+  const dungeon = r ? (en ? abilEn(r.dungeon) : r.dungeon) || '' : '', exact = dungeon ? '' : en ? abilityExactEn(r) : abilityExact(r);
   const add = s => [s && s.replace(/\.$/, ''), fx].filter(Boolean).join('. ');
   return { n: a?.n || '?', d: a?.d || '', dungeon: dungeon && add(dungeon), exact: dungeon ? '' : add(exact), none: !r && !fx };
 }
 function abilityHtml(id, hidden) {
   const x = abilityDesc(id);
-  return `<div class="ab-box"><b>${esc(x.n)}</b>${hidden ? ' <span class="dim">(숨겨진 특성)</span>' : ''}
+  return `<div class="ab-box"><b>${esc(x.n)}</b>${hidden ? ` <span class="dim">${L('(숨겨진 특성)', '(Hidden Ability)')}</span>` : ''}
     <div class="dim">${esc(x.d)}</div>
-    ${x.dungeon ? `<div class="md-rule">⚑ 던전 규칙: ${esc(x.dungeon)}</div>` : ''}
-    ${x.exact ? `<div class="md-rule">📊 정확한 효과: ${esc(x.exact)}</div>` : ''}
-    ${x.none ? '<div class="md-rule">⚑ 던전에서는 효과가 없다.</div>' : ''}</div>`;
+    ${x.dungeon ? `<div class="md-rule">⚑ ${L('던전 규칙', 'Dungeon rule')}: ${esc(x.dungeon)}</div>` : ''}
+    ${x.exact ? `<div class="md-rule">📊 ${L('정확한 효과', 'Exact effect')}: ${esc(x.exact)}</div>` : ''}
+    ${x.none ? `<div class="md-rule">⚑ ${L('던전에서는 효과가 없다.', 'No effect in dungeons.')}</div>` : ''}</div>`;
 }
-function showAbilityInfo(id, hidden) { UI.alert('특성 정보', abilityHtml(id, hidden)); }
+function showAbilityInfo(id, hidden) { UI.alert(L('특성 정보', 'Ability info'), abilityHtml(id, hidden)); }
 // 적이 가질 특성 (숨겨진 특성 제외)
 // 적의 특성: 보통은 일반 특성 중 하나, HIDDEN_ABILITY_CHANCE 확률로 숨겨진 특성 (있으면)
 const HIDDEN_ABILITY_CHANCE = 0.1;
