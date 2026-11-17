@@ -45,7 +45,8 @@ const Progress = (() => {
   const startersOf = g => STARTERS[g].filter(ownsLine).length;
   let legendIds = null;
   const legends = () => (legendIds = legendIds || SPECIES_IDS.map(Number).filter(id => DATA.species[id].lg && !NO_RECRUIT.includes(id)));
-  const legendOwned = () => legends().filter(id => S().roster[id]).length;
+  // 도감과 같은 기준: 진화시켜 목록에서 빠진 진화 전 모습(코스모그·멜탄 등)도 영입한 것으로
+  const legendOwned = () => { const own = new Set(Object.keys(S().roster).flatMap(k => [+k, ...preEvos(+k)])); return legends().filter(id => own.has(id)).length; };
   // prog: [현재, 목표] / reward: 돈·아이템(n개)·티켓
   const ACH = [
     { id: 'kill1',    icon: '⚔', n: '첫 승리',         d: '적 포켓몬을 1마리 쓰러뜨린다.', prog: () => [stat('kills'), 1], reward: { money: 100 } },
